@@ -1,0 +1,174 @@
+import { useState } from 'react';
+import PortalLayout from '../../components/layout/PortalLayout';
+import { useAuth } from '../../context/AuthContext';
+import { Send, MessageCircle, Bell, User, Layout } from 'lucide-react';
+
+const Messages = () => {
+  const { currentUser, notifications, addNotification } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
+  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(isAdmin ? 'whatsapp' : 'notifications');
+  
+  // WhatsApp State
+  const [waMessage, setWaMessage] = useState('');
+  
+  // Notification State
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMsg, setNotifMsg] = useState('');
+  const [notifType, setNotifType] = useState<'info' | 'warning' | 'success'>('info');
+
+  const handleSendWhatsApp = () => {
+    if (!waMessage) return;
+    // Replace with actual group link if available, or just open WhatsApp with message
+    const url = `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
+    window.open(url, '_blank');
+    setWaMessage('');
+  };
+
+  const handlePostNotification = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (notifTitle && notifMsg) {
+      addNotification({ title: notifTitle, message: notifMsg, type: notifType });
+      setNotifTitle('');
+      setNotifMsg('');
+      alert("Notification posted to all users!");
+    }
+  };
+
+  return (
+    <PortalLayout title="Communication Center">
+      <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '24px', height: 'calc(100vh - 180px)' }}>
+        
+        {/* Sidebar Navigation */}
+        <div className="card glass" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+           <button 
+            onClick={() => setActiveView('notifications')}
+            className={`btn ${activeView === 'notifications' ? 'btn-primary' : 'btn-outline'}`}
+            style={{ justifyContent: 'flex-start' }}
+           >
+             <Bell size={18} /> System Notices
+           </button>
+           
+           {isAdmin && (
+             <button 
+              onClick={() => setActiveView('whatsapp')}
+              className={`btn ${activeView === 'whatsapp' ? 'btn-primary' : 'btn-outline'}`}
+              style={{ justifyContent: 'flex-start' }}
+             >
+               <MessageCircle size={18} /> WhatsApp Group
+             </button>
+           )}
+
+           <button 
+            onClick={() => setActiveView('chats')}
+            className={`btn ${activeView === 'chats' ? 'btn-primary' : 'btn-outline'}`}
+            style={{ justifyContent: 'flex-start' }}
+           >
+             <User size={18} /> Private Chats
+           </button>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="card glass" style={{ padding: '30px', borderRadius: '24px', overflowY: 'auto' }}>
+           
+           {activeView === 'notifications' && (
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                   <h3>System Notifications</h3>
+                   {isAdmin && <span className="badge" style={{ background: 'var(--primary)', color: 'white' }}>Admin View</span>}
+                </div>
+
+                {isAdmin && (
+                  <form onSubmit={handlePostNotification} className="blend-bg" style={{ padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                     <h4 style={{ fontSize: '15px' }}>Post New Announcement</h4>
+                     <input 
+                      type="text" 
+                      placeholder="Title" 
+                      value={notifTitle}
+                      onChange={(e) => setNotifTitle(e.target.value)}
+                      style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} 
+                     />
+                     <textarea 
+                      placeholder="Message content..." 
+                      rows={3}
+                      value={notifMsg}
+                      onChange={(e) => setNotifMsg(e.target.value)}
+                      style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
+                     />
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <select 
+                          value={notifType} 
+                          onChange={(e) => setNotifType(e.target.value as any)}
+                          style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                        >
+                           <option value="info">Information (Blue)</option>
+                           <option value="warning">Important (Orange)</option>
+                           <option value="success">Success (Green)</option>
+                        </select>
+                        <button type="submit" className="btn btn-primary">
+                           <Send size={18} /> Post to All Portals
+                        </button>
+                     </div>
+                  </form>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                   {notifications.map((n, i) => (
+                     <div key={i} className="hover-scale" style={{ padding: '20px', borderRadius: '16px', borderLeft: `6px solid ${n.type === 'warning' ? 'var(--warning)' : n.type === 'success' ? 'var(--success)' : 'var(--primary)'}`, background: 'var(--bg-surface)', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                           <h4 style={{ fontWeight: '800' }}>{n.title}</h4>
+                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(n.date).toLocaleDateString()}</span>
+                        </div>
+                        <p style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: '1.6' }}>{n.message}</p>
+                     </div>
+                   ))}
+                   {notifications.length === 0 && (
+                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                        <Bell size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                        <p>No system notifications yet.</p>
+                     </div>
+                   )}
+                </div>
+             </div>
+           )}
+
+           {activeView === 'whatsapp' && isAdmin && (
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center', justifyContent: 'center', height: '100%', maxWidth: '600px', margin: '0 auto' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                   <MessageCircle size={40} />
+                </div>
+                <h2 style={{ textAlign: 'center' }}>WhatsApp Broadcast Control</h2>
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '20px' }}>Compose a message below to send directly to the school's WhatsApp group as an Administrator.</p>
+                
+                <textarea 
+                  value={waMessage}
+                  onChange={(e) => setWaMessage(e.target.value)}
+                  placeholder="Type your group announcement here..."
+                  style={{ width: '100%', padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', minHeight: '200px', fontSize: '16px', resize: 'none' }}
+                />
+                
+                <button 
+                  onClick={handleSendWhatsApp}
+                  className="btn btn-primary lg" 
+                  style={{ width: '100%', background: '#25D366 !important', borderColor: '#25D366 !important', boxShadow: '0 8px 20px rgba(37, 211, 102, 0.3)' }}
+                >
+                   <MessageCircle size={20} /> Open WhatsApp & Send to Group
+                </button>
+             </div>
+           )}
+
+           {activeView === 'chats' && (
+             <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
+                <Layout size={48} style={{ opacity: 0.1, marginBottom: '20px' }} />
+                <h3>Chat System Coming Soon</h3>
+                <p>Individual messaging is currently under maintenance. Use System Notices for urgent communications.</p>
+             </div>
+           )}
+
+        </div>
+
+      </div>
+    </PortalLayout>
+  );
+};
+
+export default Messages;

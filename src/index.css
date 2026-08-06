@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary: #6B21A8;
+  --primary-hover: #7E22CE;
+  --secondary: #D8B4FE;
+  --accent: #E9D5FF;
+  --bg-light: #FDFBFF;
+  --bg-surface: #FFFFFF;
+  --text-main: #1E1B4B;
+  --text-muted: #6B7280;
+  --success: #10B981; 
+  --error: #EF4444;
+  --warning: #F59E0B;
+  
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(107 33 168 / 0.1), 0 4px 6px -4px rgb(107 33-168 / 0.1);
+  
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  
+  --mouse-x: 50%;
+  --mouse-y: 50%;                 
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme='dark'] {
+  --primary: #A855F7;
+  --primary-hover: #C084FC;
+  --secondary: #6B21A8;
+  --accent: #4C1D95;
+  --bg-light: #08070A; /* Deeper for zero ash look */
+  --bg-surface: #100E14;
+  --text-main: #FDFCFE;
+  --text-muted: #94A3B8;
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+  --glass: rgba(16, 14, 20, 0.75);
+  --glass-border: rgba(168, 85, 247, 0.2);
+}
+
+.mouse-glow {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1; /* Above background, below content */
+  background: radial-gradient(
+    800px circle at var(--mouse-x) var(--mouse-y),
+    rgba(107, 33, 168, 0.12),
+    transparent 50%
+  );
+  transition: opacity 0.5s ease;
+}
+
+[data-theme='dark'] .mouse-glow {
+  background: radial-gradient(
+    1000px circle at var(--mouse-x) var(--mouse-y),
+    rgba(168, 85, 247, 0.2),
+    transparent 60%
+  );
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--bg-light);
+  color: var(--text-main);
+  line-height: 1.5;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+/* Glassmorphism Classes */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-purple {
+  background: rgba(168, 85, 247, 0.08);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+}
+
+/* Glowing text for dark mode */
+.glowing-text {
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .glowing-text {
+  color: #FFFFFF !important;
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.3), 0 0 30px rgba(168, 85, 247, 0.1);
+  animation: intense-pulse 2s infinite alternate ease-in-out;
+}
+
+@keyframes intense-pulse {
+  from { text-shadow: 0 0 10px rgba(168, 85, 247, 0.5); transform: scale(1); }
+  to { text-shadow: 0 0 25px rgba(168, 85, 247, 0.8), 0 0 45px rgba(168, 85, 247, 0.4); transform: scale(1.01); }
+}
+
+/* Button Base Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--primary) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px 0 rgba(107, 33, 168, 0.3) !important;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(107, 33, 168, 0.4) !important;
+}
+
+.btn-outline {
+  border: 1.5px solid var(--primary) !important;
+  color: var(--primary) !important;
+  background: transparent !important;
+}
+
+.btn-outline:hover {
+  background: rgba(107, 33, 168, 0.05) !important;
+  transform: translateY(-2px);
+}
+
+.btn.lg { padding: 16px 32px; font-size: 17px; }
+.btn.sm { padding: 8px 16px; font-size: 13px; }
+
+.login-btn-ghost {
+  background: transparent !important;
+  color: var(--text-main) !important;
+  border: 1.5px solid var(--glass-border) !important;
+  border-radius: 50px !important;
+  padding: 10px 20px !important;
+}
+
+.login-btn-ghost:hover {
+  background: var(--glass) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+/* Ensuring backgrounds blend */
+section, footer, .blend-bg {
+  background-color: var(--bg-light);
+}
+
+/* Utility Animations */
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}

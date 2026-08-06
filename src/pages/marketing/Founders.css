@@ -1,0 +1,200 @@
+.founders-root {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding-bottom: 120px;
+}
+
+.founders-nav {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 40px);
+  max-width: 1200px;
+  z-index: 1000;
+  padding: 16px 32px;
+  border-radius: 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  background: white;
+  padding: 12px 24px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateX(-5px);
+  background: var(--primary);
+  color: white;
+}
+
+.school-logo-small {
+  font-weight: 900;
+  color: var(--text-main);
+  font-size: 20px;
+}
+
+.founders-header {
+  text-align: center;
+  padding: 220px 20px 100px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.founders-header h1 {
+  font-size: 64px;
+  line-height: 1.1;
+  font-weight: 900;
+  margin-bottom: 24px;
+}
+
+.founders-header h1 span {
+  color: var(--primary);
+  position: relative;
+}
+
+.founders-header p {
+  color: var(--text-muted);
+  font-size: 20px;
+}
+
+.founder-section {
+  padding: 120px 0;
+}
+
+.founder-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 100px;
+}
+
+.founder-image-wrapper {
+  flex: 0 0 45%;
+  position: relative;
+  border-radius: 32px;
+  overflow: hidden;
+  aspect-ratio: 4/5;
+  box-shadow: 0 50px 100px -20px rgba(107, 33, 168, 0.2);
+  border: 8px solid white;
+}
+
+.founder-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.founder-image-wrapper:hover .founder-img {
+  transform: scale(1.05);
+}
+
+.founder-text {
+  flex: 1;
+}
+
+.founder-role {
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 800;
+  color: var(--primary);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.founder-text h2 {
+  font-size: 52px;
+  font-weight: 900;
+  margin-bottom: 24px;
+  line-height: 1.1;
+}
+
+.quote-box {
+  background: var(--accent);
+  padding: 48px;
+  border-radius: 32px;
+  position: relative;
+  margin-bottom: 40px;
+}
+
+.quote-icon {
+  position: absolute;
+  top: -20px;
+  left: 40px;
+  background: var(--primary);
+  color: white;
+  padding: 12px;
+  border-radius: 50%;
+}
+
+.quote-box p {
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.6;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.description {
+  font-size: 18px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin-bottom: 48px;
+}
+
+.founder-awards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.award-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.reverse .founder-content {
+  flex-direction: row-reverse;
+}
+
+/* Responsiveness */
+@media (max-width: 1100px) {
+  .founder-content { gap: 60px; }
+  .founder-text h2 { font-size: 40px; }
+  .quote-box p { font-size: 18px; }
+}
+
+@media (max-width: 968px) {
+  .founder-content {
+    flex-direction: column;
+    text-align: center;
+  }
+  .reverse .founder-content {
+    flex-direction: column;
+  }
+  .founder-image-wrapper {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 500px;
+  }
+  .founders-nav {
+     padding: 10px 20px;
+  }
+  .school-logo-small { display: none; }
+  .founders-header h1 { font-size: 48px; }
+}
