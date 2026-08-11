@@ -1,11 +1,15 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 
 export interface Result {
+  id?: string;
   subject: string;
   score: number;
   grade: string;
   term: '1st Term' | '2nd Term' | '3rd Term';
   session: string;
+  createdAt?: string;
 }
 
 export interface PastRecord {
@@ -15,16 +19,15 @@ export interface PastRecord {
 }
 
 export interface User {
-  id: string;
+  id: string;              // Supabase auth UUID -- the real primary key
+  displayId: string;       // human-readable ID, e.g. "CH 001", "CH-STAFF-01"
   name: string;
-  role: 'student' | 'teacher' | 'admin';
-  password: string;
-  createdAt: string;
+  role: 'student' | 'teacher' | 'teacher_pending' | 'admin';
+  email: string;
   status: 'Active' | 'Inactive';
+  createdAt: string;
   grade?: string;
-  email?: string;
   phone?: string;
-  subjects?: string[];
   assignedClass?: string;
   results?: Result[];
   history?: PastRecord[];
@@ -48,237 +51,304 @@ export interface Notification {
 interface AuthContextType {
   students: User[];
   staff: User[];
-  registerStudent: (name: string, password: string, grade: string) => User;
-  registerStaff: (name: string, password: string, role: 'teacher' | 'admin') => User;
-  addStudent: (student: Omit<User, 'id' | 'createdAt' | 'status' | 'role'>) => User;
-  updateUser: (id: string, data: Partial<User>) => void;
-  deleteUser: (id: string) => void;
-  promoteStudent: (id: string, nextGrade: string, currentSession: string) => void;
-  addResult: (studentId: string, result: Result) => void;
-  login: (idOrName: string, password: string, role: string) => User | null;
   currentUser: User | null;
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
+  registerStudent: (name: string, email: string, password: string, grade: string) => Promise<{ error: string | null }>;
+  registerStaff: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  inviteUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null }>;
+  updateUser: (id: string, data: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  approveTeacher: (id: string) => Promise<void>;
+  promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
+  addResult: (studentId: string, result: Result) => Promise<void>;
   subjectsByClass: Record<string, string[]>;
-  updateSubjects: (className: string, subjects: string[]) => void;
+  updateSubjects: (className: string, subjects: string[]) => Promise<void>;
   timetables: Record<string, TimetableEntry[]>;
-  updateTimetable: (className: string, entries: TimetableEntry[]) => void;
+  updateTimetable: (className: string, entries: TimetableEntry[]) => Promise<void>;
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id' | 'date'>) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'date'>) => Promise<void>;
   exportData: () => void;
-  importData: (jsonData: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapProfileRow = (row: any): User => ({
+  id: row.id,
+  displayId: row.display_id,
+  name: row.name,
+  role: row.role,
+  email: row.email ?? '',
+  status: row.status,
+  createdAt: row.created_at,
+  grade: row.grade ?? undefined,
+  phone: row.phone ?? undefined,
+  assignedClass: row.assigned_class ?? undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  results: (row.results ?? []).map((r: any) => ({
+    id: r.id, subject: r.subject, score: r.score, grade: r.grade, term: r.term, session: r.session, createdAt: r.created_at,
+  })),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  history: (row.academic_history ?? []).map((h: any) => ({
+    grade: h.grade, session: h.session, results: h.results ?? [],
+  })),
+});
+
+const PROFILE_SELECT = '*, results(*), academic_history(*)';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [students, setStudents] = useState<User[]>(() => {
-    const saved = localStorage.getItem('citadel_students');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [staff, setStaff] = useState<User[]>(() => {
-    const saved = localStorage.getItem('citadel_staff');
-    const parsed = saved ? JSON.parse(saved) : [];
-    if (parsed.length === 0) {
-      const defaultStaff: User[] = [
-        { 
-          id: 'CH-STAFF-01', 
-          name: 'Admin', 
-          role: 'admin', 
-          password: 'password123', 
-          createdAt: new Date().toISOString(), 
-          status: 'Active' 
-        }
-      ];
-      localStorage.setItem('citadel_staff', JSON.stringify(defaultStaff));
-      return defaultStaff;
-    }
-    return parsed;
-  });
-
+  const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
-  const [subjectsByClass, setSubjectsByClass] = useState<Record<string, string[]>>(() => {
-    const saved = localStorage.getItem('citadel_subjects');
-    return saved ? JSON.parse(saved) : {};
-  });
-  
-  const [timetables, setTimetables] = useState<Record<string, TimetableEntry[]>>(() => {
-    const saved = localStorage.getItem('citadel_timetables');
-    return saved ? JSON.parse(saved) : {};
-  });
-  
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const saved = localStorage.getItem('citadel_notifications');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [students, setStudents] = useState<User[]>([]);
+  const [staff, setStaff] = useState<User[]>([]);
+  const [subjectsByClass, setSubjectsByClass] = useState<Record<string, string[]>>({});
+  const [timetables, setTimetables] = useState<Record<string, TimetableEntry[]>>({});
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Save to localStorage whenever data changes
-  useEffect(() => localStorage.setItem('citadel_students', JSON.stringify(students)), [students]);
-  useEffect(() => localStorage.setItem('citadel_staff', JSON.stringify(staff)), [staff]);
-  useEffect(() => localStorage.setItem('citadel_subjects', JSON.stringify(subjectsByClass)), [subjectsByClass]);
-  useEffect(() => localStorage.setItem('citadel_timetables', JSON.stringify(timetables)), [timetables]);
-  useEffect(() => localStorage.setItem('citadel_notifications', JSON.stringify(notifications)), [notifications]);
+  const refreshProfiles = useCallback(async () => {
+    const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).order('created_at');
+    if (error) { console.error('Failed to load profiles', error); return; }
+    const rows = (data ?? []).map(mapProfileRow);
+    setStudents(rows.filter(u => u.role === 'student'));
+    setStaff(rows.filter(u => u.role !== 'student'));
+  }, []);
 
-  const generateStudentId = () => `CH ${String(students.length + 1).padStart(3, '0')}`;
-  const generateStaffId = () => `CH-STAFF-${String(staff.length + 1).padStart(2, '0')}`;
+  const refreshCurrentProfile = useCallback(async (userId: string) => {
+    const { data, error } = await supabase.from('profiles').select(PROFILE_SELECT).eq('id', userId).single();
+    if (error) { console.error('Failed to load current profile', error); setCurrentUser(null); return; }
+    setCurrentUser(mapProfileRow(data));
+  }, []);
 
-  const registerStudent = (name: string, password: string, grade: string) => {
-    const newStudent: User = {
-      id: generateStudentId(),
-      name,
-      role: 'student',
-      password,
-      createdAt: new Date().toISOString(),
-      status: 'Active',
-      grade,
-      results: [],
-      history: []
-    };
-    setStudents(prev => [...prev, newStudent]);
-    return newStudent;
-  };
+  const refreshSubjects = useCallback(async () => {
+    const { data, error } = await supabase.from('class_subjects').select('*');
+    if (error) { console.error('Failed to load subjects', error); return; }
+    const map: Record<string, string[]> = {};
+    (data ?? []).forEach((row) => { map[row.class_name] = row.subjects ?? []; });
+    setSubjectsByClass(map);
+  }, []);
 
-  const registerStaff = (name: string, password: string, role: 'teacher' | 'admin') => {
-    const newStaff: User = {
-      id: generateStaffId(),
-      name,
-      role,
-      password,
-      createdAt: new Date().toISOString(),
-      status: 'Active'
-    };
-    setStaff(prev => [...prev, newStaff]);
-    return newStaff;
-  };
+  const refreshTimetables = useCallback(async () => {
+    const { data, error } = await supabase.from('timetable_entries').select('*');
+    if (error) { console.error('Failed to load timetables', error); return; }
+    const map: Record<string, TimetableEntry[]> = {};
+    (data ?? []).forEach((row) => {
+      if (!map[row.class_name]) map[row.class_name] = [];
+      map[row.class_name].push({ day: row.day, time: row.time, subject: row.subject, teacher: row.teacher });
+    });
+    setTimetables(map);
+  }, []);
 
-  const addStudent = (data: Omit<User, 'id' | 'createdAt' | 'status' | 'role'>) => {
-    const newStudent: User = {
-      ...data,
-      id: generateStudentId(),
-      role: 'student',
-      createdAt: new Date().toISOString(),
-      status: 'Active',
-      results: [],
-      history: []
-    };
-    setStudents(prev => [...prev, newStudent]);
-    return newStudent;
-  };
+  const refreshNotifications = useCallback(async () => {
+    const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Failed to load notifications', error); return; }
+    setNotifications((data ?? []).map((row) => ({
+      id: row.id, title: row.title, message: row.message, date: row.created_at, type: row.type,
+    })));
+  }, []);
 
-  const updateUser = (id: string, data: Partial<User>) => {
-    setStudents(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-    setStaff(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-    if (currentUser?.id === id) setCurrentUser(prev => prev ? { ...prev, ...data } : null);
-  };
+  const refreshAll = useCallback(async (userId: string) => {
+    await Promise.all([
+      refreshCurrentProfile(userId),
+      refreshProfiles(),
+      refreshSubjects(),
+      refreshTimetables(),
+      refreshNotifications(),
+    ]);
+  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications]);
 
-  const deleteUser = (id: string) => {
-    setStudents(prev => prev.filter(u => u.id !== id));
-    setStaff(prev => prev.filter(u => u.id !== id));
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const promoteStudent = (id: string, nextGrade: string, currentSession: string) => {
-    setStudents(prev => prev.map(u => {
-      if (u.id === id) {
-        const pastRecord: PastRecord = {
-          grade: u.grade || 'Unknown',
-          session: currentSession,
-          results: u.results || []
-        };
-        return {
-          ...u,
-          grade: nextGrade,
-          results: [],
-          history: [...(u.history || []), pastRecord]
-        };
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!isMounted) return;
+      setSession(session);
+      if (session?.user) await refreshAll(session.user.id);
+      setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        await refreshAll(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setStudents([]);
+        setStaff([]);
+        setSubjectsByClass({});
+        setTimetables({});
+        setNotifications([]);
       }
-      return u;
-    }));
+    });
+
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [refreshAll]);
+
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ?? null };
   };
 
-  const addResult = (studentId: string, result: Result) => {
-    setStudents(prev => prev.map(u => {
-      if (u.id === studentId) {
-        return {
-          ...u,
-          results: [...(u.results || []), result]
-        };
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const registerStudent = async (name: string, email: string, password: string, grade: string) => {
+    const { error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { name, role: 'student', grade } },
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const registerStaff = async (name: string, email: string, password: string) => {
+    // Always lands as 'teacher_pending' -- an admin must approve before
+    // it becomes a real 'teacher' account. See approveTeacher().
+    const { error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { name, role: 'teacher' } },
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error: error?.message ?? null };
+  };
+
+  const inviteUser = async (name: string, email: string, role: 'student' | 'teacher', grade?: string) => {
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: { name, email, role, grade },
+    });
+    if (error) return { error: error.message };
+    if (data?.error) return { error: data.error as string };
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  const updateUser = async (id: string, data: Partial<User>) => {
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.phone !== undefined) patch.phone = data.phone;
+    if (data.grade !== undefined) patch.grade = data.grade;
+    if (data.assignedClass !== undefined) patch.assigned_class = data.assignedClass;
+    if (data.status !== undefined) patch.status = data.status;
+    if (data.role !== undefined) patch.role = data.role;
+
+    const { error } = await supabase.from('profiles').update(patch).eq('id', id);
+    if (error) { console.error('updateUser failed', error); return; }
+
+    if (session?.user.id === id) await refreshCurrentProfile(id);
+    await refreshProfiles();
+  };
+
+  const deleteUser = async (id: string) => {
+    // NOTE: this removes the profile row (and therefore all app-level
+    // access), but does not delete the underlying auth.users login --
+    // that requires the service_role key, which the frontend must
+    // never hold. If you need full account deletion, extend the
+    // admin-create-user edge function with a delete counterpart.
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) { console.error('deleteUser failed', error); return; }
+    await refreshProfiles();
+  };
+
+  const approveTeacher = async (id: string) => {
+    await updateUser(id, { role: 'teacher' });
+  };
+
+  const promoteStudent = async (id: string, nextGrade: string, currentSession: string) => {
+    const student = students.find(s => s.id === id);
+    if (!student) return;
+
+    const currentResults = student.results ?? [];
+    if (currentResults.length > 0) {
+      await supabase.from('academic_history').insert({
+        student_id: id,
+        grade: student.grade ?? 'Unknown',
+        session: currentSession,
+        results: currentResults,
+      });
+      const resultIds = currentResults.map(r => r.id).filter(Boolean) as string[];
+      if (resultIds.length > 0) {
+        await supabase.from('results').delete().in('id', resultIds);
       }
-      return u;
-    }));
-  };
-
-  const login = (idOrName: string, password: string, role: string) => {
-    const searchId = idOrName.trim().toLowerCase();
-    const allUsers = [...students, ...staff];
-    const foundUser = allUsers.find(u => 
-      (u.id.toLowerCase() === searchId || u.name.toLowerCase() === searchId) && 
-      u.password === password &&
-      (role === 'student' ? u.role === 'student' : u.role !== 'student')
-    );
-
-    if (foundUser) {
-      setCurrentUser(foundUser);
-      return foundUser;
     }
-    return null;
+
+    await supabase.from('profiles').update({ grade: nextGrade }).eq('id', id);
+    await refreshProfiles();
   };
 
-  const logout = () => setCurrentUser(null);
-
-  const updateSubjects = (className: string, subjects: string[]) => {
-    setSubjectsByClass(prev => ({ ...prev, [className]: subjects }));
+  const addResult = async (studentId: string, result: Result) => {
+    const { error } = await supabase.from('results').insert({
+      student_id: studentId,
+      subject: result.subject,
+      score: result.score,
+      grade: result.grade,
+      term: result.term,
+      session: result.session,
+    });
+    if (error) { console.error('addResult failed', error); return; }
+    if (session?.user.id === studentId) await refreshCurrentProfile(studentId);
+    await refreshProfiles();
   };
 
-  const updateTimetable = (className: string, entries: TimetableEntry[]) => {
-    setTimetables(prev => ({ ...prev, [className]: entries }));
+  const updateSubjects = async (className: string, subjects: string[]) => {
+    const { error } = await supabase.from('class_subjects').upsert({ class_name: className, subjects });
+    if (error) { console.error('updateSubjects failed', error); return; }
+    await refreshSubjects();
   };
 
-  const addNotification = (notif: Omit<Notification, 'id' | 'date'>) => {
-    const newNotif: Notification = {
-      ...notif,
-      id: Math.random().toString(36).substr(2, 9),
-      date: new Date().toISOString()
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+  const updateTimetable = async (className: string, entries: TimetableEntry[]) => {
+    await supabase.from('timetable_entries').delete().eq('class_name', className);
+    if (entries.length > 0) {
+      await supabase.from('timetable_entries').insert(
+        entries.map(e => ({ class_name: className, day: e.day, time: e.time, subject: e.subject, teacher: e.teacher }))
+      );
+    }
+    await refreshTimetables();
+  };
+
+  const addNotification = async (notif: Omit<Notification, 'id' | 'date'>) => {
+    const { error } = await supabase.from('notifications').insert({
+      title: notif.title, message: notif.message, type: notif.type,
+    });
+    if (error) { console.error('addNotification failed', error); return; }
+    await refreshNotifications();
   };
 
   const exportData = () => {
-    const data = {
-      students,
-      staff,
-      subjects: subjectsByClass,
-      timetables,
-      notifications
-    };
+    const data = { students, staff, subjects: subjectsByClass, timetables, notifications };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `citadel_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
-  };
-
-  const importData = (jsonData: string) => {
-    try {
-      const data = JSON.parse(jsonData);
-      if (data.students) setStudents(data.students);
-      if (data.staff) setStaff(data.staff);
-      if (data.subjects) setSubjectsByClass(data.subjects);
-      if (data.timetables) setTimetables(data.timetables);
-      if (data.notifications) setNotifications(data.notifications);
-      alert('Data imported successfully!');
-    } catch (e) {
-      alert('Failed to import data. Invalid JSON format.');
-    }
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      students, staff, registerStudent, registerStaff, addStudent, updateUser, deleteUser, 
-      promoteStudent, addResult, login, currentUser, logout,
-      subjectsByClass, updateSubjects, timetables, updateTimetable, notifications, addNotification,
-      exportData, importData
+    <AuthContext.Provider value={{
+      students, staff, currentUser, loading,
+      login, logout, registerStudent, registerStaff, requestPasswordReset, updatePassword, inviteUser,
+      updateUser, deleteUser, approveTeacher, promoteStudent, addResult,
+      subjectsByClass, updateSubjects, timetables, updateTimetable,
+      notifications, addNotification, exportData,
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,68 +1,78 @@
 import { useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type User } from '../../context/AuthContext';
-import { 
-  Users, 
-  Settings, 
-  Database, 
-  PlusCircle, 
+import {
+  Users,
+  Settings,
+  Database,
+  PlusCircle,
   Search,
   Edit2,
   Key,
   CheckCircle,
   Clock,
-  MoreVertical,
   Calendar,
-  Lock,
   X,
   Save
 } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { students, staff, addStudent, updateUser } = useAuth();
+  const { students, staff, inviteUser, updateUser, requestPasswordReset, exportData } = useAuth();
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
-  
+
+  const pendingTeacherCount = staff.filter(s => s.role === 'teacher_pending').length;
+
   const adminStats = [
     { label: "Total Students", value: students.length.toString(), icon: <Users size={20} />, trend: "Across all grades" },
     { label: "Active This Term", value: students.filter(s => s.status === 'Active').length.toString(), icon: <CheckCircle size={20} />, trend: "Registered & Paid" },
-    { label: "Pending Registration", value: "0", icon: <Clock size={20} />, trend: "Incomplete profiles" },
+    { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers" },
     { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin" },
   ];
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredStudents = students.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddStudent = () => {
+  const handleAddStudent = async () => {
     const name = prompt("Enter Student Full Name:");
-    const password = prompt("Enter Student Password:");
-    if (name && password) {
-      addStudent({ name, password });
-      alert("Student added successfully!");
+    if (!name) return;
+    const email = prompt("Enter Student's Email (or a parent/guardian's):");
+    if (!email) return;
+    const grade = prompt("Enter Grade / Class:", "Grade 1");
+    if (!grade) return;
+
+    const { error } = await inviteUser(name, email, 'student', grade);
+    if (error) {
+      alert("Failed to add student: " + error);
+    } else {
+      alert(`Invitation sent to ${email}. They'll set their own password via the emailed link.`);
     }
   };
 
-  const handleUpdateStudent = (e: React.FormEvent) => {
+  const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingStudent) {
-      updateUser(editingStudent.id, editingStudent);
+      await updateUser(editingStudent.id, editingStudent);
       setEditingStudent(null);
       alert("Student updated!");
     }
   };
 
-  const toggleStatus = (student: User) => {
-    updateUser(student.id, { status: student.status === 'Active' ? 'Inactive' : 'Active' });
+  const toggleStatus = async (student: User) => {
+    await updateUser(student.id, { status: student.status === 'Active' ? 'Inactive' : 'Active' });
   };
 
-  const resetPassword = (student: User) => {
-    const newPass = prompt("Enter new password for " + student.name, student.password);
-    if (newPass) {
-      updateUser(student.id, { password: newPass });
-      alert("Password reset successful!");
+  const resetPassword = async (student: User) => {
+    if (!student.email) {
+      alert("This student has no email on file, so a reset link can't be sent.");
+      return;
     }
+    if (!window.confirm(`Send a password reset link to ${student.name} (${student.email})?`)) return;
+    const { error } = await requestPasswordReset(student.email);
+    if (error) alert("Failed to send reset email: " + error);
+    else alert("Password reset link sent to " + student.email);
   };
 
   return (
@@ -119,7 +129,6 @@ const AdminDashboard = () => {
                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
                       <th style={{ padding: '12px 20px' }}>STUDENT NAME</th>
                       <th style={{ padding: '12px 20px' }}>ID / LOGIN</th>
-                      <th style={{ padding: '12px 20px' }}>PASSWORD</th>
                       <th style={{ padding: '12px 20px' }}>DATE CREATED</th>
                       <th style={{ padding: '12px 20px' }}>STATUS</th>
                       <th style={{ padding: '12px 20px', textAlign: 'right' }}>ACTIONS</th>
@@ -129,13 +138,7 @@ const AdminDashboard = () => {
                    {filteredStudents.map((student, i) => (
                      <tr key={i} className="hover-scale" style={{ background: 'var(--bg-surface)', transition: 'all 0.2s ease' }}>
                         <td style={{ padding: '16px 20px', borderRadius: '12px 0 0 12px', fontWeight: '600' }}>{student.name}</td>
-                        <td style={{ padding: '16px 20px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.id}</td>
-                        <td style={{ padding: '16px 20px' }}>
-                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: '600' }}>
-                              <Lock size={14} />
-                              {student.password}
-                           </div>
-                        </td>
+                        <td style={{ padding: '16px 20px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.displayId}</td>
                         <td style={{ padding: '16px 20px', color: 'var(--text-muted)', fontSize: '13px' }}>
                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <Calendar size={14} />
@@ -143,7 +146,7 @@ const AdminDashboard = () => {
                            </div>
                         </td>
                         <td style={{ padding: '16px 20px' }}>
-                           <span 
+                           <span
                             onClick={() => toggleStatus(student)}
                             style={{ cursor: 'pointer', padding: '4px 10px', borderRadius: '50px', fontSize: '11px', fontWeight: '700', background: student.status === 'Active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: student.status === 'Active' ? 'var(--success)' : 'var(--error)' }}
                            >
@@ -153,8 +156,7 @@ const AdminDashboard = () => {
                         <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                               <button onClick={() => setEditingStudent(student)} className="icon-btn" title="Edit Student" style={{ color: 'var(--primary)' }}><Edit2 size={16} /></button>
-                              <button onClick={() => resetPassword(student)} className="icon-btn" title="Reset Password" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
-                              <button className="icon-btn"><MoreVertical size={16} /></button>
+                              <button onClick={() => resetPassword(student)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
                            </div>
                         </td>
                      </tr>
@@ -222,43 +224,22 @@ const AdminDashboard = () => {
               </div>
               <div className="blend-bg" style={{ padding: '20px', borderRadius: '16px', marginBottom: '20px' }}>
                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '13px' }}>Database Backup</span>
-                    <span style={{ fontSize: '11px', color: 'var(--success)' }}>Local Storage Active</span>
+                    <span style={{ fontSize: '13px' }}>Database</span>
+                    <span style={{ fontSize: '11px', color: 'var(--success)' }}>Supabase (Postgres)</span>
                  </div>
-                 <div style={{ height: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: '100%', height: '100%', background: 'var(--primary)' }}></div>
-                 </div>
-                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>All data is stored in your browser's secure local storage.</p>
+                 <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Data is stored centrally and shared across every device -- not just this browser.</p>
               </div>
-              
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                 <button 
-                  onClick={useAuth().exportData}
-                  className="btn btn-primary sm" 
-                  style={{ flex: 1, justifyContent: 'center' }}
-                 >
-                    <Save size={16} /> Download Backup (JSON)
-                 </button>
-                 <label className="btn btn-outline sm" style={{ flex: 1, justifyContent: 'center', cursor: 'pointer' }}>
-                    <Database size={16} /> Import Data
-                    <input 
-                      type="file" 
-                      accept=".json" 
-                      style={{ display: 'none' }} 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const content = event.target?.result as string;
-                            useAuth().importData(content);
-                          };
-                          reader.readAsText(file);
-                        }
-                      }}
-                    />
-                 </label>
-              </div>
+
+              <button
+               onClick={exportData}
+               className="btn btn-primary sm"
+               style={{ width: '100%', justifyContent: 'center' }}
+              >
+                 <Save size={16} /> Download Backup (JSON)
+              </button>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+                 Bulk restore-from-file was removed -- it let anyone overwrite the entire user database with unvalidated data. Individual records can still be edited above.
+              </p>
             </section>
         </div>
       </div>

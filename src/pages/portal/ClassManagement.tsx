@@ -1,18 +1,12 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type Result, type User } from '../../context/AuthContext';
-import { 
-  Users, 
-  ArrowRight, 
-  Plus, 
-  FileText, 
-  Trash2, 
-  ChevronRight, 
+import {
+  Plus,
+  FileText,
   CheckCircle,
-  Clock,
   Sparkles,
-  Camera,
   Search,
   ArrowUpCircle
 } from 'lucide-react';
@@ -21,7 +15,6 @@ import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 const ClassManagement = () => {
   const { className } = useParams();
   const { students, addResult, promoteStudent, addNotification } = useAuth();
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [isAddingResult, setIsAddingResult] = useState(false);
@@ -36,25 +29,25 @@ const ClassManagement = () => {
   });
 
   const classStudents = students.filter(s => s.grade === className && (
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   ));
 
-  const handleAddResult = (e: React.FormEvent) => {
+  const handleAddResult = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedStudent && newResult.subject && newResult.score !== undefined) {
       const score = Number(newResult.score);
       const grade = score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : score >= 50 ? 'D' : 'F';
-      
-      addResult(selectedStudent.id, {
+
+      await addResult(selectedStudent.id, {
         subject: newResult.subject,
         score: score,
         grade,
-        term: newResult.term as any,
+        term: newResult.term as Result['term'],
         session: newResult.session as string
       });
 
-      addNotification({
+      await addNotification({
         title: "Result Added",
         message: `New result for ${selectedStudent.name} in ${newResult.subject} has been uploaded.`,
         type: 'success'
@@ -65,11 +58,11 @@ const ClassManagement = () => {
     }
   };
 
-  const handlePromote = (student: User) => {
+  const handlePromote = async (student: User) => {
     const nextGrade = prompt(`Promote ${student.name} to which class?`, 'Grade 2');
     if (nextGrade) {
-      promoteStudent(student.id, nextGrade, "2023/2024");
-      addNotification({
+      await promoteStudent(student.id, nextGrade, "2023/2024");
+      await addNotification({
         title: "Student Promoted",
         message: `${student.name} has been promoted to ${nextGrade}. All previous records archived.`,
         type: 'success'
@@ -78,20 +71,20 @@ const ClassManagement = () => {
     }
   };
 
-  const handleExtractedResults = (extracted: { subject: string; score: number }[]) => {
+  const handleExtractedResults = async (extracted: { subject: string; score: number }[]) => {
     if (selectedStudent) {
-      extracted.forEach(item => {
+      for (const item of extracted) {
         const grade = item.score >= 80 ? 'A' : item.score >= 70 ? 'B' : item.score >= 60 ? 'C' : item.score >= 50 ? 'D' : 'F';
-        addResult(selectedStudent.id, {
+        await addResult(selectedStudent.id, {
           subject: item.subject,
           score: item.score,
           grade,
           term: '1st Term', // Default or could be selected
           session: '2023/2024'
         });
-      });
+      }
 
-      addNotification({
+      await addNotification({
         title: "AI Extraction Success",
         message: `Automatically extracted ${extracted.length} results for ${selectedStudent.name}.`,
         type: 'success'
@@ -140,7 +133,7 @@ const ClassManagement = () => {
                 {classStudents.map((student, i) => (
                   <tr key={i} className="hover-scale" style={{ background: 'var(--bg-surface)', borderRadius: '16px', transition: 'all 0.2s ease' }}>
                     <td style={{ padding: '20px', borderRadius: '16px 0 0 16px', fontWeight: '700' }}>{student.name}</td>
-                    <td style={{ padding: '20px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.id}</td>
+                    <td style={{ padding: '20px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.displayId}</td>
                     <td style={{ padding: '20px' }}>
                       <span style={{ padding: '4px 10px', background: 'var(--accent)', color: 'var(--primary)', borderRadius: '50px', fontSize: '12px', fontWeight: '700' }}>
                         {student.results?.length || 0} Subjects

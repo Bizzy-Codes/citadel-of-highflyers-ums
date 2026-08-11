@@ -1,7 +1,8 @@
 import PortalLayout from '../../components/layout/PortalLayout';
-import { 
-  Calendar, 
-  TrendingUp, 
+import { useAuth } from '../../context/AuthContext';
+import {
+  Calendar,
+  TrendingUp,
   AlertCircle,
   Play,
   Download,
@@ -12,11 +13,18 @@ import {
 import './Dashboard.css';
 
 const Dashboard = () => {
+  const { currentUser } = useAuth();
+  const results = currentUser?.results ?? [];
+
+  const averageGrade = results.length > 0
+    ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+    : null;
+
   const stats = [
-    { label: "Attendance", value: "95%", icon: <CheckCircle2 className="success" />, trend: "+2% from last month" },
-    { label: "Average Grade", value: "A-", icon: <TrendingUp className="primary" />, trend: "Steady progress" },
-    { label: "Upcoming Exams", value: "3", icon: <Calendar className="warning" />, trend: "Starts in 12 days" },
-    { label: "Pending Fees", value: "$0.00", icon: <AlertCircle className="success" />, trend: "Fully paid" },
+    { label: "Attendance", value: "N/A", icon: <CheckCircle2 className="success" />, trend: "Attendance tracking not yet implemented" },
+    { label: "Average Score", value: averageGrade !== null ? `${averageGrade}%` : "No results yet", icon: <TrendingUp className="primary" />, trend: `${results.length} subject(s) this term` },
+    { label: "Upcoming Exams", value: "N/A", icon: <Calendar className="warning" />, trend: "Exam calendar not yet implemented" },
+    { label: "Pending Fees", value: "N/A", icon: <AlertCircle className="success" />, trend: "Fee tracking not yet implemented" },
   ];
 
   const assignments = [
@@ -31,11 +39,10 @@ const Dashboard = () => {
         <section className="welcome-banner glass-purple">
           <div className="welcome-text">
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
-               <div style={{ padding: '10px 20px', background: 'var(--primary)', color: 'white', borderRadius: '12px', fontWeight: '700' }}>Grade 4 (Green)</div>
-               <div style={{ fontWeight: '600', color: 'var(--text-muted)' }}>Age: 9 Years</div>
+               <div style={{ padding: '10px 20px', background: 'var(--primary)', color: 'white', borderRadius: '12px', fontWeight: '700' }}>{currentUser?.grade || 'Unassigned'}</div>
             </div>
-            <h1>Welcome back, <span>Ikechukwu!</span> 👋</h1>
-            <p>You have {assignments.length} assignments due this week. Your performance is up by 5% compared to last term.</p>
+            <h1>Welcome back, <span>{currentUser?.name || 'Student'}!</span> 👋</h1>
+            <p>You have {assignments.length} assignments due this week.</p>
             <div style={{ display: 'flex', gap: '12px' }}>
                <button className="btn btn-primary sm"><Download size={18} /> Download Result Sheet</button>
                <button className="btn btn-outline sm">View Schedule</button>

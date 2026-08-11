@@ -15,9 +15,11 @@ const Profile = () => {
 
   if (!currentUser) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser(currentUser.id, formData);
+    const { email: _email, ...editable } = formData;
+    void _email; // email isn't editable here -- see the disabled field below
+    await updateUser(currentUser.id, editable);
     setIsEditing(false);
     alert("Profile updated successfully!");
   };
@@ -38,7 +40,7 @@ const Profile = () => {
                 <div>
                   <h1 style={{ fontSize: '36px', fontWeight: '900', marginBottom: '8px' }}>{currentUser.name}</h1>
                   <p style={{ color: 'var(--text-muted)', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <UserIcon size={18} /> {currentUser.role.toUpperCase()} ID: {currentUser.id} {currentUser.role === 'student' && `| ${currentUser.grade}`}
+                    <UserIcon size={18} /> {currentUser.role.toUpperCase()} ID: {currentUser.displayId} {currentUser.role === 'student' && `| ${currentUser.grade}`}
                   </p>
                 </div>
                 <button onClick={() => setIsEditing(!isEditing)} className={`btn ${isEditing ? 'btn-outline' : 'btn-primary'}`}>
@@ -91,8 +93,9 @@ const Profile = () => {
                   <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                 </div>
                 <div className="input-group">
-                  <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Email Address</label>
-                  <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                  <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Email Address (login)</label>
+                  <input type="email" value={formData.email} disabled style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)' }} />
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>This is your login email and can't be changed here. Contact an admin if it needs to change.</p>
                 </div>
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Phone Number</label>

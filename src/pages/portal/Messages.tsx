@@ -24,10 +24,10 @@ const Messages = () => {
     setWaMessage('');
   };
 
-  const handlePostNotification = (e: React.FormEvent) => {
+  const handlePostNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (notifTitle && notifMsg) {
-      addNotification({ title: notifTitle, message: notifMsg, type: notifType });
+      await addNotification({ title: notifTitle, message: notifMsg, type: notifType });
       setNotifTitle('');
       setNotifMsg('');
       alert("Notification posted to all users!");

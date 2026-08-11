@@ -1,5 +1,5 @@
 import PortalLayout from '../../components/layout/PortalLayout';
-import { Download, ChevronRight, FileText, Calendar } from 'lucide-react';
+import { Download, ChevronRight, Calendar } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Results = () => {

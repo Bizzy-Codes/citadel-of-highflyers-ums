@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type User } from '../../context/AuthContext';
-import { 
-  Users, 
+import {
+  Users,
   Search,
   Edit2,
   Trash2,
   BookOpen,
   UserCheck,
+  UserPlus,
   Save,
   X
 } from 'lucide-react';
 
 const UserManagement = () => {
-  const { students, staff, updateUser, deleteUser, subjectsByClass, updateSubjects } = useAuth();
+  const { students, staff, updateUser, deleteUser, approveTeacher, subjectsByClass, updateSubjects } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -21,37 +22,42 @@ const UserManagement = () => {
 
   const classes = ["Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
-  const filteredStaff = staff.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredStaff = staff.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredStudents = students.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-      updateUser(editingUser.id, editingUser);
+      await updateUser(editingUser.id, editingUser);
       setEditingUser(null);
       alert("User updated successfully!");
     }
   };
 
-  const handleDeleteUser = (id: string) => {
+  const handleDeleteUser = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
-      deleteUser(id);
+      await deleteUser(id);
       alert("User deleted.");
     }
   };
 
-  const handleUpdateSubjects = (e: React.FormEvent) => {
+  const handleApproveTeacher = async (id: string) => {
+    await approveTeacher(id);
+    alert("Teacher approved. They now have portal access.");
+  };
+
+  const handleUpdateSubjects = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingSubjects) {
       const subjectList = editingSubjects.subjects.split(',').map(s => s.trim()).filter(s => s !== "");
-      updateSubjects(editingSubjects.className, subjectList);
+      await updateSubjects(editingSubjects.className, subjectList);
       setEditingSubjects(null);
       alert("Subjects updated!");
     }
@@ -111,7 +117,6 @@ const UserManagement = () => {
                          <th style={{ padding: '12px 20px' }}>NAME</th>
                          <th style={{ padding: '12px 20px' }}>ID / LOGIN</th>
                          <th style={{ padding: '12px 20px' }}>ROLE / CLASS</th>
-                         <th style={{ padding: '12px 20px' }}>PASSWORD</th>
                          <th style={{ padding: '12px 20px' }}>STATUS</th>
                          <th style={{ padding: '12px 20px', textAlign: 'right' }}>ACTIONS</th>
                       </tr>
@@ -120,13 +125,12 @@ const UserManagement = () => {
                       {(activeTab === 'teachers' ? filteredStaff : filteredStudents).map((user, i) => (
                         <tr key={i} className="hover-scale" style={{ background: 'var(--bg-surface)' }}>
                            <td style={{ padding: '16px 20px', borderRadius: '12px 0 0 12px', fontWeight: '600' }}>{user.name}</td>
-                           <td style={{ padding: '16px 20px', color: 'var(--text-muted)' }}>{user.id}</td>
+                           <td style={{ padding: '16px 20px', color: 'var(--text-muted)' }}>{user.displayId}</td>
                            <td style={{ padding: '16px 20px' }}>
                               <span style={{ fontSize: '12px', background: 'var(--accent)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px' }}>
                                  {user.role === 'student' ? user.grade : (user.assignedClass || user.role)}
                               </span>
                            </td>
-                           <td style={{ padding: '16px 20px', fontFamily: 'monospace' }}>{user.password}</td>
                            <td style={{ padding: '16px 20px' }}>
                               <span style={{ fontSize: '11px', fontWeight: '700', color: user.status === 'Active' ? 'var(--success)' : 'var(--error)' }}>
                                  {user.status}
@@ -134,6 +138,9 @@ const UserManagement = () => {
                            </td>
                            <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
                               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                 {user.role === 'teacher_pending' && (
+                                   <button onClick={() => handleApproveTeacher(user.id)} className="icon-btn" title="Approve Teacher" style={{ color: 'var(--success)' }}><UserPlus size={16} /></button>
+                                 )}
                                  <button onClick={() => setEditingUser(user)} className="icon-btn" title="Edit"><Edit2 size={16} /></button>
                                  <button onClick={() => handleDeleteUser(user.id)} className="icon-btn" title="Delete" style={{ color: 'var(--error)' }}><Trash2 size={16} /></button>
                               </div>
@@ -191,15 +198,9 @@ const UserManagement = () => {
                         style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
                       />
                    </div>
-                   <div className="input-group">
-                      <label>Password</label>
-                      <input 
-                        type="text" 
-                        value={editingUser.password} 
-                        onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
-                      />
-                   </div>
+                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '-8px 0 0' }}>
+                      Passwords are managed by the user via "Forgot Password" -- admins can no longer view or set them directly.
+                   </p>
                    {editingUser.role === 'student' ? (
                      <div className="input-group">
                         <label>Grade / Class</label>

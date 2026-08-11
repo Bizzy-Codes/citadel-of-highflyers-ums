@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import Tesseract from 'tesseract.js';
-import { Camera, Loader2, CheckCircle, AlertCircle, FileText, Trash2 } from 'lucide-react';
+import { Camera, Loader2, CheckCircle, FileText, Trash2 } from 'lucide-react';
 
 interface OCRResultExtractorProps {
   onResultsExtracted: (data: { subject: string; score: number }[]) => void;

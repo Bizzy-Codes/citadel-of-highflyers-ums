@@ -40,8 +40,8 @@ const Timetable = () => {
     setEntries(entries.filter((_, i) => i !== index));
   };
 
-  const handleSave = () => {
-    updateTimetable(selectedClass, entries);
+  const handleSave = async () => {
+    await updateTimetable(selectedClass, entries);
     alert(`Timetable for ${selectedClass} saved!`);
   };
 
