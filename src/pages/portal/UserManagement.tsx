@@ -14,11 +14,14 @@ import {
 } from 'lucide-react';
 
 const UserManagement = () => {
-  const { students, staff, updateUser, deleteUser, approveTeacher, subjectsByClass, updateSubjects } = useAuth();
+  const { students, staff, updateUser, deleteUser, approveTeacher, inviteUser, subjectsByClass, updateSubjects } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingSubjects, setEditingSubjects] = useState<{className: string, subjects: string} | null>(null);
+  const [addingUser, setAddingUser] = useState<{ name: string; email: string; grade: string } | null>(null);
+  const [addUserError, setAddUserError] = useState('');
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   const classes = ["Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
@@ -51,6 +54,32 @@ const UserManagement = () => {
   const handleApproveTeacher = async (id: string) => {
     await approveTeacher(id);
     alert("Teacher approved. They now have portal access.");
+  };
+
+  const openAddUser = () => {
+    setAddUserError('');
+    setAddingUser({ name: '', email: '', grade: 'Grade 1' });
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addingUser) return;
+    const role = activeTab === 'teachers' ? 'teacher' : 'student';
+    setIsAddingUser(true);
+    setAddUserError('');
+    const { error } = await inviteUser(
+      addingUser.name,
+      addingUser.email,
+      role,
+      role === 'student' ? addingUser.grade : undefined
+    );
+    setIsAddingUser(false);
+    if (error) {
+      setAddUserError(error);
+      return;
+    }
+    alert(`Invitation sent to ${addingUser.email}. They'll set their own password via the emailed link.`);
+    setAddingUser(null);
   };
 
   const handleUpdateSubjects = async (e: React.FormEvent) => {
@@ -93,15 +122,22 @@ const UserManagement = () => {
               </button>
            </div>
 
-           <div className="search-bar" style={{ position: 'relative', width: '300px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                placeholder={`Search ${activeTab}...`} 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
-              />
+           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {(activeTab === 'teachers' || activeTab === 'students') && (
+                <button onClick={openAddUser} className="btn btn-primary sm">
+                   <UserPlus size={16} /> Add {activeTab === 'teachers' ? 'Teacher' : 'Student'}
+                </button>
+              )}
+              <div className="search-bar" style={{ position: 'relative', width: '300px' }}>
+                 <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                 <input
+                   type="text"
+                   placeholder={`Search ${activeTab}...`}
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                   style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
+                 />
+              </div>
            </div>
         </div>
 
@@ -181,6 +217,57 @@ const UserManagement = () => {
              </div>
            )}
         </div>
+
+        {/* Add User Modal */}
+        {addingUser && (
+          <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+             <div className="glass" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px', position: 'relative' }}>
+                <button onClick={() => setAddingUser(null)} style={{ position: 'absolute', right: '20px', top: '20px' }}><X size={20} /></button>
+                <h3 style={{ marginBottom: '24px' }}>Add {activeTab === 'teachers' ? 'Teacher' : 'Student'}</h3>
+                {addUserError && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', marginBottom: '16px', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{addUserError}</div>}
+                <form onSubmit={handleAddUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                   <div className="input-group">
+                      <label>Full Name</label>
+                      <input
+                        type="text"
+                        value={addingUser.name}
+                        onChange={(e) => setAddingUser({ ...addingUser, name: e.target.value })}
+                        required
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                      />
+                   </div>
+                   <div className="input-group">
+                      <label>Email Address</label>
+                      <input
+                        type="email"
+                        value={addingUser.email}
+                        onChange={(e) => setAddingUser({ ...addingUser, email: e.target.value })}
+                        required
+                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                      />
+                   </div>
+                   {activeTab === 'students' && (
+                     <div className="input-group">
+                        <label>Grade / Class</label>
+                        <select
+                          value={addingUser.grade}
+                          onChange={(e) => setAddingUser({ ...addingUser, grade: e.target.value })}
+                          style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                        >
+                           {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                     </div>
+                   )}
+                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                      They'll receive an email invite to set their own password. Teachers added this way skip the pending-approval step.
+                   </p>
+                   <button type="submit" className="btn btn-primary lg" style={{ marginTop: '12px' }} disabled={isAddingUser}>
+                      <UserPlus size={18} /> {isAddingUser ? 'Sending Invite...' : 'Send Invite'}
+                   </button>
+                </form>
+             </div>
+          </div>
+        )}
 
         {/* Edit User Modal */}
         {editingUser && (

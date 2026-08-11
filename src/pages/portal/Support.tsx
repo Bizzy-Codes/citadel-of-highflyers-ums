@@ -1,11 +1,12 @@
+import { useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { 
-  MessageCircle, 
-  Phone, 
-  Mail, 
-  HelpCircle, 
-  Search, 
-  ChevronRight 
+import {
+  MessageCircle,
+  Phone,
+  Mail,
+  HelpCircle,
+  Search,
+  ChevronRight
 } from 'lucide-react';
 
 const Support = () => {
@@ -14,6 +15,12 @@ const Support = () => {
     { q: "What is the procedure for updating my child's medical info?", a: "Navigate to Profile > Medical and click 'Request Edit'." },
     { q: "How do I pay tuition fees online?", a: "Access the Financial tab and use the 'New Payment' button to pay via Card or Bank Transfer." },
   ];
+
+  const [faqSearch, setFaqSearch] = useState('');
+  const filteredFaq = faq.filter(item =>
+    item.q.toLowerCase().includes(faqSearch.toLowerCase()) ||
+    item.a.toLowerCase().includes(faqSearch.toLowerCase())
+  );
 
   return (
     <PortalLayout title="Help & Support">
@@ -24,7 +31,12 @@ const Support = () => {
               <p>Search our knowledge base or chat with our administrative support team in real-time.</p>
               <div className="search-bar" style={{ display: 'block', maxWidth: '400px', marginTop: '30px' }}>
                  <Search className="search-icon" size={20} />
-                 <input type="text" placeholder="Search for answers..." />
+                 <input
+                   type="text"
+                   placeholder="Search for answers..."
+                   value={faqSearch}
+                   onChange={(e) => setFaqSearch(e.target.value)}
+                 />
               </div>
            </div>
            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '60px' }}>
@@ -67,7 +79,7 @@ const Support = () => {
               <HelpCircle size={20} />
            </div>
            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {faq.map((item, i) => (
+              {filteredFaq.map((item, i) => (
                 <div key={i} style={{ padding: '24px', background: 'var(--bg-light)', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.02)' }}>
                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <h4 style={{ fontSize: '16px', fontWeight: '700' }}>{item.q}</h4>
@@ -76,6 +88,9 @@ const Support = () => {
                    <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: '1.6' }}>{item.a}</p>
                 </div>
               ))}
+              {filteredFaq.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', padding: '12px' }}>No answers matched your search.</p>
+              )}
            </div>
         </section>
       </div>
