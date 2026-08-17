@@ -236,6 +236,43 @@ export interface TestAnswerForGrading {
   feedback?: string;
 }
 
+export interface NewAdmissionApplicationInput {
+  surname: string;
+  firstName: string;
+  otherNames?: string;
+  sex: 'Male' | 'Female';
+  dateOfBirth: string;
+  homeAddress: string;
+  nationality: string;
+  stateOfOrigin: string;
+  lga: string;
+  religion?: string;
+  bloodGroup?: string;
+  genotype?: string;
+  fatherName?: string;
+  fatherOccupation?: string;
+  fatherOfficeAddress?: string;
+  fatherPhone?: string;
+  motherName?: string;
+  motherOccupation?: string;
+  motherOfficeAddress?: string;
+  motherPhone?: string;
+  healthChallenge?: string;
+  healthChallengeDetails?: string;
+  schoolLastAttended?: string;
+  pickupPerson: string;
+  pickupPhone: string;
+  siblingNames?: string;
+}
+
+export interface AdmissionApplication extends NewAdmissionApplicationInput {
+  id: string;
+  photoPath?: string;
+  status: 'pending' | 'reviewed' | 'admitted' | 'declined';
+  adminNote?: string;
+  createdAt: string;
+}
+
 export interface PaymentReceipt {
   id: string;
   studentId: string;
@@ -307,6 +344,10 @@ interface AuthContextType {
   subscribeToDirectMessages: (otherUserId: string, onMessage: (message: DirectMessage) => void) => () => void;
   uploadChatAttachment: (recipientId: string, file: File) => Promise<{ error: string | null; path?: string; name?: string }>;
   getChatAttachmentUrl: (path: string) => Promise<string | null>;
+  submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null) => Promise<{ error: string | null }>;
+  getAdmissionApplications: () => Promise<AdmissionApplication[]>;
+  reviewAdmissionApplication: (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => Promise<{ error: string | null }>;
+  getAdmissionPhotoUrl: (path: string) => Promise<string | null>;
   submitPaymentReceipt: (amount: number, note: string, file: File) => Promise<{ error: string | null }>;
   getMyPaymentReceipts: () => Promise<PaymentReceipt[]>;
   getAllPaymentReceipts: () => Promise<PaymentReceipt[]>;
@@ -452,6 +493,41 @@ const mapTestAnswerRow = (row: any): TestAnswerForGrading => ({
   isCorrect: row.is_correct ?? undefined,
   pointsAwarded: row.points_awarded != null ? Number(row.points_awarded) : undefined,
   feedback: row.feedback ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAdmissionApplicationRow = (row: any): AdmissionApplication => ({
+  id: row.id,
+  surname: row.surname,
+  firstName: row.first_name,
+  otherNames: row.other_names ?? undefined,
+  sex: row.sex,
+  dateOfBirth: row.date_of_birth,
+  homeAddress: row.home_address,
+  nationality: row.nationality,
+  stateOfOrigin: row.state_of_origin,
+  lga: row.lga,
+  religion: row.religion ?? undefined,
+  bloodGroup: row.blood_group ?? undefined,
+  genotype: row.genotype ?? undefined,
+  fatherName: row.father_name ?? undefined,
+  fatherOccupation: row.father_occupation ?? undefined,
+  fatherOfficeAddress: row.father_office_address ?? undefined,
+  fatherPhone: row.father_phone ?? undefined,
+  motherName: row.mother_name ?? undefined,
+  motherOccupation: row.mother_occupation ?? undefined,
+  motherOfficeAddress: row.mother_office_address ?? undefined,
+  motherPhone: row.mother_phone ?? undefined,
+  healthChallenge: row.health_challenge ?? undefined,
+  healthChallengeDetails: row.health_challenge_details ?? undefined,
+  schoolLastAttended: row.school_last_attended ?? undefined,
+  pickupPerson: row.pickup_person,
+  pickupPhone: row.pickup_phone,
+  siblingNames: row.sibling_names ?? undefined,
+  photoPath: row.photo_path ?? undefined,
+  status: row.status,
+  adminNote: row.admin_note ?? undefined,
+  createdAt: row.created_at,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1293,6 +1369,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) console.error('finalizeMyExpiredAttempts failed', error);
   };
 
+  const submitAdmissionApplication = async (input: NewAdmissionApplicationInput, photo: File | null) => {
+    const id = crypto.randomUUID();
+    let photoPath: string | null = null;
+    if (photo) {
+      photoPath = `${id}/photo-${photo.name}`;
+      const { error: uploadError } = await supabase.storage.from('admission-photos').upload(photoPath, photo);
+      if (uploadError) return { error: `Failed to upload photo: ${uploadError.message}` };
+    }
+    const { error } = await supabase.from('admission_applications').insert({
+      id,
+      surname: input.surname,
+      first_name: input.firstName,
+      other_names: input.otherNames || null,
+      sex: input.sex,
+      date_of_birth: input.dateOfBirth,
+      home_address: input.homeAddress,
+      nationality: input.nationality,
+      state_of_origin: input.stateOfOrigin,
+      lga: input.lga,
+      religion: input.religion || null,
+      blood_group: input.bloodGroup || null,
+      genotype: input.genotype || null,
+      father_name: input.fatherName || null,
+      father_occupation: input.fatherOccupation || null,
+      father_office_address: input.fatherOfficeAddress || null,
+      father_phone: input.fatherPhone || null,
+      mother_name: input.motherName || null,
+      mother_occupation: input.motherOccupation || null,
+      mother_office_address: input.motherOfficeAddress || null,
+      mother_phone: input.motherPhone || null,
+      health_challenge: input.healthChallenge || null,
+      health_challenge_details: input.healthChallengeDetails || null,
+      school_last_attended: input.schoolLastAttended || null,
+      pickup_person: input.pickupPerson,
+      pickup_phone: input.pickupPhone,
+      sibling_names: input.siblingNames || null,
+      photo_path: photoPath,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const getAdmissionApplications = async (): Promise<AdmissionApplication[]> => {
+    const { data, error } = await supabase.from('admission_applications').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('getAdmissionApplications failed', error); return []; }
+    return (data ?? []).map(mapAdmissionApplicationRow);
+  };
+
+  const reviewAdmissionApplication = async (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('admission_applications').update({
+      status, admin_note: adminNote || null, reviewed_by: currentUser.id, reviewed_at: new Date().toISOString(),
+    }).eq('id', id);
+    return { error: error?.message ?? null };
+  };
+
+  const getAdmissionPhotoUrl = async (path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('admission-photos').createSignedUrl(path, 3600);
+    if (error || !data) { console.error('getAdmissionPhotoUrl failed', error); return null; }
+    return data.signedUrl;
+  };
+
   const submitPaymentReceipt = async (amount: number, note: string, file: File) => {
     if (!session?.user.id) return { error: 'Not signed in' };
     const studentId = session.user.id;
@@ -1362,6 +1499,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
       uploadChatAttachment, getChatAttachmentUrl,
+      submitAdmissionApplication, getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl,
       submitPaymentReceipt, getMyPaymentReceipts, getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,

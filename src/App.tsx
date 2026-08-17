@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Home from './pages/marketing/Home'
 import Founders from './pages/marketing/Founders'
+import Admissions from './pages/marketing/Admissions'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
 import ResetPassword from './pages/portal/ResetPassword'
@@ -25,6 +26,7 @@ import TestTaking from './pages/portal/TestTaking'
 import TeacherAssignments from './pages/portal/TeacherAssignments'
 import StudentAssignments from './pages/portal/StudentAssignments'
 import AdminPayments from './pages/portal/AdminPayments'
+import AdminAdmissions from './pages/portal/AdminAdmissions'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import './index.css'
@@ -48,6 +50,7 @@ function App() {
         {/* Public Marketing Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/founders" element={<Founders />} />
+        <Route path="/admissions" element={<Admissions />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -122,6 +125,9 @@ function App() {
         } />
         <Route path="/portal/admin/payments" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/admissions" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminAdmissions /></ProtectedRoute>
         } />
 
         {/* Catch-all */}

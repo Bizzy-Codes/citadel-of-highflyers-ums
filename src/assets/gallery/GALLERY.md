@@ -17,7 +17,10 @@ change needed, just refresh the site after adding the file.
 | `gallery-7.jpg` | Gallery | House Sports Day |
 | `gallery-8.jpg` | Gallery | Playground Time |
 | `gallery-9.jpg` | Gallery | Nature & Gardening |
+| `founder-chrispraise.jpg` | Founders page | Pastor Chrispraise Iwunna |
+| `founder-princess.jpg` | Founders page | Ambassador Mrs Princess Iwunna |
 
-Founders page (`src/pages/marketing/Founders.tsx`) still needs real
-photos of Pastor Chrispraise Iwunna and Princess Iwunna -- not covered
-by this batch.
+**None of these files exist in this folder yet** -- pasting a photo into
+the chat does not save it here. Save the actual files into this exact
+folder on the school's computer, using these exact filenames, then
+refresh the site.

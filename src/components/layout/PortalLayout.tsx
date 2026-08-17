@@ -15,7 +15,8 @@ import {
   Calendar,
   ClipboardCheck,
   FileText,
-  Receipt
+  Receipt,
+  UserPlus
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +47,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'Financial / Fees', icon: <CreditCard size={20} />, path: '/portal/fees', show: !isTeacher && !isAdmin },
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },
     { label: 'Payment Receipts', icon: <Receipt size={20} />, path: '/portal/admin/payments', show: isAdmin },
+    { label: 'Admissions', icon: <UserPlus size={20} />, path: '/portal/admin/admissions', show: isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },
     { label: 'Timetable', icon: <Calendar size={20} />, path: '/portal/timetable', show: true },
     { label: 'Profile', icon: <User size={20} />, path: '/portal/profile', show: true },

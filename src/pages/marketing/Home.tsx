@@ -60,7 +60,7 @@ const Home = () => {
           <Link to="/" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Home</Link>
           <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
           <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
-          <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
+          <a href="#gallery-section" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</a>
         </div>
 
         <div className="nav-actions">
@@ -197,7 +197,7 @@ const Home = () => {
       </section>
 
       {/* Gallery Section */}
-      <section className="gallery-section">
+      <section className="gallery-section" id="gallery-section">
          <div className="container">
             <h2 className="section-title">Glimpses of Excellence</h2>
             <div className="gallery-grid">
