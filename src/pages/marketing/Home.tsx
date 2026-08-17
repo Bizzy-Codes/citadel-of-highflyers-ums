@@ -17,16 +17,22 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
-import PhotoPlaceholder from '../../components/common/PhotoPlaceholder';
+import PhotoSlot from '../../components/common/PhotoSlot';
 import './Home.css';
 
-const GALLERY_SLOTS = [
-  'School Building',
-  'Classroom Session',
-  'Students Assembly',
-  'Sports & Games',
-  'Graduation Day',
-  'Creative Arts',
+// Drop the matching file into src/assets/gallery/ with this exact
+// name and it replaces the placeholder automatically -- no code
+// change needed. See GALLERY.md in that folder for the full list.
+const GALLERY_PHOTOS = [
+  { file: 'gallery-1.jpg', label: 'Grade 1 Class' },
+  { file: 'gallery-2.jpg', label: 'Playground Fun' },
+  { file: 'gallery-3.jpg', label: 'Outdoor Play' },
+  { file: 'gallery-4.jpg', label: 'Student Spotlight' },
+  { file: 'gallery-5.jpg', label: 'Law Day Role-Play' },
+  { file: 'gallery-6.jpg', label: 'Special Guests Visit' },
+  { file: 'gallery-7.jpg', label: 'House Sports Day' },
+  { file: 'gallery-8.jpg', label: 'Playground Time' },
+  { file: 'gallery-9.jpg', label: 'Nature & Gardening' },
 ];
 
 const Home = () => {
@@ -140,7 +146,7 @@ const Home = () => {
             </motion.div>
 
             <div className="hero-main-img-wrapper">
-               <PhotoPlaceholder label="Photo: Students at Citadel" className="hero-main-img" />
+               <PhotoSlot src="/src/assets/gallery/hero.jpg" alt="Students at Citadel of Highflyers" label="Photo: Students at Citadel" className="hero-main-img" />
             </div>
           </div>
         </div>
@@ -155,7 +161,7 @@ const Home = () => {
           <div className="features-grid-spiced">
             <div className="feature-item-large glass">
                <div className="feature-image">
-                  <PhotoPlaceholder label="Photo: Classroom Learning" />
+                  <PhotoSlot src="/src/assets/gallery/feature-learning.jpg" alt="Students at Citadel of Highflyers" label="Photo: Classroom Learning" />
                   <div className="play-overlay"><Play fill="white" size={40} color="white" /></div>
                </div>
                <div className="feature-text">
@@ -195,13 +201,13 @@ const Home = () => {
          <div className="container">
             <h2 className="section-title">Glimpses of Excellence</h2>
             <div className="gallery-grid">
-               {GALLERY_SLOTS.map((label, i) => (
+               {GALLERY_PHOTOS.map((photo, i) => (
                  <motion.div
-                  key={label}
+                  key={photo.file}
                   className={`gallery-item item-${i + 1} glass`}
                   whileHover={{ scale: 1.02 }}
                  >
-                    <PhotoPlaceholder label={label} />
+                    <PhotoSlot src={`/src/assets/gallery/${photo.file}`} alt={photo.label} label={photo.label} />
                  </motion.div>
                ))}
             </div>
