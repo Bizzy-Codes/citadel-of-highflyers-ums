@@ -950,12 +950,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       p_student_id: studentId, p_subject: subject, p_term_value: term, p_session: session,
     }).maybeSingle();
     if (error || !data) return null;
+    // No generated Database types are wired into the supabase-js client,
+    // so .rpc() rows come back as `{}` -- cast to the shape the SQL
+    // function actually returns.
+    const row = data as { lowest: number; average: number; highest: number; class_position: number | null; total_in_class: number };
     return {
-      lowest: Number(data.lowest ?? 0),
-      average: Number(data.average ?? 0),
-      highest: Number(data.highest ?? 0),
-      classPosition: data.class_position != null ? Number(data.class_position) : null,
-      totalInClass: Number(data.total_in_class ?? 0),
+      lowest: Number(row.lowest ?? 0),
+      average: Number(row.average ?? 0),
+      highest: Number(row.highest ?? 0),
+      classPosition: row.class_position != null ? Number(row.class_position) : null,
+      totalInClass: Number(row.total_in_class ?? 0),
     };
   };
 
