@@ -69,7 +69,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
       <aside className="portal-sidebar">
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <img src="/src/assets/logo.jpg" alt="Logo" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '10px' }} />
+            <img src="/logo.jpg" alt="Logo" style={{ width: '40px', height: '40px', borderRadius: '50%', marginRight: '10px' }} />
             <span className="logo-text nav-label glowing-text">Citadel of Highflyers</span>
           </div>
           <button className="sidebar-toggle-desktop" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>

@@ -65,7 +65,7 @@ const Admissions = () => {
       <nav className="founders-nav">
         <Link to="/" className="back-btn"><ArrowLeft size={20} /> Back to Home</Link>
         <div className="school-logo-small">
-          <img src="/src/assets/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '10px' }} />
+          <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '10px' }} />
           Citadel of Highflyers Int'l Academy
         </div>
       </nav>

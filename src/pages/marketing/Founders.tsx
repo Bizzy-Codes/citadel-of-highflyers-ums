@@ -9,7 +9,7 @@ const Founders = () => {
        <nav className="founders-nav">
           <Link to="/" className="back-btn"><ArrowLeft size={20} /> Back to Home</Link>
           <div className="school-logo-small">
-              <img src="/src/assets/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '10px' }} />
+              <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '10px' }} />
               Citadel of Highflyers Int'l Academy
           </div>
        </nav>
@@ -26,7 +26,7 @@ const Founders = () => {
              <div className="founder-content">
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg"></div>
-                   <PhotoSlot src="/src/assets/gallery/founder-chrispraise.jpg" alt="Pastor Chrispraise Iwunna" label="Photo: Pastor Chrispraise Iwunna" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-chrispraise.jpg" alt="Pastor Chrispraise Iwunna" label="Photo: Pastor Chrispraise Iwunna" className="founder-img" />
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Founder</div>
                 </div>
                 <div className="founder-text">
@@ -66,7 +66,7 @@ const Founders = () => {
                 </div>
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg secondary"></div>
-                   <PhotoSlot src="/src/assets/gallery/founder-princess.jpg" alt="Ambassador Mrs Princess Iwunna" label="Photo: Ambassador Mrs Princess Iwunna" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-princess.jpg" alt="Ambassador Mrs Princess Iwunna" label="Photo: Ambassador Mrs Princess Iwunna" className="founder-img" />
                    <div className="founder-badge founder-2"><Sparkles size={16} /> Proprietress</div>
                 </div>
              </div>

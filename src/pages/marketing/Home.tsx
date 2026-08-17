@@ -20,9 +20,11 @@ import { useTheme } from '../../context/ThemeContext';
 import PhotoSlot from '../../components/common/PhotoSlot';
 import './Home.css';
 
-// Drop the matching file into src/assets/gallery/ with this exact
-// name and it replaces the placeholder automatically -- no code
-// change needed. See GALLERY.md in that folder for the full list.
+// Drop the matching file into public/gallery/ (must be public/, not
+// src/assets/ -- files under src/ are only bundled if imported, so a
+// runtime string path into src/ 404s in production even though it
+// works in dev) with this exact name and it replaces the placeholder
+// automatically. See GALLERY.md in that folder for the full list.
 const GALLERY_PHOTOS = [
   { file: 'gallery-1.jpg', label: 'Grade 1 Class' },
   { file: 'gallery-2.jpg', label: 'Playground Fun' },
@@ -48,7 +50,7 @@ const Home = () => {
       <nav className="nav glass">
         <div className="logo-section">
           <Link to="/" className="logo-section">
-             <img src="/src/assets/logo.jpg" alt="Citadel Logo" className="logo-img" />
+             <img src="/logo.jpg" alt="Citadel Logo" className="logo-img" />
              <div className="logo-text">
                <span className="logo-main glowing-text">Citadel of Highflyers</span>
                <span className="logo-sub glowing-text">Int'l Academy</span>
@@ -146,7 +148,7 @@ const Home = () => {
             </motion.div>
 
             <div className="hero-main-img-wrapper">
-               <PhotoSlot src="/src/assets/gallery/hero.jpg" alt="Students at Citadel of Highflyers" label="Photo: Students at Citadel" className="hero-main-img" />
+               <PhotoSlot src="/gallery/hero.jpg" alt="Students at Citadel of Highflyers" label="Photo: Students at Citadel" className="hero-main-img" />
             </div>
           </div>
         </div>
@@ -161,7 +163,7 @@ const Home = () => {
           <div className="features-grid-spiced">
             <div className="feature-item-large glass">
                <div className="feature-image">
-                  <PhotoSlot src="/src/assets/gallery/feature-learning.jpg" alt="Students at Citadel of Highflyers" label="Photo: Classroom Learning" />
+                  <PhotoSlot src="/gallery/feature-learning.jpg" alt="Students at Citadel of Highflyers" label="Photo: Classroom Learning" />
                   <div className="play-overlay"><Play fill="white" size={40} color="white" /></div>
                </div>
                <div className="feature-text">
@@ -207,7 +209,7 @@ const Home = () => {
                   className={`gallery-item item-${i + 1} glass`}
                   whileHover={{ scale: 1.02 }}
                  >
-                    <PhotoSlot src={`/src/assets/gallery/${photo.file}`} alt={photo.label} label={photo.label} />
+                    <PhotoSlot src={`/gallery/${photo.file}`} alt={photo.label} label={photo.label} />
                  </motion.div>
                ))}
             </div>
@@ -233,7 +235,7 @@ const Home = () => {
          <div className="container" style={{ padding: '80px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '60px' }}>
             <div className="footer-brand">
                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
-                  <img src="/src/assets/logo.jpg" alt="Logo" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
+                  <img src="/logo.jpg" alt="Logo" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
                   <span className="logo-main" style={{ fontSize: '20px' }}>Citadel of Highflyers Int'l Academy</span>
                </div>
                <p style={{ opacity: 0.8 }}>Foundation for Future Generals. Rock Haven opposite St. Murumba College, Jos North, Nigeria.</p>

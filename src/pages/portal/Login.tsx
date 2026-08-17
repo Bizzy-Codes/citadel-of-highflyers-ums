@@ -115,7 +115,7 @@ const Login = () => {
         <div className="login-card glass animate-fade-in">
           <div className="login-header">
             <div className="login-logo">
-              <img src="/src/assets/logo.jpg" alt="Logo" style={{ width: '60px', height: '60px', borderRadius: '50%' }} />
+              <img src="/logo.jpg" alt="Logo" style={{ width: '60px', height: '60px', borderRadius: '50%' }} />
             </div>
             <h1>Citadel of Highflyers Int'l Academy</h1>
             <p>Access your secure portal to manage your academic profile.</p>
