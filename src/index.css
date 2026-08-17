@@ -361,6 +361,19 @@ section, footer, .blend-bg {
   padding-top: 16px;
 }
 
+.chats-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .chats-panel {
     grid-template-columns: 1fr;

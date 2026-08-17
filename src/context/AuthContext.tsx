@@ -135,6 +135,8 @@ export interface DirectMessage {
   content: string;
   createdAt: string;
   readAt?: string;
+  attachmentPath?: string;
+  attachmentName?: string;
 }
 
 export interface TestQuestionOption {
@@ -234,6 +236,22 @@ export interface TestAnswerForGrading {
   feedback?: string;
 }
 
+export interface PaymentReceipt {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  studentDisplayId?: string;
+  amount: number;
+  note?: string;
+  filePath: string;
+  fileName: string;
+  status: 'pending' | 'acknowledged' | 'rejected';
+  adminNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
 export interface ExamViolation {
   id: string;
   attemptId: string;
@@ -284,9 +302,16 @@ interface AuthContextType {
   getAssignmentFileUrl: (path: string) => Promise<string | null>;
   messageContacts: User[];
   getConversation: (otherUserId: string) => Promise<DirectMessage[]>;
-  sendDirectMessage: (recipientId: string, content: string) => Promise<{ error: string | null }>;
+  sendDirectMessage: (recipientId: string, content: string, attachment?: { path: string; name: string }) => Promise<{ error: string | null }>;
   markConversationRead: (otherUserId: string) => Promise<void>;
   subscribeToDirectMessages: (otherUserId: string, onMessage: (message: DirectMessage) => void) => () => void;
+  uploadChatAttachment: (recipientId: string, file: File) => Promise<{ error: string | null; path?: string; name?: string }>;
+  getChatAttachmentUrl: (path: string) => Promise<string | null>;
+  submitPaymentReceipt: (amount: number, note: string, file: File) => Promise<{ error: string | null }>;
+  getMyPaymentReceipts: () => Promise<PaymentReceipt[]>;
+  getAllPaymentReceipts: () => Promise<PaymentReceipt[]>;
+  reviewPaymentReceipt: (id: string, status: 'acknowledged' | 'rejected', adminNote: string) => Promise<{ error: string | null }>;
+  getPaymentReceiptUrl: (path: string) => Promise<string | null>;
   tests: Test[];
   createTest: (input: NewTestInput) => Promise<{ error: string | null; testId?: string }>;
   updateTest: (id: string, input: Partial<NewTestInput>) => Promise<{ error: string | null }>;
@@ -430,6 +455,23 @@ const mapTestAnswerRow = (row: any): TestAnswerForGrading => ({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapPaymentReceiptRow = (row: any): PaymentReceipt => ({
+  id: row.id,
+  studentId: row.student_id,
+  studentName: row.profiles?.name ?? undefined,
+  studentDisplayId: row.profiles?.display_id ?? undefined,
+  amount: Number(row.amount),
+  note: row.note ?? undefined,
+  filePath: row.file_path,
+  fileName: row.file_name,
+  status: row.status,
+  adminNote: row.admin_note ?? undefined,
+  reviewedBy: row.reviewed_by ?? undefined,
+  reviewedAt: row.reviewed_at ?? undefined,
+  createdAt: row.created_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapViolationRow = (row: any): ExamViolation => ({
   id: row.id,
   attemptId: row.attempt_id,
@@ -447,6 +489,8 @@ const mapMessageRow = (row: any): DirectMessage => ({
   content: row.content,
   createdAt: row.created_at,
   readAt: row.read_at ?? undefined,
+  attachmentPath: row.attachment_path ?? undefined,
+  attachmentName: row.attachment_name ?? undefined,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -974,14 +1018,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (data ?? []).map(mapMessageRow);
   };
 
-  const sendDirectMessage = async (recipientId: string, content: string) => {
+  const sendDirectMessage = async (recipientId: string, content: string, attachment?: { path: string; name: string }) => {
     if (!session?.user.id) return { error: 'Not signed in' };
-    const trimmed = content.trim();
+    // The DB column is not-null -- an attachment-only send falls back
+    // to the file name as the message text rather than relaxing that
+    // constraint.
+    const trimmed = content.trim() || attachment?.name || '';
     if (!trimmed) return { error: 'Message cannot be empty' };
     const { error } = await supabase.from('direct_messages').insert({
       sender_id: session.user.id, recipient_id: recipientId, content: trimmed,
+      attachment_path: attachment?.path ?? null, attachment_name: attachment?.name ?? null,
     });
     return { error: error?.message ?? null };
+  };
+
+  const uploadChatAttachment = async (recipientId: string, file: File) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const path = `${session.user.id}/${recipientId}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('chat-files').upload(path, file);
+    if (error) return { error: error.message };
+    return { error: null, path, name: file.name };
+  };
+
+  const getChatAttachmentUrl = async (path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('chat-files').createSignedUrl(path, 3600);
+    if (error || !data) { console.error('getChatAttachmentUrl failed', error); return null; }
+    return data.signedUrl;
   };
 
   const markConversationRead = async (otherUserId: string) => {
@@ -1023,6 +1085,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: input.title,
       instructions: input.instructions || null,
       duration_minutes: input.durationMinutes,
+      created_by: currentUser.id,
     }).select().single();
     if (error || !data) return { error: error?.message ?? 'Failed to create test' };
     await refreshTests();
@@ -1230,6 +1293,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) console.error('finalizeMyExpiredAttempts failed', error);
   };
 
+  const submitPaymentReceipt = async (amount: number, note: string, file: File) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const studentId = session.user.id;
+    const path = `${studentId}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('payment-receipts').upload(path, file);
+    if (uploadError) return { error: uploadError.message };
+    const { error } = await supabase.from('payment_receipts').insert({
+      student_id: studentId, amount, note: note || null, file_path: path, file_name: file.name,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const getMyPaymentReceipts = async (): Promise<PaymentReceipt[]> => {
+    if (!session?.user.id) return [];
+    const { data, error } = await supabase
+      .from('payment_receipts')
+      .select('*')
+      .eq('student_id', session.user.id)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('getMyPaymentReceipts failed', error); return []; }
+    return (data ?? []).map(mapPaymentReceiptRow);
+  };
+
+  const getAllPaymentReceipts = async (): Promise<PaymentReceipt[]> => {
+    const { data, error } = await supabase
+      .from('payment_receipts')
+      .select('*, profiles(name, display_id)')
+      .order('created_at', { ascending: false });
+    if (error) { console.error('getAllPaymentReceipts failed', error); return []; }
+    return (data ?? []).map(mapPaymentReceiptRow);
+  };
+
+  const reviewPaymentReceipt = async (id: string, status: 'acknowledged' | 'rejected', adminNote: string) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('payment_receipts').update({
+      status, admin_note: adminNote || null, reviewed_by: currentUser.id, reviewed_at: new Date().toISOString(),
+    }).eq('id', id);
+    return { error: error?.message ?? null };
+  };
+
+  const getPaymentReceiptUrl = async (path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('payment-receipts').createSignedUrl(path, 3600);
+    if (error || !data) { console.error('getPaymentReceiptUrl failed', error); return null; }
+    return data.signedUrl;
+  };
+
   const exportData = () => {
     const data = { students, staff, subjects: subjectsByClass, timetables, notifications };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1252,6 +1361,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
+      uploadChatAttachment, getChatAttachmentUrl,
+      submitPaymentReceipt, getMyPaymentReceipts, getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
       getAttemptsForTest, getAnswersForAttempt, gradeEssayAnswer, getViolationsForTest,

@@ -22,6 +22,9 @@ import TestEditor from './pages/portal/TestEditor'
 import TestMonitor from './pages/portal/TestMonitor'
 import StudentTests from './pages/portal/StudentTests'
 import TestTaking from './pages/portal/TestTaking'
+import TeacherAssignments from './pages/portal/TeacherAssignments'
+import StudentAssignments from './pages/portal/StudentAssignments'
+import AdminPayments from './pages/portal/AdminPayments'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import './index.css'
@@ -66,6 +69,9 @@ function App() {
         <Route path="/portal/tests/:attemptId" element={
           <ProtectedRoute allowedRoles={['student']}><TestTaking /></ProtectedRoute>
         } />
+        <Route path="/portal/assignments" element={
+          <ProtectedRoute allowedRoles={['student']}><StudentAssignments /></ProtectedRoute>
+        } />
 
         {/* Shared authenticated routes (student + teacher; results also useful to review as teacher) */}
         <Route path="/portal/results" element={
@@ -100,6 +106,9 @@ function App() {
         <Route path="/portal/teacher/tests/:testId/monitor" element={
           <ProtectedRoute allowedRoles={['teacher']}><TestMonitor /></ProtectedRoute>
         } />
+        <Route path="/portal/teacher/assignments" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TeacherAssignments /></ProtectedRoute>
+        } />
         <Route path="/portal/teacher/students" element={
           <ProtectedRoute allowedRoles={['teacher']}><MyStudentsRedirect /></ProtectedRoute>
         } />
@@ -110,6 +119,9 @@ function App() {
         } />
         <Route path="/portal/admin/users" element={
           <ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/payments" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>
         } />
 
         {/* Catch-all */}

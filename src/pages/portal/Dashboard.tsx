@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -13,23 +14,21 @@ import {
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const { currentUser, assignments, mySubmissions } = useAuth();
   const results = currentUser?.results ?? [];
 
   const averageGrade = results.length > 0
     ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
     : null;
 
+  const pendingAssignments = assignments.filter((a) => !mySubmissions[a.id]);
+
   const stats = [
     { label: "Attendance", value: "N/A", icon: <CheckCircle2 className="success" />, trend: "Attendance tracking not yet implemented" },
     { label: "Average Score", value: averageGrade !== null ? `${averageGrade}%` : "No results yet", icon: <TrendingUp className="primary" />, trend: `${results.length} subject(s) this term` },
     { label: "Upcoming Exams", value: "N/A", icon: <Calendar className="warning" />, trend: "Exam calendar not yet implemented" },
     { label: "Pending Fees", value: "N/A", icon: <AlertCircle className="success" />, trend: "Fee tracking not yet implemented" },
-  ];
-
-  const assignments = [
-    { title: "Science Project - Ecosystems", due: "Tomorrow", subject: "Biology", file: "assignment_bio.pdf" },
-    { title: "English Essay - My Holidays", due: "Friday", subject: "English", file: "essay_holidays.pdf" },
   ];
 
   return (
@@ -42,7 +41,7 @@ const Dashboard = () => {
                <div style={{ padding: '10px 20px', background: 'var(--primary)', color: 'white', borderRadius: '12px', fontWeight: '700' }}>{currentUser?.grade || 'Unassigned'}</div>
             </div>
             <h1>Welcome back, <span>{currentUser?.name || 'Student'}!</span> 👋</h1>
-            <p>You have {assignments.length} assignments due this week.</p>
+            <p>You have {pendingAssignments.length} assignment{pendingAssignments.length === 1 ? '' : 's'} awaiting submission.</p>
             <div style={{ display: 'flex', gap: '12px' }}>
                <button className="btn btn-primary sm"><Download size={18} /> Download Result Sheet</button>
                <button className="btn btn-outline sm">View Schedule</button>
@@ -63,12 +62,27 @@ const Dashboard = () => {
                 { title: "Inter-House Sports 2024", id: "dQw4w9WgXcQ" },
                 { title: "Cultural Day Highlights", id: "dQw4w9WgXcQ" }
               ].map((v, i) => (
-                <div key={i} className="video-card hover-scale" style={{ minWidth: '240px', background: 'var(--bg-light)', borderRadius: '12px', overflow: 'hidden' }}>
-                    <div style={{ height: '120px', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                       <Play fill="white" color="white" />
+                <a
+                  key={i}
+                  href={`https://www.youtube.com/watch?v=${v.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="video-card hover-scale"
+                  style={{ minWidth: '240px', background: 'var(--bg-light)', borderRadius: '12px', overflow: 'hidden', display: 'block', textDecoration: 'none', color: 'inherit' }}
+                >
+                    <div style={{
+                      height: '120px', position: 'relative',
+                      backgroundImage: `url(https://img.youtube.com/vi/${v.id}/hqdefault.jpg)`,
+                      backgroundSize: 'cover', backgroundPosition: 'center',
+                    }}>
+                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                             <Play fill="white" color="white" size={18} />
+                          </div>
+                       </div>
                     </div>
                     <p style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{v.title}</p>
-                </div>
+                </a>
               ))}
            </div>
         </section>
@@ -120,15 +134,24 @@ const Dashboard = () => {
                 <ClipboardCheck size={18} />
               </div>
               <div className="activity-list">
-                {assignments.map((as, i) => (
-                  <div key={i} className="activity-item" style={{ padding: '12px', background: 'var(--bg-light)', borderRadius: '12px' }}>
+                {assignments.slice(0, 4).map((as) => (
+                  <div key={as.id} className="activity-item hover-scale" style={{ padding: '12px', background: 'var(--bg-light)', borderRadius: '12px', cursor: 'pointer' }}
+                    onClick={() => navigate('/portal/assignments')}>
                     <div className="activity-info" style={{ flex: 1 }}>
                       <p className="activity-title">{as.title}</p>
-                      <span className="activity-time">Subject: {as.subject} | Due: {as.due}</span>
+                      <span className="activity-time">
+                        {as.subject} {as.dueDate ? `| Due: ${new Date(as.dueDate).toLocaleDateString()}` : ''}
+                        {mySubmissions[as.id] ? ' | Submitted' : ''}
+                      </span>
                     </div>
-                    <button className="icon-btn" title="Download Assignment"><Download size={16} /></button>
                   </div>
                 ))}
+                {assignments.length === 0 && (
+                  <p style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>No assignments posted yet.</p>
+                )}
+                <button className="btn btn-outline sm" style={{ width: '100%', marginTop: '8px' }} onClick={() => navigate('/portal/assignments')}>
+                  <Download size={14} /> View All Assignments
+                </button>
               </div>
             </section>
 

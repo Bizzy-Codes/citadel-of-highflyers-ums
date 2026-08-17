@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type DirectMessage } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, ArrowLeft } from 'lucide-react';
+import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown } from 'lucide-react';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages } = useAuth();
+  const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
+  const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
-  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(isAdmin ? 'whatsapp' : 'notifications');
+  const forcedView = (location.state as { view?: 'chats' | 'notifications' | 'whatsapp' } | null)?.view;
+  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(forcedView ?? (isAdmin ? 'whatsapp' : 'notifications'));
 
   // Private Chats state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<DirectMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!selectedContactId) return;
@@ -44,6 +49,30 @@ const Messages = () => {
     setChatDraft('');
     const { error } = await sendDirectMessage(selectedContactId, draft);
     if (error) { alert('Failed to send message: ' + error); setChatDraft(draft); }
+  };
+
+  const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedContactId) return;
+    setUploadingAttachment(true);
+    const { error, path, name } = await uploadChatAttachment(selectedContactId, file);
+    if (error || !path || !name) {
+      setUploadingAttachment(false);
+      alert('Failed to upload attachment: ' + error);
+      return;
+    }
+    const caption = chatDraft.trim();
+    setChatDraft('');
+    const { error: sendError } = await sendDirectMessage(selectedContactId, caption, { path, name });
+    setUploadingAttachment(false);
+    if (sendError) alert('Failed to send attachment: ' + sendError);
+  };
+
+  const handleOpenAttachment = async (path: string) => {
+    const url = await getChatAttachmentUrl(path);
+    if (url) window.open(url, '_blank');
+    else alert('Could not open this attachment.');
   };
 
   const selectedContact = messageContacts.find(c => c.id === selectedContactId) ?? null;
@@ -267,6 +296,16 @@ const Messages = () => {
                                    border: mine ? 'none' : '1px solid var(--glass-border)',
                                  }}>
                                     <p style={{ fontSize: '14px', wordBreak: 'break-word' }}>{msg.content}</p>
+                                    {msg.attachmentPath && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenAttachment(msg.attachmentPath!)}
+                                        className="chats-attachment-chip"
+                                        style={{ color: mine ? '#fff' : 'var(--primary)', borderColor: mine ? 'rgba(255,255,255,0.4)' : 'var(--glass-border)' }}
+                                      >
+                                        <FileDown size={14} /> {msg.attachmentName ?? 'Attachment'}
+                                      </button>
+                                    )}
                                     <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
@@ -278,14 +317,25 @@ const Messages = () => {
                        </div>
 
                        <form onSubmit={handleSendChat} className="chats-thread-input">
+                          <input ref={attachInputRef} type="file" style={{ display: 'none' }} onChange={handleAttachmentChange} />
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Attach a photo or document"
+                            disabled={uploadingAttachment}
+                            onClick={() => attachInputRef.current?.click()}
+                          >
+                            <Paperclip size={18} />
+                          </button>
                           <input
                             type="text"
-                            placeholder="Type a message..."
+                            placeholder={uploadingAttachment ? 'Uploading attachment...' : 'Type a message...'}
                             value={chatDraft}
+                            disabled={uploadingAttachment}
                             onChange={(e) => setChatDraft(e.target.value)}
                             style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                           />
-                          <button type="submit" className="btn btn-primary" disabled={!chatDraft.trim()}><Send size={18} /></button>
+                          <button type="submit" className="btn btn-primary" disabled={!chatDraft.trim() || uploadingAttachment}><Send size={18} /></button>
                        </form>
                      </>
                    )}

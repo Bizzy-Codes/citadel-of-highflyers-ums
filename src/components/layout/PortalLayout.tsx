@@ -13,7 +13,9 @@ import {
   HelpCircle,
   Users,
   Calendar,
-  ClipboardCheck
+  ClipboardCheck,
+  FileText,
+  Receipt
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -29,7 +31,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, notifications } = useAuth();
 
   // Simple role detection from path for demo purposes
   const isTeacher = currentUser?.role === 'teacher';
@@ -39,9 +41,11 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: isTeacher ? '/portal/teacher' : isAdmin ? '/portal/admin' : '/portal', show: true },
     { label: 'My Students', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
     { label: 'Tests', icon: <ClipboardCheck size={20} />, path: isTeacher ? '/portal/teacher/tests' : '/portal/tests', show: !isAdmin },
+    { label: 'Assignments', icon: <FileText size={20} />, path: isTeacher ? '/portal/teacher/assignments' : '/portal/assignments', show: !isAdmin },
     { label: 'Academic Results', icon: <GraduationCap size={20} />, path: '/portal/results', show: !isAdmin },
     { label: 'Financial / Fees', icon: <CreditCard size={20} />, path: '/portal/fees', show: !isTeacher && !isAdmin },
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },
+    { label: 'Payment Receipts', icon: <Receipt size={20} />, path: '/portal/admin/payments', show: isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },
     { label: 'Timetable', icon: <Calendar size={20} />, path: '/portal/timetable', show: true },
     { label: 'Profile', icon: <User size={20} />, path: '/portal/profile', show: true },
@@ -109,11 +113,11 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
             </div>
             
             <div className="header-actions">
-              <button className="icon-btn">
+              <button className="icon-btn" onClick={() => navigate('/portal/messages', { state: { view: 'notifications' } })} title="Notifications">
                 <Bell size={20} />
-                <span className="notification-dot"></span>
+                {notifications.length > 0 && <span className="notification-dot"></span>}
               </button>
-              <div className="user-profile">
+              <div className="user-profile" onClick={() => navigate('/portal/profile')} style={{ cursor: 'pointer' }}>
                 <div className="user-info">
                   <span className="user-name">{currentUser?.name || 'User'}</span>
                   <span className="user-role">{isTeacher ? 'Teacher' : isAdmin ? 'Administrator' : 'Student'}</span>

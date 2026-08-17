@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
+import { compressImageToTarget } from '../../lib/imageCompression';
 import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2 } from 'lucide-react';
+
+const MAX_RAW_BYTES = 15 * 1024 * 1024; // reject truly huge files outright
+const TARGET_UPLOAD_BYTES = 2 * 1024 * 1024; // compress anything above this instead of rejecting it
 
 const Profile = () => {
   const { currentUser, updateUser, uploadAvatar, removeAvatar } = useAuth();
@@ -36,12 +40,22 @@ const Profile = () => {
       alert('Please choose an image file.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image is too large -- please choose one under 5MB.');
+    if (file.size > MAX_RAW_BYTES) {
+      alert('Image is too large -- please choose one under 15MB.');
       return;
     }
     setIsSavingAvatar(true);
-    const { error } = await uploadAvatar(file);
+    let upload = file;
+    if (file.size > TARGET_UPLOAD_BYTES) {
+      try {
+        upload = await compressImageToTarget(file, TARGET_UPLOAD_BYTES);
+      } catch {
+        // Fall back to the original file if compression fails for any
+        // reason (e.g. an unusual format the canvas can't decode) --
+        // the upload itself will surface a clearer error if it's an issue.
+      }
+    }
+    const { error } = await uploadAvatar(upload);
     setIsSavingAvatar(false);
     if (error) alert('Failed to upload photo: ' + error);
   };
