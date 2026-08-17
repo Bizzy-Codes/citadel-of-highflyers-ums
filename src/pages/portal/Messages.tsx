@@ -1,13 +1,53 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, Layout } from 'lucide-react';
+import { useAuth, type DirectMessage } from '../../context/AuthContext';
+import { Send, MessageCircle, Bell, User, ArrowLeft } from 'lucide-react';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification } = useAuth();
+  const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
   const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(isAdmin ? 'whatsapp' : 'notifications');
-  
+
+  // Private Chats state
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<DirectMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const threadEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedContactId) return;
+    let cancelled = false;
+    setChatLoading(true);
+    getConversation(selectedContactId).then((msgs) => {
+      if (cancelled) return;
+      setConversation(msgs);
+      setChatLoading(false);
+      markConversationRead(selectedContactId);
+    });
+    const unsubscribe = subscribeToDirectMessages(selectedContactId, (msg) => {
+      setConversation((prev) => [...prev, msg]);
+      if (msg.senderId === selectedContactId) markConversationRead(selectedContactId);
+    });
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedContactId]);
+
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversation]);
+
+  const handleSendChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedContactId || !chatDraft.trim()) return;
+    const draft = chatDraft;
+    setChatDraft('');
+    const { error } = await sendDirectMessage(selectedContactId, draft);
+    if (error) { alert('Failed to send message: ' + error); setChatDraft(draft); }
+  };
+
+  const selectedContact = messageContacts.find(c => c.id === selectedContactId) ?? null;
+
   // WhatsApp State
   const [waMessage, setWaMessage] = useState('');
   
@@ -157,10 +197,99 @@ const Messages = () => {
            )}
 
            {activeView === 'chats' && (
-             <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-                <Layout size={48} style={{ opacity: 0.1, marginBottom: '20px' }} />
-                <h3>Chat System Coming Soon</h3>
-                <p>Individual messaging is currently under maintenance. Use System Notices for urgent communications.</p>
+             <div className="chats-panel">
+                {/* Contact list */}
+                <div className={`chats-contact-list ${selectedContactId ? 'chats-contact-list-hidden-mobile' : ''}`}>
+                   {messageContacts.length === 0 && (
+                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                        <User size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
+                        <p style={{ fontSize: '13px' }}>No contacts available yet.</p>
+                     </div>
+                   )}
+                   {messageContacts.map((contact) => (
+                     <button
+                      key={contact.id}
+                      onClick={() => setSelectedContactId(contact.id)}
+                      className="chats-contact-item"
+                      style={{
+                        background: selectedContactId === contact.id ? 'var(--accent)' : 'transparent',
+                        color: selectedContactId === contact.id ? 'var(--primary)' : 'var(--text-main)',
+                      }}
+                     >
+                        <div className="chats-contact-avatar">
+                           {contact.avatarUrl
+                             ? <img src={contact.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                             : contact.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+                           <div style={{ fontWeight: '700', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{contact.name}</div>
+                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{contact.role.replace('_', ' ')}</div>
+                        </div>
+                     </button>
+                   ))}
+                </div>
+
+                {/* Thread */}
+                <div className={`chats-thread ${selectedContactId ? '' : 'chats-thread-hidden-mobile'}`}>
+                   {!selectedContact && (
+                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                        <MessageCircle size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                        <p>Select a contact to start chatting.</p>
+                     </div>
+                   )}
+                   {selectedContact && (
+                     <>
+                       <div className="chats-thread-header">
+                          <button className="chats-back-btn" onClick={() => setSelectedContactId(null)}><ArrowLeft size={18} /></button>
+                          <div className="chats-contact-avatar">
+                             {selectedContact.avatarUrl
+                               ? <img src={selectedContact.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                               : selectedContact.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                             <div style={{ fontWeight: '700', fontSize: '15px' }}>{selectedContact.name}</div>
+                             <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{selectedContact.role.replace('_', ' ')}</div>
+                          </div>
+                       </div>
+
+                       <div className="chats-thread-messages">
+                          {chatLoading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading conversation...</p>}
+                          {!chatLoading && conversation.length === 0 && (
+                            <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No messages yet. Say hello!</p>
+                          )}
+                          {conversation.map((msg) => {
+                            const mine = msg.senderId === currentUser?.id;
+                            return (
+                              <div key={msg.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+                                 <div className="chats-bubble" style={{
+                                   background: mine ? 'var(--primary)' : 'var(--bg-surface)',
+                                   color: mine ? '#fff' : 'var(--text-main)',
+                                   border: mine ? 'none' : '1px solid var(--glass-border)',
+                                 }}>
+                                    <p style={{ fontSize: '14px', wordBreak: 'break-word' }}>{msg.content}</p>
+                                    <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
+                                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                 </div>
+                              </div>
+                            );
+                          })}
+                          <div ref={threadEndRef} />
+                       </div>
+
+                       <form onSubmit={handleSendChat} className="chats-thread-input">
+                          <input
+                            type="text"
+                            placeholder="Type a message..."
+                            value={chatDraft}
+                            onChange={(e) => setChatDraft(e.target.value)}
+                            style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                          />
+                          <button type="submit" className="btn btn-primary" disabled={!chatDraft.trim()}><Send size={18} /></button>
+                       </form>
+                     </>
+                   )}
+                </div>
              </div>
            )}
 

@@ -12,7 +12,8 @@ import {
   Settings,
   HelpCircle,
   Users,
-  Calendar
+  Calendar,
+  ClipboardCheck
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -37,6 +38,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const navItems = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: isTeacher ? '/portal/teacher' : isAdmin ? '/portal/admin' : '/portal', show: true },
     { label: 'My Students', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
+    { label: 'Tests', icon: <ClipboardCheck size={20} />, path: isTeacher ? '/portal/teacher/tests' : '/portal/tests', show: !isAdmin },
     { label: 'Academic Results', icon: <GraduationCap size={20} />, path: '/portal/results', show: !isAdmin },
     { label: 'Financial / Fees', icon: <CreditCard size={20} />, path: '/portal/fees', show: !isTeacher && !isAdmin },
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },

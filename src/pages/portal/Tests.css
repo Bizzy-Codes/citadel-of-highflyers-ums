@@ -1,0 +1,284 @@
+/* Shared styles for TeacherTests, TestEditor, TestMonitor, StudentTests, TestTaking */
+
+.test-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-wrap: wrap;
+}
+
+.test-row:last-child {
+  border-bottom: none;
+}
+
+.test-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 50px;
+  text-transform: uppercase;
+}
+
+.test-status-draft { background: rgba(107, 114, 128, 0.12); color: var(--text-muted); }
+.test-status-published { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+.test-status-closed { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+
+.test-editor-warning {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.question-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--bg-light);
+}
+
+.question-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 50px;
+  text-transform: uppercase;
+}
+
+.question-type-objective { background: rgba(107, 33, 168, 0.12); color: var(--primary); }
+.question-type-essay { background: rgba(168, 85, 247, 0.12); color: var(--secondary); }
+
+.question-options-preview {
+  list-style: none;
+  margin-top: 6px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attempt-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 50px;
+}
+
+.attempt-status-in_progress { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+.attempt-status-submitted { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+.attempt-status-terminated { background: rgba(239, 68, 68, 0.12); color: var(--error); }
+.attempt-status-expired { background: rgba(107, 114, 128, 0.12); color: var(--text-muted); }
+
+.violation-feed-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  background: rgba(245, 158, 11, 0.06);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.grading-answer-card {
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--bg-light);
+}
+
+.test-result-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 50px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+}
+
+.test-result-terminated {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
+
+/* Test-taking full-screen experience (no PortalLayout chrome) */
+.test-taking-root {
+  min-height: 100vh;
+  background: var(--bg-light);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.test-warning-banner {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--warning);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  z-index: 900;
+  box-shadow: var(--shadow-lg);
+  max-width: 90vw;
+}
+
+.test-taking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  position: sticky;
+  top: 12px;
+  z-index: 100;
+}
+
+.test-countdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.test-taking-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.test-nav-pill {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.test-nav-pill-answered {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.test-taking-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 800px;
+}
+
+.test-question-block {
+  padding: 24px;
+}
+
+.test-option-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-light);
+  cursor: pointer;
+}
+
+.test-option-label:has(input:checked) {
+  border-color: var(--primary);
+  background: rgba(107, 33, 168, 0.06);
+}
+
+/* Full-screen result / termination takeover */
+.test-takeover {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  padding: 40px;
+  background: var(--bg-light);
+}
+
+.test-takeover-done { color: var(--success); }
+.test-takeover-terminated { color: var(--error); }
+
+.test-takeover h2 { color: var(--text-main); }
+.test-takeover p { color: var(--text-muted); max-width: 480px; }
+
+/* Camera self-preview corner */
+.camera-preview-corner {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 140px;
+  height: 105px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  z-index: 500;
+  background: #000;
+}
+
+.camera-preview-corner video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-preview-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 8px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .test-taking-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .camera-preview-corner {
+    width: 90px;
+    height: 68px;
+    bottom: 12px;
+    right: 12px;
+  }
+}

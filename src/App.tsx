@@ -17,6 +17,11 @@ import ClassManagement from './pages/portal/ClassManagement'
 import Timetable from './pages/portal/Timetable'
 import Financial from './pages/portal/Financial'
 import Support from './pages/portal/Support'
+import TeacherTests from './pages/portal/TeacherTests'
+import TestEditor from './pages/portal/TestEditor'
+import TestMonitor from './pages/portal/TestMonitor'
+import StudentTests from './pages/portal/StudentTests'
+import TestTaking from './pages/portal/TestTaking'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import './index.css'
@@ -55,6 +60,12 @@ function App() {
         <Route path="/portal/fees" element={
           <ProtectedRoute allowedRoles={['student']}><Financial /></ProtectedRoute>
         } />
+        <Route path="/portal/tests" element={
+          <ProtectedRoute allowedRoles={['student']}><StudentTests /></ProtectedRoute>
+        } />
+        <Route path="/portal/tests/:attemptId" element={
+          <ProtectedRoute allowedRoles={['student']}><TestTaking /></ProtectedRoute>
+        } />
 
         {/* Shared authenticated routes (student + teacher; results also useful to review as teacher) */}
         <Route path="/portal/results" element={
@@ -79,6 +90,15 @@ function App() {
         } />
         <Route path="/portal/teacher/class/:className" element={
           <ProtectedRoute allowedRoles={['teacher']}><ClassManagement /></ProtectedRoute>
+        } />
+        <Route path="/portal/teacher/tests" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TeacherTests /></ProtectedRoute>
+        } />
+        <Route path="/portal/teacher/tests/:testId" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TestEditor /></ProtectedRoute>
+        } />
+        <Route path="/portal/teacher/tests/:testId/monitor" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TestMonitor /></ProtectedRoute>
         } />
         <Route path="/portal/teacher/students" element={
           <ProtectedRoute allowedRoles={['teacher']}><MyStudentsRedirect /></ProtectedRoute>

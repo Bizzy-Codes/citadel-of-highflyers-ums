@@ -128,6 +128,121 @@ export interface Notification {
   type: 'info' | 'warning' | 'success';
 }
 
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  content: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface TestQuestionOption {
+  key: string;
+  text: string;
+}
+
+// Teacher-side: the full row, including the answer key. Never sent
+// to a student -- see get_attempt_questions()/AttemptQuestion.
+export interface TestQuestion {
+  id: string;
+  testId: string;
+  orderIndex: number;
+  type: 'objective' | 'essay';
+  prompt: string;
+  points: number;
+  options?: TestQuestionOption[];
+  correctOption?: string;
+  modelAnswer?: string;
+  keywords?: { phrase: string; points: number }[];
+}
+
+// The single shape both a hand-typed question and a future
+// AI-extracted-then-reviewed question flow through into saveQuestion().
+export interface NewTestQuestionInput {
+  id?: string;
+  type: 'objective' | 'essay';
+  prompt: string;
+  points: number;
+  options?: TestQuestionOption[];
+  correctOption?: string;
+  modelAnswer?: string;
+  keywords?: { phrase: string; points: number }[];
+}
+
+// Student-side: sanitized shape from the get_attempt_questions RPC --
+// structurally cannot include correctOption/modelAnswer/keywords.
+export interface AttemptQuestion {
+  questionId: string;
+  orderIndex: number;
+  type: 'objective' | 'essay';
+  prompt: string;
+  points: number;
+  options?: TestQuestionOption[];
+  selectedOption?: string;
+  essayText?: string;
+}
+
+export interface Test {
+  id: string;
+  className: string;
+  subject: string;
+  title: string;
+  instructions?: string;
+  durationMinutes: number;
+  status: 'draft' | 'published' | 'closed';
+  totalPoints: number;
+  createdBy: string;
+  createdAt: string;
+  publishedAt?: string;
+}
+
+export interface NewTestInput {
+  subject: string;
+  title: string;
+  instructions?: string;
+  durationMinutes: number;
+}
+
+export interface TestAttempt {
+  id: string;
+  testId: string;
+  studentId: string;
+  studentName?: string;
+  studentDisplayId?: string;
+  status: 'in_progress' | 'submitted' | 'terminated' | 'expired';
+  startedAt: string;
+  expiresAt: string;
+  submittedAt?: string;
+  score?: number;
+  maxScore: number;
+  violationCount: number;
+  terminatedReason?: string;
+}
+
+export interface TestAnswerForGrading {
+  id: string;
+  attemptId: string;
+  questionId: string;
+  questionPrompt?: string;
+  questionType?: 'objective' | 'essay';
+  questionPoints?: number;
+  selectedOption?: string;
+  essayText?: string;
+  isCorrect?: boolean;
+  pointsAwarded?: number;
+  feedback?: string;
+}
+
+export interface ExamViolation {
+  id: string;
+  attemptId: string;
+  testId: string;
+  studentId: string;
+  studentName?: string;
+  occurredAt: string;
+}
+
 interface AuthContextType {
   students: User[];
   staff: User[];
@@ -167,6 +282,36 @@ interface AuthContextType {
   getSubmissionsForAssignment: (assignmentId: string) => Promise<AssignmentSubmission[]>;
   gradeSubmission: (submissionId: string, grade: string, feedback: string) => Promise<{ error: string | null }>;
   getAssignmentFileUrl: (path: string) => Promise<string | null>;
+  messageContacts: User[];
+  getConversation: (otherUserId: string) => Promise<DirectMessage[]>;
+  sendDirectMessage: (recipientId: string, content: string) => Promise<{ error: string | null }>;
+  markConversationRead: (otherUserId: string) => Promise<void>;
+  subscribeToDirectMessages: (otherUserId: string, onMessage: (message: DirectMessage) => void) => () => void;
+  tests: Test[];
+  createTest: (input: NewTestInput) => Promise<{ error: string | null; testId?: string }>;
+  updateTest: (id: string, input: Partial<NewTestInput>) => Promise<{ error: string | null }>;
+  publishTest: (id: string) => Promise<{ error: string | null }>;
+  closeTest: (id: string) => Promise<{ error: string | null }>;
+  deleteTest: (id: string) => Promise<void>;
+  getTestQuestions: (testId: string) => Promise<TestQuestion[]>;
+  saveQuestion: (testId: string, input: NewTestQuestionInput) => Promise<{ error: string | null; id?: string }>;
+  deleteQuestion: (id: string) => Promise<void>;
+  reorderQuestions: (orderedIds: string[]) => Promise<void>;
+  getAttemptsForTest: (testId: string) => Promise<TestAttempt[]>;
+  getAnswersForAttempt: (attemptId: string) => Promise<TestAnswerForGrading[]>;
+  gradeEssayAnswer: (answerId: string, pointsAwarded: number, feedback: string) => Promise<{ error: string | null }>;
+  getViolationsForTest: (testId: string) => Promise<ExamViolation[]>;
+  subscribeToTestAttempts: (testId: string, onChange: (attempt: TestAttempt) => void) => () => void;
+  subscribeToTestViolations: (testId: string, onViolation: (violation: ExamViolation) => void) => () => void;
+  sweepExpiredAttempts: (testId: string) => Promise<void>;
+  getMyAttemptForTest: (testId: string) => Promise<TestAttempt | null>;
+  getAttemptById: (attemptId: string) => Promise<TestAttempt | null>;
+  startTestAttempt: (testId: string) => Promise<{ error: string | null; attemptId?: string; expiresAt?: string }>;
+  getAttemptQuestions: (attemptId: string) => Promise<AttemptQuestion[]>;
+  saveTestAnswer: (attemptId: string, questionId: string, answer: { selectedOption?: string; essayText?: string }) => Promise<{ error: string | null }>;
+  submitTestAttempt: (attemptId: string) => Promise<{ error: string | null; score?: number; maxScore?: number; status?: string }>;
+  recordTestViolation: (attemptId: string) => Promise<{ error: string | null; violationCount?: number; status?: string }>;
+  finalizeMyExpiredAttempts: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -212,6 +357,99 @@ const mapAssignmentRow = (row: any): Assignment => ({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapTestRow = (row: any): Test => ({
+  id: row.id,
+  className: row.class_name,
+  subject: row.subject,
+  title: row.title,
+  instructions: row.instructions ?? undefined,
+  durationMinutes: row.duration_minutes,
+  status: row.status,
+  totalPoints: Number(row.total_points ?? 0),
+  createdBy: row.created_by,
+  createdAt: row.created_at,
+  publishedAt: row.published_at ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapTestQuestionRow = (row: any): TestQuestion => ({
+  id: row.id,
+  testId: row.test_id,
+  orderIndex: row.order_index,
+  type: row.type,
+  prompt: row.prompt,
+  points: Number(row.points),
+  options: row.options ?? undefined,
+  correctOption: row.correct_option ?? undefined,
+  modelAnswer: row.model_answer ?? undefined,
+  keywords: row.keywords ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAttemptQuestionRow = (row: any): AttemptQuestion => ({
+  questionId: row.question_id,
+  orderIndex: row.order_index,
+  type: row.type,
+  prompt: row.prompt,
+  points: Number(row.points),
+  options: row.options ?? undefined,
+  selectedOption: row.selected_option ?? undefined,
+  essayText: row.essay_text ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapTestAttemptRow = (row: any): TestAttempt => ({
+  id: row.id,
+  testId: row.test_id,
+  studentId: row.student_id,
+  studentName: row.profiles?.name ?? undefined,
+  studentDisplayId: row.profiles?.display_id ?? undefined,
+  status: row.status,
+  startedAt: row.started_at,
+  expiresAt: row.expires_at,
+  submittedAt: row.submitted_at ?? undefined,
+  score: row.score != null ? Number(row.score) : undefined,
+  maxScore: Number(row.max_score ?? 0),
+  violationCount: row.violation_count,
+  terminatedReason: row.terminated_reason ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapTestAnswerRow = (row: any): TestAnswerForGrading => ({
+  id: row.id,
+  attemptId: row.attempt_id,
+  questionId: row.question_id,
+  questionPrompt: row.test_questions?.prompt ?? undefined,
+  questionType: row.test_questions?.type ?? undefined,
+  questionPoints: row.test_questions?.points != null ? Number(row.test_questions.points) : undefined,
+  selectedOption: row.selected_option ?? undefined,
+  essayText: row.essay_text ?? undefined,
+  isCorrect: row.is_correct ?? undefined,
+  pointsAwarded: row.points_awarded != null ? Number(row.points_awarded) : undefined,
+  feedback: row.feedback ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapViolationRow = (row: any): ExamViolation => ({
+  id: row.id,
+  attemptId: row.attempt_id,
+  testId: row.test_id,
+  studentId: row.student_id,
+  studentName: row.profiles?.name ?? undefined,
+  occurredAt: row.occurred_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapMessageRow = (row: any): DirectMessage => ({
+  id: row.id,
+  senderId: row.sender_id,
+  recipientId: row.recipient_id,
+  content: row.content,
+  createdAt: row.created_at,
+  readAt: row.read_at ?? undefined,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapSubmissionRow = (row: any): AssignmentSubmission => ({
   id: row.id,
   assignmentId: row.assignment_id,
@@ -235,6 +473,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refreshProfiles = useCallback(async () => {
@@ -292,6 +531,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMySubmissions(map);
   }, []);
 
+  const refreshTests = useCallback(async () => {
+    const { data, error } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Failed to load tests', error); return; }
+    setTests((data ?? []).map(mapTestRow));
+  }, []);
+
   const refreshAll = useCallback(async (userId: string) => {
     await Promise.all([
       refreshCurrentProfile(userId),
@@ -301,8 +546,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshNotifications(),
       refreshAssignments(),
       refreshMySubmissions(),
+      refreshTests(),
     ]);
-  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications, refreshAssignments, refreshMySubmissions]);
+  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications, refreshAssignments, refreshMySubmissions, refreshTests]);
 
   useEffect(() => {
     let isMounted = true;
@@ -327,6 +573,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setNotifications([]);
         setAssignments([]);
         setMySubmissions({});
+        setTests([]);
       }
     });
 
@@ -698,6 +945,291 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshNotifications();
   };
 
+  // Who the current user is allowed to see in the "Private Chats"
+  // contact list. RLS on profiles already limits what actually comes
+  // back over the wire (a student only ever receives their own class
+  // teacher and admins, per patch_6.sql) -- this just picks the right
+  // slice of that for each role so admins aren't shown to themselves.
+  const messageContacts: User[] = (() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') {
+      return [...students, ...staff].filter(u => u.id !== currentUser.id);
+    }
+    if (currentUser.role === 'teacher') {
+      return [...students, ...staff.filter(u => u.role === 'admin')];
+    }
+    // student
+    return staff.filter(u => u.role === 'teacher' || u.role === 'admin');
+  })();
+
+  const getConversation = async (otherUserId: string): Promise<DirectMessage[]> => {
+    if (!session?.user.id) return [];
+    const userId = session.user.id;
+    const { data, error } = await supabase
+      .from('direct_messages')
+      .select('*')
+      .or(`and(sender_id.eq.${userId},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${userId})`)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('getConversation failed', error); return []; }
+    return (data ?? []).map(mapMessageRow);
+  };
+
+  const sendDirectMessage = async (recipientId: string, content: string) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const trimmed = content.trim();
+    if (!trimmed) return { error: 'Message cannot be empty' };
+    const { error } = await supabase.from('direct_messages').insert({
+      sender_id: session.user.id, recipient_id: recipientId, content: trimmed,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const markConversationRead = async (otherUserId: string) => {
+    if (!session?.user.id) return;
+    await supabase.from('direct_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('sender_id', otherUserId)
+      .eq('recipient_id', session.user.id)
+      .is('read_at', null);
+  };
+
+  // Realtime subscription for one open conversation. Returns an
+  // unsubscribe function for the caller's effect cleanup.
+  const subscribeToDirectMessages = (otherUserId: string, onMessage: (message: DirectMessage) => void) => {
+    if (!session?.user.id) return () => {};
+    const userId = session.user.id;
+    const channel = supabase
+      .channel(`dm-${[userId, otherUserId].sort().join('-')}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row = payload.new as any;
+        const isThisConversation =
+          (row.sender_id === userId && row.recipient_id === otherUserId) ||
+          (row.sender_id === otherUserId && row.recipient_id === userId);
+        if (isThisConversation) onMessage(mapMessageRow(row));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  // ------------------------------------------------------------
+  // Tests / Exams -- teacher side
+  // ------------------------------------------------------------
+  const createTest = async (input: NewTestInput) => {
+    if (!currentUser?.assignedClass) return { error: 'No class assigned to your account.' };
+    const { data, error } = await supabase.from('tests').insert({
+      class_name: currentUser.assignedClass,
+      subject: input.subject,
+      title: input.title,
+      instructions: input.instructions || null,
+      duration_minutes: input.durationMinutes,
+    }).select().single();
+    if (error || !data) return { error: error?.message ?? 'Failed to create test' };
+    await refreshTests();
+    return { error: null, testId: data.id as string };
+  };
+
+  const updateTest = async (id: string, input: Partial<NewTestInput>) => {
+    const patch: Record<string, unknown> = {};
+    if (input.subject !== undefined) patch.subject = input.subject;
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.instructions !== undefined) patch.instructions = input.instructions || null;
+    if (input.durationMinutes !== undefined) patch.duration_minutes = input.durationMinutes;
+    const { error } = await supabase.from('tests').update(patch).eq('id', id);
+    if (error) return { error: error.message };
+    await refreshTests();
+    return { error: null };
+  };
+
+  const publishTest = async (id: string) => {
+    const { error } = await supabase.from('tests').update({ status: 'published', published_at: new Date().toISOString() }).eq('id', id);
+    if (error) return { error: error.message };
+    await refreshTests();
+    return { error: null };
+  };
+
+  const closeTest = async (id: string) => {
+    const { error } = await supabase.from('tests').update({ status: 'closed' }).eq('id', id);
+    if (error) return { error: error.message };
+    await refreshTests();
+    return { error: null };
+  };
+
+  const deleteTest = async (id: string) => {
+    const { error } = await supabase.from('tests').delete().eq('id', id);
+    if (error) { console.error('deleteTest failed', error); return; }
+    await refreshTests();
+  };
+
+  const getTestQuestions = async (testId: string): Promise<TestQuestion[]> => {
+    const { data, error } = await supabase.from('test_questions').select('*').eq('test_id', testId).order('order_index');
+    if (error) { console.error('getTestQuestions failed', error); return []; }
+    return (data ?? []).map(mapTestQuestionRow);
+  };
+
+  const saveQuestion = async (testId: string, input: NewTestQuestionInput) => {
+    const row = {
+      test_id: testId,
+      type: input.type,
+      prompt: input.prompt,
+      points: input.points,
+      options: input.options ?? null,
+      correct_option: input.correctOption ?? null,
+      model_answer: input.modelAnswer ?? null,
+      keywords: input.keywords ?? null,
+    };
+    if (input.id) {
+      const { error } = await supabase.from('test_questions').update(row).eq('id', input.id);
+      if (error) return { error: error.message };
+      await refreshTests(); // total_points changed via the recalc_test_points trigger
+      return { error: null, id: input.id };
+    }
+    const { data, error } = await supabase.from('test_questions').insert(row).select().single();
+    if (error || !data) return { error: error?.message ?? 'Failed to save question' };
+    await refreshTests();
+    return { error: null, id: data.id as string };
+  };
+
+  const deleteQuestion = async (id: string) => {
+    const { error } = await supabase.from('test_questions').delete().eq('id', id);
+    if (error) { console.error('deleteQuestion failed', error); return; }
+    await refreshTests();
+  };
+
+  const reorderQuestions = async (orderedIds: string[]) => {
+    await Promise.all(orderedIds.map((id, index) =>
+      supabase.from('test_questions').update({ order_index: index }).eq('id', id)
+    ));
+  };
+
+  const getAttemptsForTest = async (testId: string): Promise<TestAttempt[]> => {
+    const { data, error } = await supabase
+      .from('test_attempts')
+      .select('*, profiles(name, display_id)')
+      .eq('test_id', testId)
+      .order('started_at', { ascending: false });
+    if (error) { console.error('getAttemptsForTest failed', error); return []; }
+    return (data ?? []).map(mapTestAttemptRow);
+  };
+
+  const getAnswersForAttempt = async (attemptId: string): Promise<TestAnswerForGrading[]> => {
+    const { data, error } = await supabase
+      .from('test_answers')
+      .select('*, test_questions(prompt, type, points)')
+      .eq('attempt_id', attemptId);
+    if (error) { console.error('getAnswersForAttempt failed', error); return []; }
+    return (data ?? []).map(mapTestAnswerRow);
+  };
+
+  const gradeEssayAnswer = async (answerId: string, pointsAwarded: number, feedback: string) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('test_answers').update({
+      points_awarded: pointsAwarded, feedback, graded_by: currentUser.id, graded_at: new Date().toISOString(),
+    }).eq('id', answerId);
+    return { error: error?.message ?? null };
+  };
+
+  const getViolationsForTest = async (testId: string): Promise<ExamViolation[]> => {
+    const { data, error } = await supabase
+      .from('exam_violations')
+      .select('*, profiles(name)')
+      .eq('test_id', testId)
+      .order('occurred_at', { ascending: false });
+    if (error) { console.error('getViolationsForTest failed', error); return []; }
+    return (data ?? []).map(mapViolationRow);
+  };
+
+  const subscribeToTestAttempts = (testId: string, onChange: (attempt: TestAttempt) => void) => {
+    const channel = supabase
+      .channel(`test-attempts-${testId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_attempts', filter: `test_id=eq.${testId}` }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onChange(mapTestAttemptRow(payload.new as any));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  const subscribeToTestViolations = (testId: string, onViolation: (violation: ExamViolation) => void) => {
+    const channel = supabase
+      .channel(`test-violations-${testId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'exam_violations', filter: `test_id=eq.${testId}` }, (payload) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onViolation(mapViolationRow(payload.new as any));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  const sweepExpiredAttempts = async (testId: string) => {
+    const { error } = await supabase.rpc('finalize_expired_attempts_for_test', { p_test_id: testId });
+    if (error) console.error('sweepExpiredAttempts failed', error);
+  };
+
+  // ------------------------------------------------------------
+  // Tests / Exams -- student side. Every mutation goes through a
+  // SECURITY DEFINER RPC -- see supabase/patch_7.sql -- so timers,
+  // one-attempt enforcement, grading, and strike counts can't be
+  // forged from the browser console.
+  // ------------------------------------------------------------
+  const getMyAttemptForTest = async (testId: string): Promise<TestAttempt | null> => {
+    if (!session?.user.id) return null;
+    const { data, error } = await supabase
+      .from('test_attempts')
+      .select('*')
+      .eq('test_id', testId)
+      .eq('student_id', session.user.id)
+      .maybeSingle();
+    if (error) { console.error('getMyAttemptForTest failed', error); return null; }
+    return data ? mapTestAttemptRow(data) : null;
+  };
+
+  const getAttemptById = async (attemptId: string): Promise<TestAttempt | null> => {
+    const { data, error } = await supabase.from('test_attempts').select('*').eq('id', attemptId).maybeSingle();
+    if (error) { console.error('getAttemptById failed', error); return null; }
+    return data ? mapTestAttemptRow(data) : null;
+  };
+
+  const startTestAttempt = async (testId: string) => {
+    const { data, error } = await supabase.rpc('start_test_attempt', { p_test_id: testId });
+    if (error) return { error: error.message };
+    const row = Array.isArray(data) ? data[0] : data;
+    return { error: null, attemptId: row.attempt_id as string, expiresAt: row.expires_at as string };
+  };
+
+  const getAttemptQuestions = async (attemptId: string): Promise<AttemptQuestion[]> => {
+    const { data, error } = await supabase.rpc('get_attempt_questions', { p_attempt_id: attemptId });
+    if (error) { console.error('getAttemptQuestions failed', error); return []; }
+    return (data ?? []).map(mapAttemptQuestionRow);
+  };
+
+  const saveTestAnswer = async (attemptId: string, questionId: string, answer: { selectedOption?: string; essayText?: string }) => {
+    const { error } = await supabase.rpc('save_test_answer', {
+      p_attempt_id: attemptId, p_question_id: questionId,
+      p_selected_option: answer.selectedOption ?? null, p_essay_text: answer.essayText ?? null,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const submitTestAttempt = async (attemptId: string) => {
+    const { data, error } = await supabase.rpc('submit_test_attempt', { p_attempt_id: attemptId });
+    if (error) return { error: error.message };
+    const row = Array.isArray(data) ? data[0] : data;
+    return { error: null, score: Number(row.score), maxScore: Number(row.max_score), status: row.status as string };
+  };
+
+  const recordTestViolation = async (attemptId: string) => {
+    const { data, error } = await supabase.rpc('record_test_violation', { p_attempt_id: attemptId });
+    if (error) return { error: error.message };
+    const row = Array.isArray(data) ? data[0] : data;
+    return { error: null, violationCount: row.violation_count as number, status: row.status as string };
+  };
+
+  const finalizeMyExpiredAttempts = async () => {
+    const { error } = await supabase.rpc('finalize_expired_attempts');
+    if (error) console.error('finalizeMyExpiredAttempts failed', error);
+  };
+
   const exportData = () => {
     const data = { students, staff, subjects: subjectsByClass, timetables, notifications };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -719,6 +1251,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       notifications, addNotification, exportData,
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
+      messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
+      tests, createTest, updateTest, publishTest, closeTest, deleteTest,
+      getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
+      getAttemptsForTest, getAnswersForAttempt, gradeEssayAnswer, getViolationsForTest,
+      subscribeToTestAttempts, subscribeToTestViolations, sweepExpiredAttempts,
+      getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
+      submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
     }}>
       {children}
     </AuthContext.Provider>
