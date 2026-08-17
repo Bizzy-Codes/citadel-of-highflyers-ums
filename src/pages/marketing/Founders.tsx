@@ -1,5 +1,6 @@
 import { ArrowLeft, Quote, Award, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import PhotoPlaceholder from '../../components/common/PhotoPlaceholder';
 import './Founders.css';
 
 const Founders = () => {
@@ -25,7 +26,7 @@ const Founders = () => {
              <div className="founder-content">
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg"></div>
-                   <img src="https://images.unsplash.com/photo-1540324155974-7523202daa3f?q=80&w=600" alt="Pastor Chrispraise Iwunna" className="founder-img" />
+                   <PhotoPlaceholder label="Photo: Pastor Chrispraise Iwunna" className="founder-img" />
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Founder</div>
                 </div>
                 <div className="founder-text">
@@ -65,7 +66,7 @@ const Founders = () => {
                 </div>
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg secondary"></div>
-                   <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600" alt="Ambassador Mrs Princess Iwunna" className="founder-img" />
+                   <PhotoPlaceholder label="Photo: Ambassador Mrs Princess Iwunna" className="founder-img" />
                    <div className="founder-badge founder-2"><Sparkles size={16} /> Proprietress</div>
                 </div>
              </div>

@@ -17,7 +17,17 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
+import PhotoPlaceholder from '../../components/common/PhotoPlaceholder';
 import './Home.css';
+
+const GALLERY_SLOTS = [
+  'School Building',
+  'Classroom Session',
+  'Students Assembly',
+  'Sports & Games',
+  'Graduation Day',
+  'Creative Arts',
+];
 
 const Home = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -130,7 +140,7 @@ const Home = () => {
             </motion.div>
 
             <div className="hero-main-img-wrapper">
-               <img src="https://images.unsplash.com/photo-1577891913216-3d9a69e79601?q=80&w=800" alt="Students" className="hero-main-img" />
+               <PhotoPlaceholder label="Photo: Students at Citadel" className="hero-main-img" />
             </div>
           </div>
         </div>
@@ -145,7 +155,7 @@ const Home = () => {
           <div className="features-grid-spiced">
             <div className="feature-item-large glass">
                <div className="feature-image">
-                  <img src="https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=800" alt="Learning" />
+                  <PhotoPlaceholder label="Photo: Classroom Learning" />
                   <div className="play-overlay"><Play fill="white" size={40} color="white" /></div>
                </div>
                <div className="feature-text">
@@ -185,13 +195,13 @@ const Home = () => {
          <div className="container">
             <h2 className="section-title">Glimpses of Excellence</h2>
             <div className="gallery-grid">
-               {[1,2,3,4,5,6].map(i => (
-                 <motion.div 
-                  key={i} 
-                  className={`gallery-item item-${i} glass`}
+               {GALLERY_SLOTS.map((label, i) => (
+                 <motion.div
+                  key={label}
+                  className={`gallery-item item-${i + 1} glass`}
                   whileHover={{ scale: 1.02 }}
                  >
-                    <img src={`https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=400&sig=${i}`} alt="Gallery" />
+                    <PhotoPlaceholder label={label} />
                  </motion.div>
                ))}
             </div>
