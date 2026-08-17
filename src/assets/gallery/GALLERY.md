@@ -20,7 +20,6 @@ change needed, just refresh the site after adding the file.
 | `founder-chrispraise.jpg` | Founders page | Pastor Chrispraise Iwunna |
 | `founder-princess.jpg` | Founders page | Ambassador Mrs Princess Iwunna |
 
-**None of these files exist in this folder yet** -- pasting a photo into
-the chat does not save it here. Save the actual files into this exact
-folder on the school's computer, using these exact filenames, then
-refresh the site.
+All 13 filenames above are filled in with real photos as of 2026-08-17.
+To swap any of them out later, just overwrite that file with a new one
+using the same filename, then refresh the site.
