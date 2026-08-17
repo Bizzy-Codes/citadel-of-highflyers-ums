@@ -36,20 +36,20 @@ const Messages = () => {
 
   return (
     <PortalLayout title="Communication Center">
-      <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '24px', height: 'calc(100vh - 180px)' }}>
-        
+      <div className="animate-fade-in comm-center-grid" style={{ gap: '24px' }}>
+
         {/* Sidebar Navigation */}
-        <div className="card glass" style={{ padding: '20px', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-           <button 
+        <div className="card glass comm-center-sidebar" style={{ padding: '20px', borderRadius: '24px', gap: '12px' }}>
+           <button
             onClick={() => setActiveView('notifications')}
             className={`btn ${activeView === 'notifications' ? 'btn-primary' : 'btn-outline'}`}
             style={{ justifyContent: 'flex-start' }}
            >
              <Bell size={18} /> System Notices
            </button>
-           
+
            {isAdmin && (
-             <button 
+             <button
               onClick={() => setActiveView('whatsapp')}
               className={`btn ${activeView === 'whatsapp' ? 'btn-primary' : 'btn-outline'}`}
               style={{ justifyContent: 'flex-start' }}
@@ -58,7 +58,7 @@ const Messages = () => {
              </button>
            )}
 
-           <button 
+           <button
             onClick={() => setActiveView('chats')}
             className={`btn ${activeView === 'chats' ? 'btn-primary' : 'btn-outline'}`}
             style={{ justifyContent: 'flex-start' }}
@@ -68,7 +68,7 @@ const Messages = () => {
         </div>
 
         {/* Main Content Area */}
-        <div className="card glass" style={{ padding: '30px', borderRadius: '24px', overflowY: 'auto' }}>
+        <div className="card glass comm-center-main" style={{ padding: '30px', borderRadius: '24px', overflowY: 'auto' }}>
            
            {activeView === 'notifications' && (
              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -80,25 +80,25 @@ const Messages = () => {
                 {isAdmin && (
                   <form onSubmit={handlePostNotification} className="blend-bg" style={{ padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                      <h4 style={{ fontSize: '15px' }}>Post New Announcement</h4>
-                     <input 
-                      type="text" 
-                      placeholder="Title" 
+                     <input
+                      type="text"
+                      placeholder="Title"
                       value={notifTitle}
                       onChange={(e) => setNotifTitle(e.target.value)}
-                      style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} 
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                      />
-                     <textarea 
-                      placeholder="Message content..." 
+                     <textarea
+                      placeholder="Message content..."
                       rows={3}
                       value={notifMsg}
                       onChange={(e) => setNotifMsg(e.target.value)}
-                      style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
                      />
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <select 
-                          value={notifType} 
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                        <select
+                          value={notifType}
                           onChange={(e) => setNotifType(e.target.value as any)}
-                          style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
+                          style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                         >
                            <option value="info">Information (Blue)</option>
                            <option value="warning">Important (Orange)</option>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type User } from '../../context/AuthContext';
 import {
@@ -20,14 +21,15 @@ const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { students, staff, inviteUser, updateUser, requestPasswordReset, exportData } = useAuth();
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
+  const navigate = useNavigate();
 
   const pendingTeacherCount = staff.filter(s => s.role === 'teacher_pending').length;
 
   const adminStats = [
     { label: "Total Students", value: students.length.toString(), icon: <Users size={20} />, trend: "Across all grades" },
     { label: "Active This Term", value: students.filter(s => s.status === 'Active').length.toString(), icon: <CheckCircle size={20} />, trend: "Registered & Paid" },
-    { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers" },
-    { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin" },
+    { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers", onClick: () => navigate('/portal/admin/users') },
+    { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin", onClick: () => navigate('/portal/admin/users') },
   ];
 
   const filteredStudents = students.filter(s =>
@@ -82,7 +84,12 @@ const AdminDashboard = () => {
         {/* Overview Stats */}
         <section className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
            {adminStats.map((stat, i) => (
-             <div key={i} className="stat-card glass hover-scale" style={{ padding: '24px', borderRadius: '24px', border: '1px solid var(--glass-border)' }}>
+             <div
+               key={i}
+               className="stat-card glass hover-scale"
+               onClick={stat.onClick}
+               style={{ padding: '24px', borderRadius: '24px', border: '1px solid var(--glass-border)', cursor: stat.onClick ? 'pointer' : 'default' }}
+             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--accent)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.8 }}>
                       {stat.icon}
@@ -207,13 +214,13 @@ const AdminDashboard = () => {
                  <Settings size={20} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
-                 <div className="blend-bg hover-scale" style={{ padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid var(--glass-border)' }}>
+                 <div onClick={() => navigate('/portal/admin/users')} className="blend-bg hover-scale" style={{ padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid var(--glass-border)' }}>
                     <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>Manage Staff</h4>
                     <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{staff.length} Total accounts</p>
                  </div>
-                 <div className="blend-bg hover-scale" style={{ padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid var(--glass-border)' }}>
-                    <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>Academic Calendar</h4>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Configure terms & breaks</p>
+                 <div onClick={() => navigate('/portal/timetable')} className="blend-bg hover-scale" style={{ padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid var(--glass-border)' }}>
+                    <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>Class Timetables</h4>
+                    <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Edit weekly class schedules</p>
                  </div>
               </div>
            </section>

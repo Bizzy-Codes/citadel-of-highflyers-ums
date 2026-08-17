@@ -1,12 +1,41 @@
+import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
+import ReportCard from '../../components/portal/ReportCard';
 import { Download, ChevronRight, Calendar } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, type Result, type ReportCardData, type SubjectStats } from '../../context/AuthContext';
 
 const Results = () => {
-  const { currentUser } = useAuth();
-  
+  const { currentUser, getReportCard, getSubjectStats } = useAuth();
+
   const currentResults = currentUser?.results || [];
   const history = currentUser?.history || [];
+
+  const [reportCard, setReportCard] = useState<ReportCardData | null>(null);
+  const [subjectStats, setSubjectStats] = useState<Record<string, SubjectStats>>({});
+
+  // The report card shows one term/session at a time -- default to
+  // whichever the student's most recently entered result belongs to.
+  const latestResult = [...currentResults].sort(
+    (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+  )[0];
+  const reportTerm: Result['term'] = latestResult?.term ?? '1st Term';
+  const reportSession = latestResult?.session ?? '2023/2024';
+  const reportResults = currentResults.filter(r => r.term === reportTerm && r.session === reportSession);
+
+  useEffect(() => {
+    if (!currentUser || reportResults.length === 0) { setReportCard(null); setSubjectStats({}); return; }
+
+    getReportCard(currentUser.id, reportTerm, reportSession).then(setReportCard);
+
+    Promise.all(
+      reportResults.map(r => getSubjectStats(currentUser.id, r.subject, reportTerm, reportSession).then(stats => [r.subject, stats] as const))
+    ).then(entries => {
+      const map: Record<string, SubjectStats> = {};
+      for (const [subject, stats] of entries) if (stats) map[subject] = stats;
+      setSubjectStats(map);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, reportTerm, reportSession, reportResults.length]);
 
   const calculateGPA = (results: any[]) => {
     if (results.length === 0) return "0.0";
@@ -28,7 +57,7 @@ const Results = () => {
   return (
     <PortalLayout title="Academic Results">
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        
+
         {/* Latest Performance Card */}
         <div className="card glass-purple" style={{ padding: '40px', textAlign: 'center' }}>
           <h2 style={{ fontSize: '18px', color: 'var(--text-muted)', marginBottom: '16px' }}>Current Performance ({currentUser?.grade})</h2>
@@ -39,40 +68,20 @@ const Results = () => {
           </div>
         </div>
 
-        {/* Current Term Subjects */}
-        <div className="card glass">
-          <div className="card-header">
-            <h3>Current Term Subjects ({currentResults.length})</h3>
+        {/* Official Report Card */}
+        {currentUser && (
+          <div className="card glass" style={{ padding: '20px', overflowX: 'auto' }}>
+            <ReportCard
+              student={currentUser}
+              term={reportTerm}
+              session={reportSession}
+              results={reportResults}
+              reportCard={reportCard}
+              subjectStats={subjectStats}
+              totalInClass={Object.values(subjectStats)[0]?.totalInClass ?? 0}
+            />
           </div>
-          <div style={{ width: '100%', overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--secondary)' }}>
-                  <th style={{ padding: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>SUBJECT</th>
-                  <th style={{ padding: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>SCORE</th>
-                  <th style={{ padding: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>GRADE</th>
-                  <th style={{ padding: '20px', fontSize: '13px', color: 'var(--text-muted)' }}>TERM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentResults.length > 0 ? currentResults.map((res, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td style={{ padding: '20px', fontWeight: '600' }}>{res.subject}</td>
-                    <td style={{ padding: '20px' }}>{res.score}/100</td>
-                    <td style={{ padding: '20px' }}>
-                      <span style={{ padding: '4px 12px', borderRadius: '4px', background: res.score >= 50 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: res.score >= 50 ? 'var(--success)' : 'var(--error)', fontWeight: '700' }}>
-                        {res.grade}
-                      </span>
-                    </td>
-                    <td style={{ padding: '20px' }}>{res.term}</td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={4} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No results uploaded for this term yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
         {/* Past Academic History (Promotion Records) */}
         {history.length > 0 && (

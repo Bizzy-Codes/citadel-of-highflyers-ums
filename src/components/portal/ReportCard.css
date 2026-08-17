@@ -1,0 +1,235 @@
+.report-card {
+  background: #fff;
+  color: #1a1a1a;
+  border: 2px solid #1a1a1a;
+  padding: 24px;
+  font-size: 12px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.report-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report-card th,
+.report-card td {
+  border: 1px solid #333;
+  padding: 5px 7px;
+  text-align: center;
+}
+
+.report-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.report-card-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.report-card-title {
+  flex: 1;
+  text-align: center;
+}
+
+.report-card-title h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.report-card-title p {
+  font-size: 11px;
+  margin: 2px 0;
+}
+
+.report-card-student-info {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px 16px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid #333;
+}
+
+.report-card-student-info div {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-card-student-info span {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+}
+
+.report-card-student-info strong {
+  font-size: 13px;
+}
+
+.report-card-subjects {
+  margin-bottom: 16px;
+}
+
+.report-card-subjects th {
+  background: #f0f0f0;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.report-card-domains {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.report-card-domain-table th {
+  background: #f0f0f0;
+  font-size: 10px;
+}
+
+.report-card-domain-table td:first-child {
+  text-align: left;
+}
+
+.report-card-domain-table .total-row td {
+  font-weight: 700;
+  background: #f7f7f7;
+}
+
+.report-card-summary {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.remark-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.remark-stats div {
+  border: 1px solid #333;
+  padding: 6px;
+  text-align: center;
+}
+
+.remark-stats span {
+  display: block;
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+}
+
+.remark-stats strong {
+  font-size: 15px;
+}
+
+.remark-box {
+  border: 1px solid #333;
+  padding: 8px;
+  min-height: 48px;
+}
+
+.remark-box span {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+}
+
+.remark-box p {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.report-card-grading-system th {
+  background: #f0f0f0;
+  font-size: 10px;
+}
+
+.report-card-grading-system td {
+  font-size: 11px;
+}
+
+.report-card-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.report-card-footer > div {
+  border: 1px solid #333;
+  padding: 10px;
+  min-height: 70px;
+}
+
+.report-card-footer span {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+}
+
+.report-card-footer p {
+  margin-top: 6px;
+}
+
+.report-card-footer .signature {
+  margin-top: 20px;
+  border-top: 1px solid #333;
+  padding-top: 4px;
+  font-style: italic;
+  font-size: 11px;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+  .report-card, .report-card * {
+    visibility: visible;
+  }
+  .report-card {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-card table,
+  .report-card-domains,
+  .report-card-summary,
+  .report-card-footer,
+  .report-card-student-info,
+  .report-card-header {
+    break-inside: avoid;
+  }
+
+  .report-card-subjects tr {
+    break-inside: avoid;
+  }
+}

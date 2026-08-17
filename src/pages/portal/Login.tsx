@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus } from 'lucide-react';
+import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, KeyRound } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './Login.css';
 
@@ -18,10 +18,16 @@ const Login = () => {
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<'student' | 'teacher'>('student');
   const [regGrade, setRegGrade] = useState('Grade 1');
-  const [registrationMessage, setRegistrationMessage] = useState<string | null>(null);
+
+  // OTP verification state -- shown after a successful registerStudent/
+  // registerStaff call, since Supabase requires the emailed code before
+  // the account can sign in at all.
+  const [otpEmail, setOtpEmail] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState('');
 
   const navigate = useNavigate();
-  const { login, registerStudent, registerStaff, currentUser } = useAuth();
+  const { login, registerStudent, registerStaff, verifySignupOtp, currentUser } = useAuth();
 
   // login() only starts the sign-in; currentUser updates asynchronously
   // via AuthContext's onAuthStateChange listener. Reacting to that
@@ -44,7 +50,7 @@ const Login = () => {
     setIsLoading(false);
 
     if (error) {
-      setError('Invalid credentials. Please check your email and password.');
+      setError('Invalid credentials. Please check your email/login ID and password.');
     }
   };
 
@@ -64,15 +70,28 @@ const Login = () => {
       return;
     }
 
-    setRegistrationMessage(
-      regRole === 'student'
-        ? 'Account created! Check your email to confirm it, then sign in.'
-        : "Account created! It's pending admin approval before you can access the teacher portal. You'll be notified once approved."
-    );
+    setOtpEmail(regEmail);
     setIsRegistering(false);
     setRegName('');
     setRegEmail('');
     setRegPassword('');
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpEmail) return;
+    setOtpError('');
+    setIsLoading(true);
+
+    const { error } = await verifySignupOtp(otpEmail, otpCode);
+    setIsLoading(false);
+
+    if (error) {
+      setOtpError(error);
+      return;
+    }
+    // Success sets a real session; the currentUser effect above handles
+    // routing to the right dashboard once AuthContext picks it up.
   };
 
   const classes = [
@@ -102,18 +121,18 @@ const Login = () => {
             <p>Access your secure portal to manage your academic profile.</p>
           </div>
 
-          {!isRegistering && !registrationMessage && (
+          {!isRegistering && !otpEmail && (
             <>
               {error && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', textAlign: 'center', marginBottom: '16px', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{error}</div>}
 
               <form className="login-form" onSubmit={handleLogin}>
                 <div className="input-group">
-                  <label>Email Address</label>
+                  <label>Email or Login ID</label>
                   <div className="input-field">
                     <Mail size={18} className="input-icon" />
                     <input
-                      type="email"
-                      placeholder="you@example.com"
+                      type="text"
+                      placeholder="you@example.com or CH 001"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -266,21 +285,49 @@ const Login = () => {
             </form>
           )}
 
-          {registrationMessage && (
-            <div className="registration-success animate-fade-in" style={{ textAlign: 'center', padding: '20px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                <UserPlus size={32} />
+          {otpEmail && (
+            <form className="login-form animate-fade-in" onSubmit={handleVerifyOtp}>
+              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+                <div style={{ width: '64px', height: '64px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                  <KeyRound size={32} />
+                </div>
+                <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Verify Your Email</h2>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  We sent a verification code to <strong>{otpEmail}</strong>. Enter it below to activate your account.
+                </p>
               </div>
-              <h2 style={{ fontSize: '22px', marginBottom: '12px' }}>Registration Received</h2>
-              <p style={{ marginBottom: '24px', color: 'var(--text-muted)' }}>{registrationMessage}</p>
+
+              {otpError && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{otpError}</div>}
+
+              <div className="input-group">
+                <label>Verification Code</label>
+                <div className="input-field">
+                  <KeyRound size={18} className="input-icon" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter the code from your email"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    style={{ letterSpacing: '4px', fontSize: '18px' }}
+                    autoFocus
+                    required
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="login-submit btn-primary" disabled={isLoading || otpCode.length < 6}>
+                {isLoading ? (<><Loader2 size={20} className="animate-spin" /> Verifying...</>) : 'Verify & Continue'}
+              </button>
 
               <button
-                className="login-submit btn-primary"
-                onClick={() => setRegistrationMessage(null)}
+                type="button"
+                onClick={() => { setOtpEmail(null); setOtpCode(''); setOtpError(''); }}
+                style={{ width: '100%', fontSize: '14px', color: 'var(--text-muted)' }}
               >
-                Continue to Login
+                Back to Login
               </button>
-            </div>
+            </form>
           )}
         </div>
       </div>

@@ -3,9 +3,9 @@ import { CreditCard, Download, Receipt } from 'lucide-react';
 
 const Fees = () => {
   const transactions = [
-    { type: 'School Fees', amount: '$2,500.00', date: 'Jan 15, 2024', status: 'Approved', receipt: 'R-7821' },
-    { type: 'Uniform & Gears', amount: '$350.00', date: 'Jan 10, 2024', status: 'Approved', receipt: 'R-7815' },
-    { type: 'Books & Materials', amount: '$200.00', date: 'Jan 05, 2024', status: 'Approved', receipt: 'R-7802' },
+    { type: 'School Fees', amount: '₦250,000.00', date: 'Jan 15, 2024', status: 'Approved', receipt: 'R-7821' },
+    { type: 'Uniform & Gears', amount: '₦35,000.00', date: 'Jan 10, 2024', status: 'Approved', receipt: 'R-7815' },
+    { type: 'Books & Materials', amount: '₦20,000.00', date: 'Jan 05, 2024', status: 'Approved', receipt: 'R-7802' },
   ];
 
   return (
@@ -13,12 +13,12 @@ const Fees = () => {
       <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '32px' }}>
          <div className="card glass-purple" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
             <h4 style={{ fontSize: '14px', color: 'var(--primary)', marginBottom: '8px' }}>Total Balance</h4>
-            <div style={{ fontSize: '32px', fontWeight: '700' }}>$0.00</div>
+            <div style={{ fontSize: '32px', fontWeight: '700' }}>₦0.00</div>
             <p style={{ fontSize: '12px', color: 'var(--success)', marginTop: '8px' }}>Fully Paid for Term 1</p>
          </div>
          <div className="card glass" style={{ padding: '24px' }}>
             <h4 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>Upcoming Payment</h4>
-            <div style={{ fontSize: '32px', fontWeight: '700' }}>$0.00</div>
+            <div style={{ fontSize: '32px', fontWeight: '700' }}>₦0.00</div>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>Next session: Sept 2024</p>
          </div>
          <div className="card glass" style={{ padding: '24px' }}>

@@ -5,10 +5,11 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import './Login.css';
 
-// Reached via the link in the password-reset email. Supabase's client
-// picks up the recovery token from the URL automatically and fires a
-// PASSWORD_RECOVERY auth event, giving this page a temporary session
-// that's only good for calling updateUser({ password }).
+// Reached either via the OTP code flow (ForgotPassword already verified
+// the code and holds a session by the time it navigates here) or, for
+// old email clicks, via Supabase's client picking up the recovery token
+// from the URL and firing a PASSWORD_RECOVERY auth event. Either way this
+// page just needs a live session to call updateUser({ password }).
 const ResetPassword = () => {
   const { updatePassword } = useAuth();
   const navigate = useNavigate();

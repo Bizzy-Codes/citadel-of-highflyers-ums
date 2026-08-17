@@ -116,7 +116,11 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
                   <span className="user-name">{currentUser?.name || 'User'}</span>
                   <span className="user-role">{isTeacher ? 'Teacher' : isAdmin ? 'Administrator' : 'Student'}</span>
                 </div>
-                <div className="user-avatar">{currentUser ? getInitials(currentUser.name) : 'U'}</div>
+                <div className="user-avatar">
+                  {currentUser?.avatarUrl
+                    ? <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                    : (currentUser ? getInitials(currentUser.name) : 'U')}
+                </div>
               </div>
             </div>
           </div>

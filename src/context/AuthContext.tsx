@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
+import { gradeFromScore } from '../lib/grading';
 
 export interface Result {
   id?: string;
@@ -10,6 +11,51 @@ export interface Result {
   term: '1st Term' | '2nd Term' | '3rd Term';
   session: string;
   createdAt?: string;
+  ca1?: number;
+  ca2?: number;
+  exam?: number;
+}
+
+export interface NewResultInput {
+  subject: string;
+  term: Result['term'];
+  session: string;
+  ca1: number;
+  ca2: number;
+  exam: number;
+}
+
+// One row per student per term -- the data that doesn't fit on the
+// per-subject results table: term dates, remarks/signatures, and the
+// fixed psychomotor/affective domain ratings from the official sheet.
+export interface ReportCardData {
+  termEnds?: string;
+  nextTermBegins?: string;
+  remark?: string;
+  headmasterComment?: string;
+  classTeacherComment?: string;
+  headmasterSignature?: string;
+  classTeacherSignature?: string;
+  commOralRating?: string;
+  creativityRating?: string;
+  drawingPaintingRating?: string;
+  musicRating?: string;
+  sportsRating?: string;
+  honestyRating?: string;
+  punctualityRating?: string;
+  attentivenessRating?: string;
+  politenessRating?: string;
+  obedienceRating?: string;
+  independenceRating?: string;
+  socialRating?: string;
+}
+
+export interface SubjectStats {
+  lowest: number;
+  average: number;
+  highest: number;
+  classPosition: number | null;
+  totalInClass: number;
 }
 
 export interface PastRecord {
@@ -29,8 +75,42 @@ export interface User {
   grade?: string;
   phone?: string;
   assignedClass?: string;
+  avatarUrl?: string;
   results?: Result[];
   history?: PastRecord[];
+}
+
+export interface Assignment {
+  id: string;
+  className: string;
+  subject: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  attachmentPath?: string;
+  attachmentName?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface NewAssignmentInput {
+  subject: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  studentId: string;
+  studentName?: string;
+  studentDisplayId?: string;
+  filePath: string;
+  fileName: string;
+  submittedAt: string;
+  grade?: string;
+  feedback?: string;
 }
 
 export interface TimetableEntry {
@@ -57,14 +137,21 @@ interface AuthContextType {
   logout: () => Promise<void>;
   registerStudent: (name: string, email: string, password: string, grade: string) => Promise<{ error: string | null }>;
   registerStaff: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
+  verifySignupOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  verifyRecoveryOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   inviteUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null }>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<{ error: string | null }>;
+  removeAvatar: () => Promise<{ error: string | null }>;
   deleteUser: (id: string) => Promise<void>;
   approveTeacher: (id: string) => Promise<void>;
   promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
-  addResult: (studentId: string, result: Result) => Promise<void>;
+  addResult: (studentId: string, result: NewResultInput) => Promise<void>;
+  getReportCard: (studentId: string, term: Result['term'], session: string) => Promise<ReportCardData | null>;
+  upsertReportCard: (studentId: string, term: Result['term'], session: string, data: ReportCardData) => Promise<void>;
+  getSubjectStats: (studentId: string, subject: string, term: Result['term'], session: string) => Promise<SubjectStats | null>;
   subjectsByClass: Record<string, string[]>;
   updateSubjects: (className: string, subjects: string[]) => Promise<void>;
   timetables: Record<string, TimetableEntry[]>;
@@ -72,6 +159,14 @@ interface AuthContextType {
   notifications: Notification[];
   addNotification: (notification: Omit<Notification, 'id' | 'date'>) => Promise<void>;
   exportData: () => void;
+  assignments: Assignment[];
+  mySubmissions: Record<string, AssignmentSubmission>;
+  createAssignment: (input: NewAssignmentInput, file: File | null) => Promise<{ error: string | null }>;
+  deleteAssignment: (id: string) => Promise<void>;
+  submitAssignment: (assignmentId: string, file: File) => Promise<{ error: string | null }>;
+  getSubmissionsForAssignment: (assignmentId: string) => Promise<AssignmentSubmission[]>;
+  gradeSubmission: (submissionId: string, grade: string, feedback: string) => Promise<{ error: string | null }>;
+  getAssignmentFileUrl: (path: string) => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,9 +183,11 @@ const mapProfileRow = (row: any): User => ({
   grade: row.grade ?? undefined,
   phone: row.phone ?? undefined,
   assignedClass: row.assigned_class ?? undefined,
+  avatarUrl: row.avatar_url ?? undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: (row.results ?? []).map((r: any) => ({
     id: r.id, subject: r.subject, score: r.score, grade: r.grade, term: r.term, session: r.session, createdAt: r.created_at,
+    ca1: r.ca1 ?? undefined, ca2: r.ca2 ?? undefined, exam: r.exam ?? undefined,
   })),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   history: (row.academic_history ?? []).map((h: any) => ({
@@ -100,6 +197,34 @@ const mapProfileRow = (row: any): User => ({
 
 const PROFILE_SELECT = '*, results(*), academic_history(*)';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAssignmentRow = (row: any): Assignment => ({
+  id: row.id,
+  className: row.class_name,
+  subject: row.subject,
+  title: row.title,
+  description: row.description ?? undefined,
+  dueDate: row.due_date ?? undefined,
+  attachmentPath: row.attachment_path ?? undefined,
+  attachmentName: row.attachment_name ?? undefined,
+  createdBy: row.created_by,
+  createdAt: row.created_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapSubmissionRow = (row: any): AssignmentSubmission => ({
+  id: row.id,
+  assignmentId: row.assignment_id,
+  studentId: row.student_id,
+  studentName: row.profiles?.name ?? undefined,
+  studentDisplayId: row.profiles?.display_id ?? undefined,
+  filePath: row.file_path,
+  fileName: row.file_name,
+  submittedAt: row.submitted_at,
+  grade: row.grade ?? undefined,
+  feedback: row.feedback ?? undefined,
+});
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -108,6 +233,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [subjectsByClass, setSubjectsByClass] = useState<Record<string, string[]>>({});
   const [timetables, setTimetables] = useState<Record<string, TimetableEntry[]>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
   const [loading, setLoading] = useState(true);
 
   const refreshProfiles = useCallback(async () => {
@@ -151,6 +278,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })));
   }, []);
 
+  const refreshAssignments = useCallback(async () => {
+    const { data, error } = await supabase.from('assignments').select('*').order('due_date', { ascending: true, nullsFirst: false });
+    if (error) { console.error('Failed to load assignments', error); return; }
+    setAssignments((data ?? []).map(mapAssignmentRow));
+  }, []);
+
+  const refreshMySubmissions = useCallback(async () => {
+    const { data, error } = await supabase.from('assignment_submissions').select('*');
+    if (error) { console.error('Failed to load submissions', error); return; }
+    const map: Record<string, AssignmentSubmission> = {};
+    (data ?? []).forEach((row) => { map[row.assignment_id] = mapSubmissionRow(row); });
+    setMySubmissions(map);
+  }, []);
+
   const refreshAll = useCallback(async (userId: string) => {
     await Promise.all([
       refreshCurrentProfile(userId),
@@ -158,8 +299,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshSubjects(),
       refreshTimetables(),
       refreshNotifications(),
+      refreshAssignments(),
+      refreshMySubmissions(),
     ]);
-  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications]);
+  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications, refreshAssignments, refreshMySubmissions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -182,6 +325,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSubjectsByClass({});
         setTimetables({});
         setNotifications([]);
+        setAssignments([]);
+        setMySubmissions({});
       }
     });
 
@@ -191,7 +336,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [refreshAll]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (identifier: string, password: string) => {
+    let email = identifier.trim();
+    // Supabase's password login only accepts an email. If what was typed
+    // isn't one, treat it as the login ID (profiles.display_id, e.g.
+    // "CH 001") and resolve it to the account's email first.
+    if (!email.includes('@')) {
+      const { data, error: lookupError } = await supabase.rpc('email_for_login_id', { p_login_id: email });
+      if (lookupError || !data) return { error: 'Invalid login credentials' };
+      email = data as string;
+    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
@@ -218,10 +372,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error?.message ?? null };
   };
 
+  const verifySignupOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+    return { error: error?.message ?? null };
+  };
+
   const requestPasswordReset = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
+    return { error: error?.message ?? null };
+  };
+
+  const verifyRecoveryOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
     return { error: error?.message ?? null };
   };
 
@@ -248,12 +412,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.assignedClass !== undefined) patch.assigned_class = data.assignedClass;
     if (data.status !== undefined) patch.status = data.status;
     if (data.role !== undefined) patch.role = data.role;
+    if (data.avatarUrl !== undefined) patch.avatar_url = data.avatarUrl;
 
     const { error } = await supabase.from('profiles').update(patch).eq('id', id);
     if (error) { console.error('updateUser failed', error); return; }
 
     if (session?.user.id === id) await refreshCurrentProfile(id);
     await refreshProfiles();
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const userId = session.user.id;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${userId}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true });
+    if (uploadError) return { error: uploadError.message };
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    // Cache-bust so the new image shows immediately instead of a stale
+    // cached copy at the same URL.
+    const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
+
+    const { error: dbError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+    if (dbError) return { error: dbError.message };
+
+    await refreshCurrentProfile(userId);
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  const removeAvatar = async () => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const userId = session.user.id;
+
+    const { data: files } = await supabase.storage.from('avatars').list(userId);
+    if (files && files.length > 0) {
+      await supabase.storage.from('avatars').remove(files.map(f => `${userId}/${f.name}`));
+    }
+
+    const { error: dbError } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
+    if (dbError) return { error: dbError.message };
+
+    await refreshCurrentProfile(userId);
+    await refreshProfiles();
+    return { error: null };
   };
 
   const deleteUser = async (id: string) => {
@@ -293,18 +499,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshProfiles();
   };
 
-  const addResult = async (studentId: string, result: Result) => {
+  const addResult = async (studentId: string, result: NewResultInput) => {
+    const score = result.ca1 + result.ca2 + result.exam;
+    const { grade } = gradeFromScore(score);
     const { error } = await supabase.from('results').insert({
       student_id: studentId,
       subject: result.subject,
-      score: result.score,
-      grade: result.grade,
+      score,
+      grade,
       term: result.term,
       session: result.session,
+      ca1: result.ca1,
+      ca2: result.ca2,
+      exam: result.exam,
     });
     if (error) { console.error('addResult failed', error); return; }
     if (session?.user.id === studentId) await refreshCurrentProfile(studentId);
     await refreshProfiles();
+  };
+
+  const REPORT_CARD_COLUMNS = 'term_ends, next_term_begins, remark, headmaster_comment, class_teacher_comment, headmaster_signature, class_teacher_signature, comm_oral_rating, creativity_rating, drawing_painting_rating, music_rating, sports_rating, honesty_rating, punctuality_rating, attentiveness_rating, politeness_rating, obedience_rating, independence_rating, social_rating';
+
+  const getReportCard = async (studentId: string, term: Result['term'], session: string): Promise<ReportCardData | null> => {
+    const { data, error } = await supabase
+      .from('report_cards')
+      .select(REPORT_CARD_COLUMNS)
+      .eq('student_id', studentId).eq('term', term).eq('session', session)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      termEnds: data.term_ends ?? undefined,
+      nextTermBegins: data.next_term_begins ?? undefined,
+      remark: data.remark ?? undefined,
+      headmasterComment: data.headmaster_comment ?? undefined,
+      classTeacherComment: data.class_teacher_comment ?? undefined,
+      headmasterSignature: data.headmaster_signature ?? undefined,
+      classTeacherSignature: data.class_teacher_signature ?? undefined,
+      commOralRating: data.comm_oral_rating ?? undefined,
+      creativityRating: data.creativity_rating ?? undefined,
+      drawingPaintingRating: data.drawing_painting_rating ?? undefined,
+      musicRating: data.music_rating ?? undefined,
+      sportsRating: data.sports_rating ?? undefined,
+      honestyRating: data.honesty_rating ?? undefined,
+      punctualityRating: data.punctuality_rating ?? undefined,
+      attentivenessRating: data.attentiveness_rating ?? undefined,
+      politenessRating: data.politeness_rating ?? undefined,
+      obedienceRating: data.obedience_rating ?? undefined,
+      independenceRating: data.independence_rating ?? undefined,
+      socialRating: data.social_rating ?? undefined,
+    };
+  };
+
+  const upsertReportCard = async (studentId: string, term: Result['term'], session: string, data: ReportCardData) => {
+    const { error } = await supabase.from('report_cards').upsert({
+      student_id: studentId,
+      term,
+      session,
+      term_ends: data.termEnds || null,
+      next_term_begins: data.nextTermBegins || null,
+      remark: data.remark || null,
+      headmaster_comment: data.headmasterComment || null,
+      class_teacher_comment: data.classTeacherComment || null,
+      headmaster_signature: data.headmasterSignature || null,
+      class_teacher_signature: data.classTeacherSignature || null,
+      comm_oral_rating: data.commOralRating || null,
+      creativity_rating: data.creativityRating || null,
+      drawing_painting_rating: data.drawingPaintingRating || null,
+      music_rating: data.musicRating || null,
+      sports_rating: data.sportsRating || null,
+      honesty_rating: data.honestyRating || null,
+      punctuality_rating: data.punctualityRating || null,
+      attentiveness_rating: data.attentivenessRating || null,
+      politeness_rating: data.politenessRating || null,
+      obedience_rating: data.obedienceRating || null,
+      independence_rating: data.independenceRating || null,
+      social_rating: data.socialRating || null,
+    }, { onConflict: 'student_id,term,session' });
+    if (error) console.error('upsertReportCard failed', error);
+  };
+
+  const getSubjectStats = async (studentId: string, subject: string, term: Result['term'], session: string): Promise<SubjectStats | null> => {
+    const { data, error } = await supabase.rpc('subject_class_stats', {
+      p_student_id: studentId, p_subject: subject, p_term_value: term, p_session: session,
+    }).maybeSingle();
+    if (error || !data) return null;
+    return {
+      lowest: Number(data.lowest ?? 0),
+      average: Number(data.average ?? 0),
+      highest: Number(data.highest ?? 0),
+      classPosition: data.class_position != null ? Number(data.class_position) : null,
+      totalInClass: Number(data.total_in_class ?? 0),
+    };
   };
 
   const updateSubjects = async (className: string, subjects: string[]) => {
@@ -321,6 +606,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
     await refreshTimetables();
+  };
+
+  const createAssignment = async (input: NewAssignmentInput, file: File | null) => {
+    if (!currentUser?.assignedClass) return { error: 'No class assigned to your account.' };
+
+    const { data: inserted, error: insertError } = await supabase.from('assignments').insert({
+      class_name: currentUser.assignedClass,
+      subject: input.subject,
+      title: input.title,
+      description: input.description || null,
+      due_date: input.dueDate || null,
+      created_by: currentUser.id,
+    }).select().single();
+    if (insertError || !inserted) return { error: insertError?.message ?? 'Failed to create assignment' };
+
+    if (file) {
+      const path = `${inserted.id}/brief/${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
+      if (uploadError) return { error: `Assignment created, but the attachment failed to upload: ${uploadError.message}` };
+      await supabase.from('assignments').update({ attachment_path: path, attachment_name: file.name }).eq('id', inserted.id);
+    }
+
+    await refreshAssignments();
+    return { error: null };
+  };
+
+  const deleteAssignment = async (id: string) => {
+    const { error } = await supabase.from('assignments').delete().eq('id', id);
+    if (error) { console.error('deleteAssignment failed', error); return; }
+    await refreshAssignments();
+  };
+
+  const submitAssignment = async (assignmentId: string, file: File) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const studentId = session.user.id;
+
+    // Resubmitting: clear out any prior (ungraded) submission first --
+    // RLS only allows this delete while grade is still null, so a
+    // graded submission simply won't be removed and the insert below
+    // will fail on the unique constraint, surfacing as an error.
+    await supabase.from('assignment_submissions').delete().eq('assignment_id', assignmentId).eq('student_id', studentId);
+
+    const path = `${assignmentId}/submissions/${studentId}/${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
+    if (uploadError) return { error: uploadError.message };
+
+    const { error: insertError } = await supabase.from('assignment_submissions').insert({
+      assignment_id: assignmentId,
+      student_id: studentId,
+      file_path: path,
+      file_name: file.name,
+    });
+    if (insertError) {
+      const message = insertError.code === '23505'
+        ? 'This assignment has already been graded and can no longer be resubmitted.'
+        : insertError.message;
+      return { error: message };
+    }
+
+    await refreshMySubmissions();
+    return { error: null };
+  };
+
+  const getSubmissionsForAssignment = async (assignmentId: string): Promise<AssignmentSubmission[]> => {
+    const { data, error } = await supabase
+      .from('assignment_submissions')
+      .select('*, profiles(name, display_id)')
+      .eq('assignment_id', assignmentId)
+      .order('submitted_at', { ascending: false });
+    if (error) { console.error('getSubmissionsForAssignment failed', error); return []; }
+    return (data ?? []).map(mapSubmissionRow);
+  };
+
+  const gradeSubmission = async (submissionId: string, grade: string, feedback: string) => {
+    const { error } = await supabase.from('assignment_submissions').update({ grade, feedback }).eq('id', submissionId);
+    return { error: error?.message ?? null };
+  };
+
+  const getAssignmentFileUrl = async (path: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from('assignment-files').createSignedUrl(path, 3600);
+    if (error || !data) { console.error('getAssignmentFileUrl failed', error); return null; }
+    return data.signedUrl;
   };
 
   const addNotification = async (notif: Omit<Notification, 'id' | 'date'>) => {
@@ -345,10 +712,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       students, staff, currentUser, loading,
-      login, logout, registerStudent, registerStaff, requestPasswordReset, updatePassword, inviteUser,
-      updateUser, deleteUser, approveTeacher, promoteStudent, addResult,
+      login, logout, registerStudent, registerStaff, verifySignupOtp, requestPasswordReset, verifyRecoveryOtp, updatePassword, inviteUser,
+      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult,
+      getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
       notifications, addNotification, exportData,
+      assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
+      getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
     }}>
       {children}
     </AuthContext.Provider>

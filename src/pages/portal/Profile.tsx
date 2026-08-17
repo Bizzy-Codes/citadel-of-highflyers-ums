@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
-import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2 } from 'lucide-react';
 
 const Profile = () => {
-  const { currentUser, updateUser } = useAuth();
+  const { currentUser, updateUser, uploadAvatar, removeAvatar } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: currentUser?.name || '',
     email: currentUser?.email || '',
@@ -24,6 +26,34 @@ const Profile = () => {
     alert("Profile updated successfully!");
   };
 
+  const handleAvatarPick = () => fileInputRef.current?.click();
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image is too large -- please choose one under 5MB.');
+      return;
+    }
+    setIsSavingAvatar(true);
+    const { error } = await uploadAvatar(file);
+    setIsSavingAvatar(false);
+    if (error) alert('Failed to upload photo: ' + error);
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!window.confirm('Remove your profile photo?')) return;
+    setIsSavingAvatar(true);
+    const { error } = await removeAvatar();
+    setIsSavingAvatar(false);
+    if (error) alert('Failed to remove photo: ' + error);
+  };
+
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
@@ -32,8 +62,44 @@ const Profile = () => {
         
         <div className="card glass" style={{ padding: '40px', borderRadius: '32px' }}>
           <div style={{ display: 'flex', gap: '40px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', fontWeight: '800', border: '4px solid white', boxShadow: 'var(--shadow-lg)' }}>
-              {getInitials(currentUser.name)}
+            <div style={{ position: 'relative', width: '150px', height: '150px', flexShrink: 0 }}>
+              <div style={{
+                width: '150px', height: '150px', borderRadius: '50%',
+                background: currentUser.avatarUrl ? undefined : 'linear-gradient(135deg, var(--primary), var(--secondary))',
+                color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '48px', fontWeight: '800', border: '4px solid white', boxShadow: 'var(--shadow-lg)',
+                overflow: 'hidden',
+              }}>
+                {currentUser.avatarUrl
+                  ? <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : getInitials(currentUser.name)}
+                {isSavingAvatar && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader2 size={28} className="animate-spin" />
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleAvatarPick}
+                title="Upload photo"
+                disabled={isSavingAvatar}
+                style={{ position: 'absolute', bottom: '4px', right: '4px', width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: 'white', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <Camera size={18} />
+              </button>
+              {currentUser.avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  title="Remove photo"
+                  disabled={isSavingAvatar}
+                  style={{ position: 'absolute', bottom: '4px', left: '4px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--error)', color: 'white', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

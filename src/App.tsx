@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from './context/AuthContext'
 import Home from './pages/marketing/Home'
 import Founders from './pages/marketing/Founders'
 import Login from './pages/portal/Login'
@@ -19,6 +20,17 @@ import Support from './pages/portal/Support'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import './index.css'
+
+// The "My Students" sidebar link has no class name to point at directly --
+// it means "whichever class I'm assigned to". Resolve that here rather
+// than hard-coding a class into the route.
+const MyStudentsRedirect = () => {
+  const { currentUser } = useAuth();
+  if (!currentUser) return null;
+  return currentUser.assignedClass
+    ? <Navigate to={`/portal/teacher/class/${encodeURIComponent(currentUser.assignedClass)}`} replace />
+    : <Navigate to="/portal/teacher" replace />;
+};
 
 function App() {
   return (
@@ -67,6 +79,9 @@ function App() {
         } />
         <Route path="/portal/teacher/class/:className" element={
           <ProtectedRoute allowedRoles={['teacher']}><ClassManagement /></ProtectedRoute>
+        } />
+        <Route path="/portal/teacher/students" element={
+          <ProtectedRoute allowedRoles={['teacher']}><MyStudentsRedirect /></ProtectedRoute>
         } />
 
         {/* Admin Routes */}

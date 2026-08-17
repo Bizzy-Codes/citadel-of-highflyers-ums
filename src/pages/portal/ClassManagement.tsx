@@ -1,32 +1,46 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type Result, type User } from '../../context/AuthContext';
+import { useAuth, type Result, type ReportCardData, type User } from '../../context/AuthContext';
+import { gradeFromScore, RATING_OPTIONS } from '../../lib/grading';
 import {
   Plus,
   FileText,
   CheckCircle,
   Sparkles,
   Search,
-  ArrowUpCircle
+  ArrowUpCircle,
+  ClipboardList
 } from 'lucide-react';
 import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 
 const ClassManagement = () => {
   const { className } = useParams();
-  const { students, addResult, promoteStudent, addNotification } = useAuth();
+  const { students, addResult, promoteStudent, addNotification, getReportCard, upsertReportCard } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [isAddingResult, setIsAddingResult] = useState(false);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
-  
-  // Modal states for manual result entry
-  const [newResult, setNewResult] = useState<Partial<Result>>({
+  const [isEditingReportCard, setIsEditingReportCard] = useState(false);
+
+  // Modal state for manual result entry -- CA1/CA2/Exam breakdown,
+  // matching the official report sheet; total and grade are computed
+  // from these rather than entered directly.
+  const [newResult, setNewResult] = useState({
     subject: '',
-    score: 0,
-    term: '1st Term',
-    session: '2023/2024'
+    term: '1st Term' as Result['term'],
+    session: '2023/2024',
+    ca1: 0,
+    ca2: 0,
+    exam: 0,
   });
+
+  // Modal state for the per-term report card fields (remarks, domain
+  // ratings, signatures) that live alongside but separate from
+  // per-subject results.
+  const [reportCardTerm, setReportCardTerm] = useState<Result['term']>('1st Term');
+  const [reportCardSession, setReportCardSession] = useState('2023/2024');
+  const [reportCard, setReportCard] = useState<ReportCardData>({});
 
   const classStudents = students.filter(s => s.grade === className && (
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -35,16 +49,14 @@ const ClassManagement = () => {
 
   const handleAddResult = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedStudent && newResult.subject && newResult.score !== undefined) {
-      const score = Number(newResult.score);
-      const grade = score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : score >= 50 ? 'D' : 'F';
-
+    if (selectedStudent && newResult.subject) {
       await addResult(selectedStudent.id, {
         subject: newResult.subject,
-        score: score,
-        grade,
-        term: newResult.term as Result['term'],
-        session: newResult.session as string
+        term: newResult.term,
+        session: newResult.session,
+        ca1: newResult.ca1,
+        ca2: newResult.ca2,
+        exam: newResult.exam,
       });
 
       await addNotification({
@@ -54,8 +66,27 @@ const ClassManagement = () => {
       });
 
       setIsAddingResult(false);
-      setNewResult({ subject: '', score: 0, term: '1st Term', session: '2023/2024' });
+      setNewResult({ subject: '', term: '1st Term', session: '2023/2024', ca1: 0, ca2: 0, exam: 0 });
     }
+  };
+
+  const openReportCard = async (student: User) => {
+    setSelectedStudent(student);
+    const existing = await getReportCard(student.id, reportCardTerm, reportCardSession);
+    setReportCard(existing ?? {});
+    setIsEditingReportCard(true);
+  };
+
+  const handleSaveReportCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
+    await addNotification({
+      title: "Report Card Updated",
+      message: `Report card details for ${selectedStudent.name} (${reportCardTerm}, ${reportCardSession}) saved.`,
+      type: 'success'
+    });
+    setIsEditingReportCard(false);
   };
 
   const handlePromote = async (student: User) => {
@@ -74,13 +105,16 @@ const ClassManagement = () => {
   const handleExtractedResults = async (extracted: { subject: string; score: number }[]) => {
     if (selectedStudent) {
       for (const item of extracted) {
-        const grade = item.score >= 80 ? 'A' : item.score >= 70 ? 'B' : item.score >= 60 ? 'C' : item.score >= 50 ? 'D' : 'F';
+        // OCR only gives a single total, not a CA/exam breakdown, so it
+        // all goes into "exam" -- the printed report just shows blank
+        // CA columns for these subjects until a teacher fills them in.
         await addResult(selectedStudent.id, {
           subject: item.subject,
-          score: item.score,
-          grade,
           term: '1st Term', // Default or could be selected
-          session: '2023/2024'
+          session: '2023/2024',
+          ca1: 0,
+          ca2: 0,
+          exam: item.score,
         });
       }
 
@@ -146,13 +180,19 @@ const ClassManagement = () => {
                     </td>
                     <td style={{ padding: '20px', borderRadius: '0 16px 16px 0', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                        <button 
+                        <button
                           onClick={() => { setSelectedStudent(student); setIsAddingResult(true); }}
                           className="btn btn-outline sm"
                         >
                           <Plus size={16} /> Add Result
                         </button>
-                        <button 
+                        <button
+                          onClick={() => openReportCard(student)}
+                          className="btn btn-outline sm"
+                        >
+                          <ClipboardList size={16} /> Report Card
+                        </button>
+                        <button
                           onClick={() => { setSelectedStudent(student); setIsAIProcessing(true); }}
                           className="btn btn-primary sm"
                           style={{ background: 'linear-gradient(135deg, var(--primary), #D946EF)' }}
@@ -210,18 +250,41 @@ const ClassManagement = () => {
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
                    </div>
-                   <div className="input-group">
-                      <label>Score (Out of 100)</label>
-                      <input 
-                        type="number" 
-                        max="100"
-                        min="0"
-                        value={newResult.score}
-                        onChange={e => setNewResult({...newResult, score: parseInt(e.target.value)})}
-                        required
-                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                      />
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label>1st CA (20)</label>
+                        <input
+                          type="number" max="20" min="0"
+                          value={newResult.ca1}
+                          onChange={e => setNewResult({...newResult, ca1: Number(e.target.value)})}
+                          required
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>2nd CA (20)</label>
+                        <input
+                          type="number" max="20" min="0"
+                          value={newResult.ca2}
+                          onChange={e => setNewResult({...newResult, ca2: Number(e.target.value)})}
+                          required
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Exam (60)</label>
+                        <input
+                          type="number" max="60" min="0"
+                          value={newResult.exam}
+                          onChange={e => setNewResult({...newResult, exam: Number(e.target.value)})}
+                          required
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
                    </div>
+                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                     Total: <strong>{newResult.ca1 + newResult.ca2 + newResult.exam}</strong> / 100 -- Grade: <strong>{gradeFromScore(newResult.ca1 + newResult.ca2 + newResult.exam).grade}</strong>
+                   </p>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
                         <label>Term</label>
@@ -248,6 +311,175 @@ const ClassManagement = () => {
                    <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
                       <button type="button" onClick={() => setIsAddingResult(false)} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
                       <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Result</button>
+                   </div>
+                </form>
+             </div>
+          </div>
+        )}
+
+        {/* Report Card Modal -- term dates, remarks/signatures, and
+            psychomotor/affective domain ratings for the printed sheet. */}
+        {isEditingReportCard && selectedStudent && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+             <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '90%', maxWidth: '560px', maxHeight: '85vh', overflowY: 'auto' }}>
+                <h3 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                   <ClipboardList size={20} /> Report Card: {selectedStudent.name}
+                </h3>
+                <form onSubmit={handleSaveReportCard} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label>Term</label>
+                        <select
+                          value={reportCardTerm}
+                          onChange={async e => {
+                            const term = e.target.value as Result['term'];
+                            setReportCardTerm(term);
+                            setReportCard(await getReportCard(selectedStudent.id, term, reportCardSession) ?? {});
+                          }}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        >
+                          <option>1st Term</option>
+                          <option>2nd Term</option>
+                          <option>3rd Term</option>
+                        </select>
+                      </div>
+                      <div className="input-group">
+                        <label>Session</label>
+                        <input
+                          type="text"
+                          value={reportCardSession}
+                          onChange={async e => {
+                            const value = e.target.value;
+                            setReportCardSession(value);
+                            setReportCard(await getReportCard(selectedStudent.id, reportCardTerm, value) ?? {});
+                          }}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                   </div>
+
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label>This Term Ends</label>
+                        <input
+                          type="date"
+                          value={reportCard.termEnds ?? ''}
+                          onChange={e => setReportCard({...reportCard, termEnds: e.target.value})}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Next Term Begins</label>
+                        <input
+                          type="date"
+                          value={reportCard.nextTermBegins ?? ''}
+                          onChange={e => setReportCard({...reportCard, nextTermBegins: e.target.value})}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                   </div>
+
+                   <div className="input-group">
+                      <label>Overall Remark</label>
+                      <input
+                        type="text" placeholder="e.g. A hardworking and diligent student."
+                        value={reportCard.remark ?? ''}
+                        onChange={e => setReportCard({...reportCard, remark: e.target.value})}
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                      />
+                   </div>
+
+                   <h4 style={{ marginTop: '8px' }}>Psychomotor Domain</h4>
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {([
+                        ['commOralRating', 'Communication (Oral)'],
+                        ['creativityRating', 'Creativity'],
+                        ['drawingPaintingRating', 'Drawing & Painting'],
+                        ['musicRating', 'Music'],
+                        ['sportsRating', 'Sports'],
+                      ] as const).map(([key, label]) => (
+                        <div className="input-group" key={key}>
+                          <label>{label}</label>
+                          <select
+                            value={reportCard[key] ?? ''}
+                            onChange={e => setReportCard({...reportCard, [key]: e.target.value})}
+                            style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                          >
+                            <option value="">-- Not rated --</option>
+                            {RATING_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                   </div>
+
+                   <h4 style={{ marginTop: '8px' }}>Affective Domain (Conduct)</h4>
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      {([
+                        ['honestyRating', 'Honesty'],
+                        ['punctualityRating', 'Punctuality & Cleanliness'],
+                        ['attentivenessRating', 'Attentiveness & Promptness'],
+                        ['politenessRating', 'Politeness & Considerate'],
+                        ['obedienceRating', 'Obedience & Homework'],
+                        ['independenceRating', 'Works Independently'],
+                        ['socialRating', 'Social Skills'],
+                      ] as const).map(([key, label]) => (
+                        <div className="input-group" key={key}>
+                          <label>{label}</label>
+                          <select
+                            value={reportCard[key] ?? ''}
+                            onChange={e => setReportCard({...reportCard, [key]: e.target.value})}
+                            style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                          >
+                            <option value="">-- Not rated --</option>
+                            {RATING_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                   </div>
+
+                   <h4 style={{ marginTop: '8px' }}>Comments & Signatures</h4>
+                   <div className="input-group">
+                      <label>Head Master's Comment</label>
+                      <input
+                        type="text"
+                        value={reportCard.headmasterComment ?? ''}
+                        onChange={e => setReportCard({...reportCard, headmasterComment: e.target.value})}
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                      />
+                   </div>
+                   <div className="input-group">
+                      <label>Class Teacher's Comment</label>
+                      <input
+                        type="text"
+                        value={reportCard.classTeacherComment ?? ''}
+                        onChange={e => setReportCard({...reportCard, classTeacherComment: e.target.value})}
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                      />
+                   </div>
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label>Head Master's Signature</label>
+                        <input
+                          type="text" placeholder="Typed name"
+                          value={reportCard.headmasterSignature ?? ''}
+                          onChange={e => setReportCard({...reportCard, headmasterSignature: e.target.value})}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                      <div className="input-group">
+                        <label>Class Teacher's Signature</label>
+                        <input
+                          type="text" placeholder="Typed name"
+                          value={reportCard.classTeacherSignature ?? ''}
+                          onChange={e => setReportCard({...reportCard, classTeacherSignature: e.target.value})}
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        />
+                      </div>
+                   </div>
+
+                   <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                      <button type="button" onClick={() => setIsEditingReportCard(false)} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
+                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Report Card</button>
                    </div>
                 </form>
              </div>

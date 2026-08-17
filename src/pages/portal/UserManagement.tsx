@@ -10,11 +10,12 @@ import {
   UserCheck,
   UserPlus,
   Save,
-  X
+  X,
+  Key
 } from 'lucide-react';
 
 const UserManagement = () => {
-  const { students, staff, updateUser, deleteUser, approveTeacher, inviteUser, subjectsByClass, updateSubjects } = useAuth();
+  const { students, staff, updateUser, deleteUser, approveTeacher, inviteUser, subjectsByClass, updateSubjects, requestPasswordReset } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -54,6 +55,17 @@ const UserManagement = () => {
   const handleApproveTeacher = async (id: string) => {
     await approveTeacher(id);
     alert("Teacher approved. They now have portal access.");
+  };
+
+  const handleResetPassword = async (user: User) => {
+    if (!user.email) {
+      alert("This user has no email on file, so a reset link can't be sent.");
+      return;
+    }
+    if (!window.confirm(`Send a password reset link to ${user.name} (${user.email})?`)) return;
+    const { error } = await requestPasswordReset(user.email);
+    if (error) alert("Failed to send reset email: " + error);
+    else alert("Password reset link sent to " + user.email);
   };
 
   const openAddUser = () => {
@@ -177,6 +189,7 @@ const UserManagement = () => {
                                  {user.role === 'teacher_pending' && (
                                    <button onClick={() => handleApproveTeacher(user.id)} className="icon-btn" title="Approve Teacher" style={{ color: 'var(--success)' }}><UserPlus size={16} /></button>
                                  )}
+                                 <button onClick={() => handleResetPassword(user)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
                                  <button onClick={() => setEditingUser(user)} className="icon-btn" title="Edit"><Edit2 size={16} /></button>
                                  <button onClick={() => handleDeleteUser(user.id)} className="icon-btn" title="Delete" style={{ color: 'var(--error)' }}><Trash2 size={16} /></button>
                               </div>
@@ -286,7 +299,7 @@ const UserManagement = () => {
                       />
                    </div>
                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '-8px 0 0' }}>
-                      Passwords are managed by the user via "Forgot Password" -- admins can no longer view or set them directly.
+                      Passwords are hashed and can't be viewed or set by admins. Use the key icon in the table to send this user a password reset email instead.
                    </p>
                    {editingUser.role === 'student' ? (
                      <div className="input-group">

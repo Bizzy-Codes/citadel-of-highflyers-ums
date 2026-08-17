@@ -10,9 +10,9 @@ import {
 
 const Financial = () => {
   const transactions = [
-    { title: "Third Term Tuition Fee", date: "Sep 10, 2024", amount: "$350.00", status: "Completed", type: "Tuition" },
-    { title: "School Bus Service Fee", date: "Sep 12, 2024", amount: "$85.00", status: "Completed", type: "Transport" },
-    { title: "Graduation Gown Fee", date: "Oct 01, 2024", amount: "$50.00", status: "Pending", type: "Other" },
+    { title: "Third Term Tuition Fee", date: "Sep 10, 2024", amount: "₦350,000.00", status: "Completed", type: "Tuition" },
+    { title: "School Bus Service Fee", date: "Sep 12, 2024", amount: "₦85,000.00", status: "Completed", type: "Transport" },
+    { title: "Graduation Gown Fee", date: "Oct 01, 2024", amount: "₦50,000.00", status: "Pending", type: "Other" },
   ];
 
   return (
@@ -26,7 +26,7 @@ const Financial = () => {
                  </div>
                  <span style={{ fontSize: '12px', padding: '4px 10px', background: 'rgba(168, 85, 247, 0.1)', color: 'var(--primary)', borderRadius: '50px', fontWeight: '700' }}>Balance</span>
               </div>
-              <div style={{ fontSize: '28px', fontWeight: '800' }}>$0.00</div>
+              <div style={{ fontSize: '28px', fontWeight: '800' }}>₦0.00</div>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Current Term Balance</p>
            </div>
 
@@ -37,7 +37,7 @@ const Financial = () => {
                  </div>
                  <span style={{ fontSize: '12px', padding: '4px 10px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '50px', fontWeight: '700' }}>Paid</span>
               </div>
-              <div style={{ fontSize: '28px', fontWeight: '800' }}>$435.00</div>
+              <div style={{ fontSize: '28px', fontWeight: '800' }}>₦435,000.00</div>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Current Term Payments</p>
            </div>
 
@@ -48,7 +48,7 @@ const Financial = () => {
                  </div>
                  <span style={{ fontSize: '12px', padding: '4px 10px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', borderRadius: '50px', fontWeight: '700' }}>Pending</span>
               </div>
-              <div style={{ fontSize: '28px', fontWeight: '800' }}>$50.00</div>
+              <div style={{ fontSize: '28px', fontWeight: '800' }}>₦50,000.00</div>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Upcoming Obligations</p>
            </div>
         </section>
