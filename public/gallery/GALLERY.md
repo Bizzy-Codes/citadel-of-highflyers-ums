@@ -18,7 +18,9 @@ change needed, just refresh the site after adding the file.
 | `gallery-8.jpg` | Gallery | Playground Time |
 | `gallery-9.jpg` | Gallery | Nature & Gardening |
 | `founder-chrispraise.jpg` | Founders page | Pastor Chrispraise Iwunna |
-| `founder-princess.jpg` | Founders page | Ambassador Mrs Princess Iwunna |
+| `founder-princess.jpg` | Founders page | Ambassador Mrs Iwunna Princess |
+| `founder-headteacher.jpg` | Founders page | Head Teacher (placeholder -- add real photo + edit name/bio in Founders.tsx) |
+| `founder-admin.jpg` | Founders page | Admin (placeholder -- add real photo + edit name/bio in Founders.tsx) |
 
 All 13 filenames above are filled in with real photos as of 2026-08-17.
 To swap any of them out later, just overwrite that file with a new one

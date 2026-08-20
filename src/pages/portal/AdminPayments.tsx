@@ -52,7 +52,7 @@ const AdminPayments = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ marginBottom: '4px' }}>Payment Receipts</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Review receipts submitted by students/parents and acknowledge or reject each one.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Review receipts submitted by pupils/parents and acknowledge or reject each one.</p>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className={`btn sm ${filter === 'pending' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter('pending')}>Pending</button>

@@ -40,7 +40,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
 
   const navItems = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: isTeacher ? '/portal/teacher' : isAdmin ? '/portal/admin' : '/portal', show: true },
-    { label: 'My Students', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
+    { label: 'My Pupils', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
     { label: 'Tests', icon: <ClipboardCheck size={20} />, path: isTeacher ? '/portal/teacher/tests' : '/portal/tests', show: !isAdmin },
     { label: 'Assignments', icon: <FileText size={20} />, path: isTeacher ? '/portal/teacher/assignments' : '/portal/assignments', show: !isAdmin },
     { label: 'Academic Results', icon: <GraduationCap size={20} />, path: '/portal/results', show: !isAdmin },
@@ -111,7 +111,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
           <div className="header-right">
             <div className="search-bar">
               <Search className="search-icon" size={18} />
-              <input type="text" placeholder="Search for results, students..." />
+              <input type="text" placeholder="Search for results, pupils..." />
             </div>
             
             <div className="header-actions">
@@ -122,7 +122,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
               <div className="user-profile" onClick={() => navigate('/portal/profile')} style={{ cursor: 'pointer' }}>
                 <div className="user-info">
                   <span className="user-name">{currentUser?.name || 'User'}</span>
-                  <span className="user-role">{isTeacher ? 'Teacher' : isAdmin ? 'Administrator' : 'Student'}</span>
+                  <span className="user-role">{isTeacher ? 'Teacher' : isAdmin ? 'Administrator' : 'Pupil'}</span>
                 </div>
                 <div className="user-avatar">
                   {currentUser?.avatarUrl

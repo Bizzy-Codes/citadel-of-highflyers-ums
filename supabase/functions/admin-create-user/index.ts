@@ -1,11 +1,18 @@
-// Admin-only: invite a new student or teacher account by email.
-// Runs server-side because creating a user directly (rather than
-// having them self-register) requires the service_role key, which
-// must never be shipped to the browser.
+// Admin-only user management: create a new account directly (no email
+// sent, account is usable immediately), or set an existing user's
+// password directly. Runs server-side because both operations require
+// the service_role key, which must never be shipped to the browser.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -37,29 +44,53 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Admin only' }), { status: 403 });
   }
 
-  const { name, email, role, grade } = await req.json();
+  const body = await req.json();
+  const action = body.action ?? 'create';
+  const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  if (action === 'set_password') {
+    const { userId, newPassword } = body;
+    if (!userId || typeof newPassword !== 'string' || newPassword.length < 6) {
+      return new Response(JSON.stringify({ error: 'A user and a password of at least 6 characters are required' }), { status: 400 });
+    }
+
+    const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const { name, email, role, grade } = body;
   if (!name || !email || !['student', 'teacher'].includes(role)) {
     return new Response(JSON.stringify({ error: 'Invalid input' }), { status: 400 });
   }
 
-  const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const tempPassword = generateTempPassword();
 
-  const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: { name, role, grade },
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: { name, role, grade },
   });
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), { status: 400 });
   }
 
-  // Admin-created accounts are pre-vetted, so a teacher invited this
-  // way skips the 'teacher_pending' approval step that self-registered
+  // Admin-created accounts are pre-vetted, so a teacher added this way
+  // skips the 'teacher_pending' approval step that self-registered
   // teachers go through.
   if (role === 'teacher' && data.user) {
     await adminClient.from('profiles').update({ role: 'teacher' }).eq('id', data.user.id);
   }
 
-  return new Response(JSON.stringify({ id: data.user?.id }), {
+  return new Response(JSON.stringify({ id: data.user?.id, password: tempPassword }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

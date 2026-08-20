@@ -29,7 +29,7 @@ const TeacherAssignments = () => {
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Delete "${title}"? This removes all student submissions too.`)) return;
+    if (!confirm(`Delete "${title}"? This removes all pupil submissions too.`)) return;
     await deleteAssignment(id);
   };
 
@@ -64,7 +64,7 @@ const TeacherAssignments = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ marginBottom: '4px' }}>Assignments {currentUser?.assignedClass ? `— ${currentUser.assignedClass}` : ''}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with an optional brief, then review and grade student submissions.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with an optional brief, then review and grade pupil submissions.</p>
           </div>
           <button className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> New Assignment</button>
         </div>

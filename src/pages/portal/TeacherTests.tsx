@@ -38,7 +38,7 @@ const TeacherTests = () => {
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`Delete "${title}"? This removes all questions and student attempts. This cannot be undone.`)) return;
+    if (!confirm(`Delete "${title}"? This removes all questions and pupil attempts. This cannot be undone.`)) return;
     setBusyId(id);
     await deleteTest(id);
     setBusyId(null);

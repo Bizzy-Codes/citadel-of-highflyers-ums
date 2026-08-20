@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Home from './pages/marketing/Home'
 import Founders from './pages/marketing/Founders'
 import Admissions from './pages/marketing/Admissions'
+import Gallery from './pages/marketing/Gallery'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
 import ResetPassword from './pages/portal/ResetPassword'
@@ -14,6 +15,7 @@ import Messages from './pages/portal/Messages'
 import TeacherDashboard from './pages/portal/TeacherDashboard'
 import AdminDashboard from './pages/portal/AdminDashboard'
 import UserManagement from './pages/portal/UserManagement'
+import AdminUserDetail from './pages/portal/AdminUserDetail'
 import ClassManagement from './pages/portal/ClassManagement'
 import Timetable from './pages/portal/Timetable'
 import Financial from './pages/portal/Financial'
@@ -29,6 +31,7 @@ import AdminPayments from './pages/portal/AdminPayments'
 import AdminAdmissions from './pages/portal/AdminAdmissions'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
+import ScrollToTop from './components/common/ScrollToTop'
 import './index.css'
 
 // The "My Students" sidebar link has no class name to point at directly --
@@ -45,12 +48,14 @@ const MyStudentsRedirect = () => {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <MouseGlow />
       <Routes>
         {/* Public Marketing Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/founders" element={<Founders />} />
         <Route path="/admissions" element={<Admissions />} />
+        <Route path="/gallery" element={<Gallery />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -122,6 +127,9 @@ function App() {
         } />
         <Route path="/portal/admin/users" element={
           <ProtectedRoute allowedRoles={['admin']}><UserManagement /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/users/:userId" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminUserDetail /></ProtectedRoute>
         } />
         <Route path="/portal/admin/payments" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>

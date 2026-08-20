@@ -256,7 +256,7 @@ const TestEditor = () => {
               {form.type === 'essay' && (
                 <>
                   <div className="input-group">
-                    <label>Model Answer (optional, for future AI grading — never shown to students)</label>
+                    <label>Model Answer (optional, for future AI grading — never shown to pupils)</label>
                     <textarea rows={2} value={form.modelAnswer} onChange={(e) => setForm({ ...form, modelAnswer: e.target.value })}
                       style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }} />
                   </div>

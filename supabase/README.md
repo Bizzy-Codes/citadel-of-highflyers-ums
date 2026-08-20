@@ -32,7 +32,15 @@ Supabase's built-in mailer is capped at 2 emails/hour — fine for nothing beyon
 2. In Supabase: **Authentication → Emails → SMTP Settings** → toggle "Enable Custom SMTP" → paste Brevo's host/port/username/SMTP key.
 3. **Authentication → URL Configuration** → set Site URL to `http://localhost:5173` for now (update to your real domain once deployed), and add `http://localhost:5173/reset-password` to Redirect URLs.
 
-## 5. What to send back
+## 5. Turn off signup email confirmation
+Parents and teachers found the "check your email for a code" step too slow — codes often expired before they got back to the tab. New signups now create and sign the account in immediately, no code sent. This is a project-level Supabase setting, so it has to be flipped by hand once:
+
+1. **Authentication → Sign In / Providers → Email**.
+2. Toggle **"Confirm email"** OFF, then Save.
+
+Without this, new signups will still work but will silently sit unconfirmed with no way to finish logging in, since the app no longer has an OTP-entry screen.
+
+## 6. What to send back
 From **Settings → API**:
 - **Project URL**
 - **anon / public key**

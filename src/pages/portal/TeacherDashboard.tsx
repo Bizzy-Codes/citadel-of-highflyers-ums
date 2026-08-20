@@ -13,7 +13,7 @@ const TeacherDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, students } = useAuth();
 
-  const classes = ["Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
+  const classes = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
   // RLS already scopes `students` to whichever class this teacher is
   // assigned to, so counting by class here reflects real enrollment.
@@ -56,7 +56,7 @@ const TeacherDashboard = () => {
                    <button className="icon-btn"><ChevronRight size={20} /></button>
                 </div>
                 <h3 style={{ fontSize: '20px', marginBottom: '4px' }}>{cls.name}</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{cls.students} Enrolled Student{cls.students === 1 ? '' : 's'}</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{cls.students} Enrolled Pupil{cls.students === 1 ? '' : 's'}</p>
              </div>
            ))}
            {classCounts.length === 0 && (
@@ -75,7 +75,7 @@ const TeacherDashboard = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                  <thead>
                     <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--secondary)' }}>
-                       <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>STUDENT NAME</th>
+                       <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>PUPIL NAME</th>
                        <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>CLASS</th>
                        <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>SUBJECT</th>
                        <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>SCORE</th>

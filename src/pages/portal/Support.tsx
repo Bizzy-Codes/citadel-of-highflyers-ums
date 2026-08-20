@@ -44,7 +44,7 @@ const Support = () => {
            </div>
         </section>
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '24px' }}>
            <div className="card glass hover-scale" style={{ padding: '24px', textAlign: 'center' }}>
               <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'var(--accent)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                  <MessageCircle />

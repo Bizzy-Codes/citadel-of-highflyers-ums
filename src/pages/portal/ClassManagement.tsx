@@ -94,7 +94,7 @@ const ClassManagement = () => {
     if (nextGrade) {
       await promoteStudent(student.id, nextGrade, "2023/2024");
       await addNotification({
-        title: "Student Promoted",
+        title: "Pupil Promoted",
         message: `${student.name} has been promoted to ${nextGrade}. All previous records archived.`,
         type: 'success'
       });
@@ -137,14 +137,14 @@ const ClassManagement = () => {
         <section className="card glass" style={{ padding: '30px', borderRadius: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
             <div>
-              <h3 style={{ fontSize: '24px', fontWeight: '800' }}>{className} Student List</h3>
-              <p style={{ color: 'var(--text-muted)' }}>You have {classStudents.length} students in this class section.</p>
+              <h3 style={{ fontSize: '24px', fontWeight: '800' }}>{className} Pupil List</h3>
+              <p style={{ color: 'var(--text-muted)' }}>You have {classStudents.length} pupils in this class section.</p>
             </div>
-            <div className="search-bar" style={{ position: 'relative', width: '300px' }}>
+            <div className="search-bar" style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                placeholder="Search student..." 
+              <input
+                type="text"
+                placeholder="Search pupil..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
@@ -156,7 +156,7 @@ const ClassManagement = () => {
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  <th style={{ padding: '12px 20px' }}>STUDENT NAME</th>
+                  <th style={{ padding: '12px 20px' }}>PUPIL NAME</th>
                   <th style={{ padding: '12px 20px' }}>ID / NUMBER</th>
                   <th style={{ padding: '12px 20px' }}>CURRENT RESULTS</th>
                   <th style={{ padding: '12px 20px' }}>STATUS</th>
@@ -382,7 +382,7 @@ const ClassManagement = () => {
                    <div className="input-group">
                       <label>Overall Remark</label>
                       <input
-                        type="text" placeholder="e.g. A hardworking and diligent student."
+                        type="text" placeholder="e.g. A hardworking and diligent pupil."
                         value={reportCard.remark ?? ''}
                         onChange={e => setReportCard({...reportCard, remark: e.target.value})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}

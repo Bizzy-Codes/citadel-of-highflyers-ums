@@ -59,6 +59,8 @@
 .sidebar-nav {
   padding: 24px 12px;
   flex: 1;
+  min-height: 0; /* lets this flex child actually shrink and scroll instead of forcing the fixed-height sidebar to overflow off-screen */
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px; /* Increased gap */
@@ -306,7 +308,11 @@
     display: none; /* Hide names on mobile header to save space */
   }
 
-  .search-bar {
+  /* Only the top header's own search bar hides on mobile -- this
+     class is reused by several page-content search bars (User
+     Management, Class Management, Support, Admin Dashboard) which
+     must stay visible and usable on mobile, not disappear. */
+  .portal-header .search-bar {
     display: none;
   }
 

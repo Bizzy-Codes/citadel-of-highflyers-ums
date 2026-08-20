@@ -19,14 +19,14 @@ import {
 
 const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { students, staff, inviteUser, updateUser, requestPasswordReset, exportData } = useAuth();
+  const { students, staff, createUser, updateUser, requestPasswordReset, exportData } = useAuth();
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
   const navigate = useNavigate();
 
   const pendingTeacherCount = staff.filter(s => s.role === 'teacher_pending').length;
 
   const adminStats = [
-    { label: "Total Students", value: students.length.toString(), icon: <Users size={20} />, trend: "Across all grades" },
+    { label: "Total Pupils", value: students.length.toString(), icon: <Users size={20} />, trend: "Across all grades" },
     { label: "Active This Term", value: students.filter(s => s.status === 'Active').length.toString(), icon: <CheckCircle size={20} />, trend: "Registered & Paid" },
     { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers", onClick: () => navigate('/portal/admin/users') },
     { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin", onClick: () => navigate('/portal/admin/users') },
@@ -38,18 +38,18 @@ const AdminDashboard = () => {
   );
 
   const handleAddStudent = async () => {
-    const name = prompt("Enter Student Full Name:");
+    const name = prompt("Enter Pupil Full Name:");
     if (!name) return;
-    const email = prompt("Enter Student's Email (or a parent/guardian's):");
+    const email = prompt("Enter Pupil's Email (or a parent/guardian's):");
     if (!email) return;
     const grade = prompt("Enter Grade / Class:", "Grade 1");
     if (!grade) return;
 
-    const { error } = await inviteUser(name, email, 'student', grade);
+    const { error, password } = await createUser(name, email, 'student', grade);
     if (error) {
-      alert("Failed to add student: " + error);
+      alert("Failed to add pupil: " + error);
     } else {
-      alert(`Invitation sent to ${email}. They'll set their own password via the emailed link.`);
+      alert(`${name}'s account is ready.\n\nTemporary password: ${password}\n\nShare this with them -- they can log in right away with their name, ID, or email. No email was sent.`);
     }
   };
 
@@ -58,7 +58,7 @@ const AdminDashboard = () => {
     if (editingStudent) {
       await updateUser(editingStudent.id, editingStudent);
       setEditingStudent(null);
-      alert("Student updated!");
+      alert("Pupil updated!");
     }
   };
 
@@ -68,7 +68,7 @@ const AdminDashboard = () => {
 
   const resetPassword = async (student: User) => {
     if (!student.email) {
-      alert("This student has no email on file, so a reset link can't be sent.");
+      alert("This pupil has no email on file, so a reset link can't be sent.");
       return;
     }
     if (!window.confirm(`Send a password reset link to ${student.name} (${student.email})?`)) return;
@@ -106,11 +106,11 @@ const AdminDashboard = () => {
         <section className="card glass" style={{ padding: '30px', borderRadius: '24px', border: '1px solid var(--glass-border)' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
              <div>
-                <h3 style={{ fontSize: '20px', fontWeight: '700' }}>Student Records Database</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Manage all student profiles, login details, and passwords.</p>
+                <h3 style={{ fontSize: '20px', fontWeight: '700' }}>Pupil Records Database</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Manage all pupil profiles, login details, and passwords.</p>
              </div>
-             <div style={{ display: 'flex', gap: '12px' }}>
-                <div className="search-bar" style={{ position: 'relative', width: '280px' }}>
+             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <div className="search-bar" style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
                    <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                    <input 
                      type="text" 
@@ -125,7 +125,7 @@ const AdminDashboard = () => {
                   onClick={handleAddStudent}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '12px' }}
                 >
-                   <PlusCircle size={18} /> Add Student
+                   <PlusCircle size={18} /> Add Pupil
                 </button>
              </div>
           </div>
@@ -134,7 +134,7 @@ const AdminDashboard = () => {
              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                 <thead>
                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
-                      <th style={{ padding: '12px 20px' }}>STUDENT NAME</th>
+                      <th style={{ padding: '12px 20px' }}>PUPIL NAME</th>
                       <th style={{ padding: '12px 20px' }}>ID / LOGIN</th>
                       <th style={{ padding: '12px 20px' }}>DATE CREATED</th>
                       <th style={{ padding: '12px 20px' }}>STATUS</th>
@@ -162,7 +162,7 @@ const AdminDashboard = () => {
                         </td>
                         <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                              <button onClick={() => setEditingStudent(student)} className="icon-btn" title="Edit Student" style={{ color: 'var(--primary)' }}><Edit2 size={16} /></button>
+                              <button onClick={() => setEditingStudent(student)} className="icon-btn" title="Edit Pupil" style={{ color: 'var(--primary)' }}><Edit2 size={16} /></button>
                               <button onClick={() => resetPassword(student)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
                            </div>
                         </td>
@@ -178,10 +178,10 @@ const AdminDashboard = () => {
           <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
              <div className="glass" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '450px', position: 'relative' }}>
                 <button onClick={() => setEditingStudent(null)} style={{ position: 'absolute', right: '20px', top: '20px' }}><X size={20} /></button>
-                <h3 style={{ marginBottom: '24px' }}>Edit Student Details</h3>
+                <h3 style={{ marginBottom: '24px' }}>Edit Pupil Details</h3>
                 <form onSubmit={handleUpdateStudent} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                    <div className="input-group">
-                      <label>Student Name</label>
+                      <label>Pupil Name</label>
                       <input 
                         type="text" 
                         value={editingStudent.name} 

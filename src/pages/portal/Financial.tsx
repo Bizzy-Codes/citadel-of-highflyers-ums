@@ -65,7 +65,7 @@ const Financial = () => {
   return (
     <PortalLayout title="Financial Management">
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        <section className="stats-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <section className="stats-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
            <div className="stat-card glass hover-scale" style={{ padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--accent)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

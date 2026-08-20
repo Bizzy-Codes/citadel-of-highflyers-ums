@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AdmissionApplication } from '../../context/AuthContext';
-import { UserPlus, Download, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
+import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt } from 'lucide-react';
 
 const STATUS_STYLE: Record<AdmissionApplication['status'], { bg: string; color: string; label: string }> = {
   pending: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', label: 'Pending' },
@@ -10,8 +10,21 @@ const STATUS_STYLE: Record<AdmissionApplication['status'], { bg: string; color: 
   declined: { bg: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', label: 'Declined' },
 };
 
+const PAYMENT_STATUS_STYLE: Record<AdmissionApplication['paymentStatus'], { bg: string; color: string; label: string }> = {
+  unpaid: { bg: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', label: 'Unpaid' },
+  submitted: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', label: 'Payment Pending Confirmation' },
+  confirmed: { bg: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', label: 'Payment Confirmed' },
+};
+
+// Normalizes a Nigerian local number (e.g. "08036334689") into the
+// international format wa.me needs (e.g. "2348036334689").
+const toWhatsAppNumber = (phone: string) => {
+  const digits = phone.replace(/\D/g, '');
+  return digits.startsWith('0') ? '234' + digits.slice(1) : digits;
+};
+
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment } = useAuth();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
@@ -53,6 +66,16 @@ const AdminAdmissions = () => {
     await load();
   };
 
+  const handleConfirmPayment = async () => {
+    if (!selected) return;
+    setBusy(true);
+    const { error } = await confirmAdmissionPayment(selected.id);
+    setBusy(false);
+    if (error) { alert('Failed to confirm payment: ' + error); return; }
+    setSelected({ ...selected, paymentStatus: 'confirmed' });
+    await load();
+  };
+
   return (
     <PortalLayout title="Admission Applications">
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -76,6 +99,7 @@ const AdminAdmissions = () => {
           )}
           {visible.map((a) => {
             const s = STATUS_STYLE[a.status];
+            const p = PAYMENT_STATUS_STYLE[a.paymentStatus];
             return (
               <div key={a.id} onClick={() => openDetail(a)} className="hover-scale" style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', cursor: 'pointer', flexWrap: 'wrap' }}>
                 <div>
@@ -84,7 +108,10 @@ const AdminAdmissions = () => {
                     {a.sex} · DOB {new Date(a.dateOfBirth).toLocaleDateString()} · Submitted {new Date(a.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: p.bg, color: p.color }}>{p.label}</span>
+                  <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
+                </div>
               </div>
             );
           })}
@@ -94,11 +121,34 @@ const AdminAdmissions = () => {
       {selected && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
               <h3>{selected.firstName} {selected.otherNames} {selected.surname}</h3>
-              {selected.photoPath && (
-                <button className="btn btn-outline sm" onClick={() => handleViewPhoto(selected.photoPath!)}><Download size={14} /> View Photo</button>
-              )}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <a className="btn btn-outline sm" href={`https://wa.me/${toWhatsAppNumber(selected.pickupPhone)}`} target="_blank" rel="noopener noreferrer">
+                  <MessageCircle size={14} /> WhatsApp Applicant
+                </a>
+                {selected.photoPath && (
+                  <button className="btn btn-outline sm" onClick={() => handleViewPhoto(selected.photoPath!)}><Download size={14} /> View Photo</button>
+                )}
+              </div>
+            </div>
+
+            <div className="grading-answer-card" style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <strong>Payment: </strong>
+                  <span style={{ color: PAYMENT_STATUS_STYLE[selected.paymentStatus].color, fontWeight: 700 }}>{PAYMENT_STATUS_STYLE[selected.paymentStatus].label}</span>
+                  {selected.paymentAmount != null && <span style={{ color: 'var(--text-muted)' }}> · ₦{selected.paymentAmount.toLocaleString()} {selected.wantsPhysicalCopy ? '(incl. physical copy)' : ''}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {selected.paymentReceiptPath && (
+                    <button className="btn btn-outline sm" onClick={() => handleViewPhoto(selected.paymentReceiptPath!)}><Receipt size={14} /> View Receipt</button>
+                  )}
+                  {selected.paymentStatus === 'submitted' && (
+                    <button className="btn btn-primary sm" disabled={busy} onClick={handleConfirmPayment}><CheckCircle2 size={14} /> Confirm Payment</button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '14px', marginBottom: '20px' }}>

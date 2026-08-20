@@ -111,7 +111,7 @@ const TestMonitor = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>
-                    <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>STUDENT</th>
+                    <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>PUPIL</th>
                     <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>STATUS</th>
                     <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>STRIKES</th>
                     <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>SCORE</th>

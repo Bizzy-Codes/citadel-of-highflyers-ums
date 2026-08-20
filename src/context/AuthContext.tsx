@@ -74,6 +74,7 @@ export interface User {
   createdAt: string;
   grade?: string;
   phone?: string;
+  location?: string;
   assignedClass?: string;
   avatarUrl?: string;
   results?: Result[];
@@ -271,6 +272,10 @@ export interface AdmissionApplication extends NewAdmissionApplicationInput {
   status: 'pending' | 'reviewed' | 'admitted' | 'declined';
   adminNote?: string;
   createdAt: string;
+  wantsPhysicalCopy: boolean;
+  paymentAmount?: number;
+  paymentReceiptPath?: string;
+  paymentStatus: 'unpaid' | 'submitted' | 'confirmed';
 }
 
 export interface PaymentReceipt {
@@ -307,11 +312,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
   registerStudent: (name: string, email: string, password: string, grade: string) => Promise<{ error: string | null }>;
   registerStaff: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
-  verifySignupOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   verifyRecoveryOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
-  inviteUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null }>;
+  createUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null; password?: string }>;
+  adminSetPassword: (userId: string, newPassword: string) => Promise<{ error: string | null }>;
   updateUser: (id: string, data: Partial<User>) => Promise<void>;
   uploadAvatar: (file: File) => Promise<{ error: string | null }>;
   removeAvatar: () => Promise<{ error: string | null }>;
@@ -344,7 +349,9 @@ interface AuthContextType {
   subscribeToDirectMessages: (otherUserId: string, onMessage: (message: DirectMessage) => void) => () => void;
   uploadChatAttachment: (recipientId: string, file: File) => Promise<{ error: string | null; path?: string; name?: string }>;
   getChatAttachmentUrl: (path: string) => Promise<string | null>;
-  submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null) => Promise<{ error: string | null }>;
+  submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null) => Promise<{ error: string | null; applicationId?: string }>;
+  submitAdmissionPayment: (applicationId: string, wantsPhysicalCopy: boolean, paymentAmount: number, receipt: File) => Promise<{ error: string | null }>;
+  confirmAdmissionPayment: (applicationId: string) => Promise<{ error: string | null }>;
   getAdmissionApplications: () => Promise<AdmissionApplication[]>;
   reviewAdmissionApplication: (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => Promise<{ error: string | null }>;
   getAdmissionPhotoUrl: (path: string) => Promise<string | null>;
@@ -393,6 +400,7 @@ const mapProfileRow = (row: any): User => ({
   createdAt: row.created_at,
   grade: row.grade ?? undefined,
   phone: row.phone ?? undefined,
+  location: row.location ?? undefined,
   assignedClass: row.assigned_class ?? undefined,
   avatarUrl: row.avatar_url ?? undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -528,6 +536,10 @@ const mapAdmissionApplicationRow = (row: any): AdmissionApplication => ({
   status: row.status,
   adminNote: row.admin_note ?? undefined,
   createdAt: row.created_at,
+  wantsPhysicalCopy: row.wants_physical_copy ?? false,
+  paymentAmount: row.payment_amount != null ? Number(row.payment_amount) : undefined,
+  paymentReceiptPath: row.payment_receipt_path ?? undefined,
+  paymentStatus: row.payment_status ?? 'unpaid',
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -706,8 +718,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (identifier: string, password: string) => {
     let email = identifier.trim();
     // Supabase's password login only accepts an email. If what was typed
-    // isn't one, treat it as the login ID (profiles.display_id, e.g.
-    // "CH 001") and resolve it to the account's email first.
+    // isn't one, treat it as a login ID (profiles.display_id, e.g.
+    // "CH 001") or a full name and resolve it to the account's email
+    // first -- see email_for_login_id() in patch_3/patch_13.
     if (!email.includes('@')) {
       const { data, error: lookupError } = await supabase.rpc('email_for_login_id', { p_login_id: email });
       if (lookupError || !data) return { error: 'Invalid login credentials' };
@@ -739,11 +752,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error?.message ?? null };
   };
 
-  const verifySignupOtp = async (email: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
-    return { error: error?.message ?? null };
-  };
-
   const requestPasswordReset = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
@@ -761,13 +769,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error?.message ?? null };
   };
 
-  const inviteUser = async (name: string, email: string, role: 'student' | 'teacher', grade?: string) => {
+  // Creates the account directly and returns it usable right away -- no
+  // invite email, no verification step. The server generates a temporary
+  // password and hands it back once so the admin can share it; it's never
+  // stored or shown again after this call (the admin can always issue a
+  // new one later via adminSetPassword).
+  const createUser = async (name: string, email: string, role: 'student' | 'teacher', grade?: string) => {
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
-      body: { name, email, role, grade },
+      body: { action: 'create', name, email, role, grade },
     });
     if (error) return { error: error.message };
     if (data?.error) return { error: data.error as string };
     await refreshProfiles();
+    return { error: null, password: data?.password as string | undefined };
+  };
+
+  // Sets a user's password directly, no reset email involved -- for
+  // when the admin needs to get someone back into their account on
+  // the spot (e.g. they've lost access to the email on file).
+  const adminSetPassword = async (userId: string, newPassword: string) => {
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: { action: 'set_password', userId, newPassword },
+    });
+    if (error) return { error: error.message };
+    if (data?.error) return { error: data.error as string };
     return { error: null };
   };
 
@@ -775,6 +800,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const patch: Record<string, unknown> = {};
     if (data.name !== undefined) patch.name = data.name;
     if (data.phone !== undefined) patch.phone = data.phone;
+    if (data.location !== undefined) patch.location = data.location;
     if (data.grade !== undefined) patch.grade = data.grade;
     if (data.assignedClass !== undefined) patch.assigned_class = data.assignedClass;
     if (data.status !== undefined) patch.status = data.status;
@@ -1411,6 +1437,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sibling_names: input.siblingNames || null,
       photo_path: photoPath,
     });
+    if (error) return { error: error.message };
+    return { error: null, applicationId: id };
+  };
+
+  const submitAdmissionPayment = async (applicationId: string, wantsPhysicalCopy: boolean, paymentAmount: number, receipt: File) => {
+    const receiptPath = `${applicationId}/payment-receipt-${receipt.name}`;
+    const { error: uploadError } = await supabase.storage.from('admission-photos').upload(receiptPath, receipt);
+    if (uploadError) return { error: `Failed to upload receipt: ${uploadError.message}` };
+    const { error } = await supabase.rpc('submit_admission_payment', {
+      p_application_id: applicationId, p_wants_physical_copy: wantsPhysicalCopy,
+      p_payment_amount: paymentAmount, p_payment_receipt_path: receiptPath,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const confirmAdmissionPayment = async (applicationId: string) => {
+    const { error } = await supabase.rpc('confirm_admission_payment', { p_application_id: applicationId });
     return { error: error?.message ?? null };
   };
 
@@ -1494,7 +1537,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       students, staff, currentUser, loading,
-      login, logout, registerStudent, registerStaff, verifySignupOtp, requestPasswordReset, verifyRecoveryOtp, updatePassword, inviteUser,
+      login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
       updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
@@ -1503,7 +1546,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
       uploadChatAttachment, getChatAttachmentUrl,
-      submitAdmissionApplication, getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl,
+      submitAdmissionApplication, submitAdmissionPayment, confirmAdmissionPayment, getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl,
       submitPaymentReceipt, getMyPaymentReceipts, getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
@@ -1511,6 +1554,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscribeToTestAttempts, subscribeToTestViolations, sweepExpiredAttempts,
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
+      adminSetPassword,
     }}>
       {children}
     </AuthContext.Provider>

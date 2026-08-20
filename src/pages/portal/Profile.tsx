@@ -1,14 +1,16 @@
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToTarget } from '../../lib/imageCompression';
-import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2 } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2, LogOut } from 'lucide-react';
 
 const MAX_RAW_BYTES = 15 * 1024 * 1024; // reject truly huge files outright
 const TARGET_UPLOAD_BYTES = 2 * 1024 * 1024; // compress anything above this instead of rejecting it
 
 const Profile = () => {
-  const { currentUser, updateUser, uploadAvatar, removeAvatar } = useAuth();
+  const navigate = useNavigate();
+  const { currentUser, updateUser, uploadAvatar, removeAvatar, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,6 +18,7 @@ const Profile = () => {
     name: currentUser?.name || '',
     email: currentUser?.email || '',
     phone: currentUser?.phone || '',
+    location: currentUser?.location || '',
     grade: currentUser?.grade || '',
   });
 
@@ -23,11 +26,17 @@ const Profile = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { email: _email, ...editable } = formData;
+    const { email: _email, grade: _grade, ...editable } = formData;
     void _email; // email isn't editable here -- see the disabled field below
+    void _grade; // grade/class is admin-controlled (promotion flow), not self-editable
     await updateUser(currentUser.id, editable);
     setIsEditing(false);
     alert("Profile updated successfully!");
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
 
   const handleAvatarPick = () => fileInputRef.current?.click();
@@ -74,7 +83,7 @@ const Profile = () => {
     <PortalLayout title="My Profile">
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
-        <div className="card glass" style={{ padding: '40px', borderRadius: '32px' }}>
+        <div className="card glass" style={{ padding: 'clamp(20px, 5vw, 40px)', borderRadius: '32px' }}>
           <div style={{ display: 'flex', gap: '40px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', width: '150px', height: '150px', flexShrink: 0 }}>
               <div style={{
@@ -116,16 +125,21 @@ const Profile = () => {
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                  <h1 style={{ fontSize: '36px', fontWeight: '900', marginBottom: '8px' }}>{currentUser.name}</h1>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h1 style={{ fontSize: 'clamp(24px, 5vw, 36px)', fontWeight: '900', marginBottom: '8px' }}>{currentUser.name}</h1>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <UserIcon size={18} /> {currentUser.role.toUpperCase()} ID: {currentUser.displayId} {currentUser.role === 'student' && `| ${currentUser.grade}`}
                   </p>
                 </div>
-                <button onClick={() => setIsEditing(!isEditing)} className={`btn ${isEditing ? 'btn-outline' : 'btn-primary'}`}>
-                  {isEditing ? <><X size={18} /> Cancel</> : <><Edit3 size={18} /> Edit Profile</>}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button onClick={() => setIsEditing(!isEditing)} className={`btn ${isEditing ? 'btn-outline' : 'btn-primary'}`}>
+                    {isEditing ? <><X size={18} /> Cancel</> : <><Edit3 size={18} /> Edit Profile</>}
+                  </button>
+                  <button onClick={handleLogout} className="btn btn-outline" style={{ color: 'var(--error)', borderColor: 'var(--error)' }}>
+                    <LogOut size={18} /> Logout
+                  </button>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
                 <span style={{ padding: '6px 16px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '50px', fontSize: '13px', fontWeight: '700' }}>Active Member</span>
@@ -150,7 +164,7 @@ const Profile = () => {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                        <MapPin size={18} style={{ color: 'var(--text-muted)' }} />
-                       <span>45 Citadel Heights, Plateau State, Nigeria</span>
+                       <span>{currentUser.location || 'No location provided'}</span>
                     </div>
                   </div>
                 </div>
@@ -180,6 +194,10 @@ const Profile = () => {
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Phone Number</label>
                   <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                </div>
+                <div className="input-group">
+                  <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Location / Address</label>
+                  <input type="text" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} placeholder="e.g. Jos North, Plateau State" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                 </div>
                 {currentUser.role === 'student' && (
                   <div className="input-group">

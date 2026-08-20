@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, KeyRound } from 'lucide-react';
+import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './Login.css';
 
@@ -19,15 +19,8 @@ const Login = () => {
   const [regRole, setRegRole] = useState<'student' | 'teacher'>('student');
   const [regGrade, setRegGrade] = useState('Grade 1');
 
-  // OTP verification state -- shown after a successful registerStudent/
-  // registerStaff call, since Supabase requires the emailed code before
-  // the account can sign in at all.
-  const [otpEmail, setOtpEmail] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpError, setOtpError] = useState('');
-
   const navigate = useNavigate();
-  const { login, registerStudent, registerStaff, verifySignupOtp, currentUser } = useAuth();
+  const { login, registerStudent, registerStaff, currentUser } = useAuth();
 
   // login() only starts the sign-in; currentUser updates asynchronously
   // via AuthContext's onAuthStateChange listener. Reacting to that
@@ -50,7 +43,7 @@ const Login = () => {
     setIsLoading(false);
 
     if (error) {
-      setError('Invalid credentials. Please check your email/login ID and password.');
+      setError('Invalid credentials. Please check your name/login ID/email and password.');
     }
   };
 
@@ -63,39 +56,20 @@ const Login = () => {
       ? await registerStudent(regName, regEmail, regPassword, regGrade)
       : await registerStaff(regName, regEmail, regPassword);
 
-    setIsLoading(false);
-
     if (error) {
+      setIsLoading(false);
       setError(error);
       return;
     }
 
-    setOtpEmail(regEmail);
-    setIsRegistering(false);
-    setRegName('');
-    setRegEmail('');
-    setRegPassword('');
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpEmail) return;
-    setOtpError('');
-    setIsLoading(true);
-
-    const { error } = await verifySignupOtp(otpEmail, otpCode);
-    setIsLoading(false);
-
-    if (error) {
-      setOtpError(error);
-      return;
-    }
-    // Success sets a real session; the currentUser effect above handles
-    // routing to the right dashboard once AuthContext picks it up.
+    // No email verification step -- the account is created and signed in
+    // immediately. Leave isLoading true so the button keeps showing
+    // "Registering..." during the brief async gap before the currentUser
+    // effect above picks up the new session and redirects.
   };
 
   const classes = [
-    "Kindergarten 1", "Kindergarten 2", "Pre-Grade",
+    "Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade",
     "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"
   ];
 
@@ -121,18 +95,18 @@ const Login = () => {
             <p>Access your secure portal to manage your academic profile.</p>
           </div>
 
-          {!isRegistering && !otpEmail && (
+          {!isRegistering && (
             <>
               {error && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', textAlign: 'center', marginBottom: '16px', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{error}</div>}
 
               <form className="login-form" onSubmit={handleLogin}>
                 <div className="input-group">
-                  <label>Email or Login ID</label>
+                  <label>Name, Login ID, or Email</label>
                   <div className="input-field">
                     <Mail size={18} className="input-icon" />
                     <input
                       type="text"
-                      placeholder="you@example.com or CH 001"
+                      placeholder="Your name, CH 001, or you@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -190,7 +164,7 @@ const Login = () => {
           {isRegistering && (
             <form className="login-form animate-fade-in" onSubmit={handleRegister}>
               <h2 style={{ fontSize: '20px', marginBottom: '8px', textAlign: 'center' }}>Portal Registration</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '24px' }}>Register with your email address.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '24px' }}>Create your account instantly -- no email verification needed.</p>
 
               {error && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', textAlign: 'center', marginBottom: '16px', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{error}</div>}
 
@@ -201,7 +175,7 @@ const Login = () => {
                     type="button"
                     onClick={() => setRegRole('student')}
                     style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: regRole === 'student' ? 'var(--primary)' : 'transparent', color: regRole === 'student' ? 'white' : 'inherit' }}
-                  >Student</button>
+                  >Pupil</button>
                   <button
                     type="button"
                     onClick={() => setRegRole('teacher')}
@@ -279,51 +253,6 @@ const Login = () => {
                 type="button"
                 onClick={() => setIsRegistering(false)}
                 style={{ width: '100%', marginTop: '12px', fontSize: '14px', color: 'var(--text-muted)' }}
-              >
-                Back to Login
-              </button>
-            </form>
-          )}
-
-          {otpEmail && (
-            <form className="login-form animate-fade-in" onSubmit={handleVerifyOtp}>
-              <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-                <div style={{ width: '64px', height: '64px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                  <KeyRound size={32} />
-                </div>
-                <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Verify Your Email</h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                  We sent a verification code to <strong>{otpEmail}</strong>. Enter it below to activate your account.
-                </p>
-              </div>
-
-              {otpError && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{otpError}</div>}
-
-              <div className="input-group">
-                <label>Verification Code</label>
-                <div className="input-field">
-                  <KeyRound size={18} className="input-icon" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Enter the code from your email"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    style={{ letterSpacing: '4px', fontSize: '18px' }}
-                    autoFocus
-                    required
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className="login-submit btn-primary" disabled={isLoading || otpCode.length < 6}>
-                {isLoading ? (<><Loader2 size={20} className="animate-spin" /> Verifying...</>) : 'Verify & Continue'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setOtpEmail(null); setOtpCode(''); setOtpError(''); }}
-                style={{ width: '100%', fontSize: '14px', color: 'var(--text-muted)' }}
               >
                 Back to Login
               </button>

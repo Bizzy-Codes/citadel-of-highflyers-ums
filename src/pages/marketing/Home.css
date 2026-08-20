@@ -358,26 +358,6 @@
   color: var(--primary);
 }
 
-/* Gallery and CTA */
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-auto-rows: 250px;
-  gap: 20px;
-}
-
-.gallery-item {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.gallery-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 16px;
-}
-
 .cta-banner {
   padding: 100px 0;
 }
@@ -501,16 +481,6 @@
     justify-content: center;
   }
 
-  .gallery-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: auto;
-    gap: 12px;
-  }
-
-  .gallery-item {
-    height: 180px;
-  }
-
   .cta-content {
     padding: 40px 20px;
     border-radius: 24px;
@@ -562,6 +532,19 @@
   .section-title {
     font-size: 28px;
   }
+
+  .nav {
+    padding: 0 12px;
+  }
+
+  .nav-actions {
+    gap: 8px;
+  }
+
+  .theme-toggle {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 /* Fix for logo text display when menu is closed but needed for branding */
@@ -593,12 +576,38 @@
 }
 
 .login-btn-ghost span {
+  white-space: nowrap;
+}
+
+/* The login button's text stays visible at every width -- an icon-only
+   button here is how users kept missing it entirely. Below 480px we
+   swap "Portal Login" for the shorter "Login" instead of hiding it.
+   Both rules below are scoped as ".login-btn-ghost .login-btn-text-*"
+   (not just ".login-btn-text-*") so they out-specificity the flex-item
+   ".login-btn-ghost span" rule above -- otherwise that rule's `display`
+   silently wins over a plain single-class selector and both spans show
+   at once regardless of screen width. */
+.login-btn-ghost .login-btn-text-short {
+  display: none;
+}
+
+.login-btn-ghost .login-btn-text-full {
   display: inline;
 }
 
-@media (max-width: 600px) {
-  .login-btn-ghost span {
-    display: none; /* Hide text on very small screens */
+@media (max-width: 480px) {
+  .login-btn-ghost .login-btn-text-full {
+    display: none;
+  }
+
+  .login-btn-ghost .login-btn-text-short {
+    display: inline;
+  }
+
+  .login-btn-ghost {
+    padding: 7px 12px !important;
+    font-size: 13px !important;
+    gap: 6px !important;
   }
 }
 

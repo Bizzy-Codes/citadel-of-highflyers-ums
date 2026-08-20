@@ -18,24 +18,9 @@ import {
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import PhotoSlot from '../../components/common/PhotoSlot';
+import { GALLERY_PHOTOS } from '../../data/galleryPhotos';
 import './Home.css';
-
-// Drop the matching file into public/gallery/ (must be public/, not
-// src/assets/ -- files under src/ are only bundled if imported, so a
-// runtime string path into src/ 404s in production even though it
-// works in dev) with this exact name and it replaces the placeholder
-// automatically. See GALLERY.md in that folder for the full list.
-const GALLERY_PHOTOS = [
-  { file: 'gallery-1.jpg', label: 'Grade 1 Class' },
-  { file: 'gallery-2.jpg', label: 'Playground Fun' },
-  { file: 'gallery-3.jpg', label: 'Outdoor Play' },
-  { file: 'gallery-4.jpg', label: 'Student Spotlight' },
-  { file: 'gallery-5.jpg', label: 'Law Day Role-Play' },
-  { file: 'gallery-6.jpg', label: 'Special Guests Visit' },
-  { file: 'gallery-7.jpg', label: 'House Sports Day' },
-  { file: 'gallery-8.jpg', label: 'Playground Time' },
-  { file: 'gallery-9.jpg', label: 'Nature & Gardening' },
-];
+import './Gallery.css';
 
 const Home = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -62,7 +47,7 @@ const Home = () => {
           <Link to="/" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Home</Link>
           <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
           <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
-          <a href="#gallery-section" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</a>
+          <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
         </div>
 
         <div className="nav-actions">
@@ -71,7 +56,8 @@ const Home = () => {
            </button>
            <Link to="/login" className="btn login-btn-ghost">
              <LogIn size={18} />
-             <span>Portal Login</span>
+             <span className="login-btn-text-full">Portal Login</span>
+             <span className="login-btn-text-short">Login</span>
            </Link>
            <button className="mobile-menu-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)}>
              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -98,10 +84,10 @@ const Home = () => {
               and character. Join us as we nurture future leaders with the fear of God.
             </p>
             <div className="hero-actions">
-              <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn btn-primary lg">
+              <Link to="/admissions" className="btn btn-primary lg">
                 Apply for Admission
                 <ArrowRight size={20} />
-              </a>
+              </Link>
               <Link to="/founders" className="btn btn-outline lg">
                 Meet Founders
               </Link>
@@ -148,7 +134,7 @@ const Home = () => {
             </motion.div>
 
             <div className="hero-main-img-wrapper">
-               <PhotoSlot src="/gallery/hero.jpg" alt="Students at Citadel of Highflyers" label="Photo: Students at Citadel" className="hero-main-img" />
+               <PhotoSlot src="/gallery/hero.jpg" alt="Pupils at Citadel of Highflyers" label="Photo: Pupils at Citadel" className="hero-main-img" />
             </div>
           </div>
         </div>
@@ -163,12 +149,12 @@ const Home = () => {
           <div className="features-grid-spiced">
             <div className="feature-item-large glass">
                <div className="feature-image">
-                  <PhotoSlot src="/gallery/feature-learning.jpg" alt="Students at Citadel of Highflyers" label="Photo: Classroom Learning" />
+                  <PhotoSlot src="/gallery/feature-learning.jpg" alt="Pupils at Citadel of Highflyers" label="Photo: Classroom Learning" />
                   <div className="play-overlay"><Play fill="white" size={40} color="white" /></div>
                </div>
                <div className="feature-text">
                   <h3>Holistic Learning Environment</h3>
-                  <p>Our curriculum is a blend of international standards and local values, ensuring our students are globally competitive.</p>
+                  <p>Our curriculum is a blend of international standards and local values, ensuring our pupils are globally competitive.</p>
                   <ul className="feature-list">
                      <li><CheckCircle size={16} /> British-Nigerian Integrated Curriculum</li>
                      <li><CheckCircle size={16} /> STEM & Digital Literacy for every grade</li>
@@ -202,16 +188,20 @@ const Home = () => {
       <section className="gallery-section" id="gallery-section">
          <div className="container">
             <h2 className="section-title">Glimpses of Excellence</h2>
-            <div className="gallery-grid">
-               {GALLERY_PHOTOS.map((photo, i) => (
-                 <motion.div
-                  key={photo.file}
-                  className={`gallery-item item-${i + 1} glass`}
-                  whileHover={{ scale: 1.02 }}
-                 >
-                    <PhotoSlot src={`/gallery/${photo.file}`} alt={photo.label} label={photo.label} />
-                 </motion.div>
+            <p className="section-subtitle">A peek at classroom life, sports, excursions, and school activities -- click any photo for the full gallery.</p>
+            <div className="gallery-masonry home-gallery-preview">
+               {GALLERY_PHOTOS.slice(0, 6).map((photo, i) => (
+                 <Link to="/gallery" key={photo.file} className={`gallery-tile tile-${i % 6}`}>
+                    <PhotoSlot src={`/gallery/${photo.file}`} alt={photo.label} label={photo.label} className="gallery-tile-img" />
+                    <div className="gallery-tile-overlay">
+                       <span className="gallery-tile-category">{photo.category}</span>
+                       <span className="gallery-tile-label">{photo.label}</span>
+                    </div>
+                 </Link>
                ))}
+            </div>
+            <div className="gallery-preview-cta">
+               <Link to="/gallery" className="btn btn-primary lg">View Full Gallery <ArrowRight size={18} /></Link>
             </div>
          </div>
       </section>
@@ -223,8 +213,8 @@ const Home = () => {
                <h2>Join the Family of Highflyers</h2>
                <p>Admissions are now open for the {new Date().getFullYear()}/{new Date().getFullYear() + 1} academic session.</p>
                <div className="cta-buttons">
-                  <a href={whatsappLink} className="btn btn-primary lg">Message for Admission</a>
-                  <Link to="/login" className="btn btn-outline lg">Student Portal</Link>
+                  <Link to="/admissions" className="btn btn-primary lg">Apply for Admission</Link>
+                  <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn btn-outline lg">Chat with Us on WhatsApp</a>
                </div>
             </div>
          </div>

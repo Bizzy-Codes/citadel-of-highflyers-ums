@@ -13,7 +13,7 @@ import {
 const Timetable = () => {
   const { currentUser, timetables, updateTimetable, staff } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
-  const classes = ["Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
+  const classes = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
   
   const [selectedClass, setSelectedClass] = useState(isAdmin ? classes[0] : (currentUser?.grade || classes[0]));
   const [entries, setEntries] = useState<TimetableEntry[]>(timetables[selectedClass] || []);

@@ -32,7 +32,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <PortalLayout title="Student Overview">
+    <PortalLayout title="Pupil Overview">
       <div className="dashboard-grid animate-fade-in">
         {/* Welcome Banner */}
         <section className="welcome-banner glass-purple">
@@ -40,7 +40,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
                <div style={{ padding: '10px 20px', background: 'var(--primary)', color: 'white', borderRadius: '12px', fontWeight: '700' }}>{currentUser?.grade || 'Unassigned'}</div>
             </div>
-            <h1>Welcome back, <span>{currentUser?.name || 'Student'}!</span> 👋</h1>
+            <h1>Welcome back, <span>{currentUser?.name || 'Pupil'}!</span> 👋</h1>
             <p>You have {pendingAssignments.length} assignment{pendingAssignments.length === 1 ? '' : 's'} awaiting submission.</p>
             <div style={{ display: 'flex', gap: '12px' }}>
                <button className="btn btn-primary sm"><Download size={18} /> Download Result Sheet</button>

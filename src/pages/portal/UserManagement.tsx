@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type User } from '../../context/AuthContext';
 import {
@@ -11,11 +12,13 @@ import {
   UserPlus,
   Save,
   X,
-  Key
+  Key,
+  ExternalLink
 } from 'lucide-react';
 
 const UserManagement = () => {
-  const { students, staff, updateUser, deleteUser, approveTeacher, inviteUser, subjectsByClass, updateSubjects, requestPasswordReset } = useAuth();
+  const navigate = useNavigate();
+  const { students, staff, updateUser, deleteUser, approveTeacher, createUser, subjectsByClass, updateSubjects, requestPasswordReset } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -24,7 +27,7 @@ const UserManagement = () => {
   const [addUserError, setAddUserError] = useState('');
   const [isAddingUser, setIsAddingUser] = useState(false);
 
-  const classes = ["Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
+  const classes = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
   const filteredStaff = staff.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -79,7 +82,7 @@ const UserManagement = () => {
     const role = activeTab === 'teachers' ? 'teacher' : 'student';
     setIsAddingUser(true);
     setAddUserError('');
-    const { error } = await inviteUser(
+    const { error, password } = await createUser(
       addingUser.name,
       addingUser.email,
       role,
@@ -90,7 +93,7 @@ const UserManagement = () => {
       setAddUserError(error);
       return;
     }
-    alert(`Invitation sent to ${addingUser.email}. They'll set their own password via the emailed link.`);
+    alert(`${addingUser.name}'s account is ready.\n\nTemporary password: ${password}\n\nShare this with them -- they can log in right away with their name, ID, or email. No email was sent.`);
     setAddingUser(null);
   };
 
@@ -123,7 +126,7 @@ const UserManagement = () => {
                 className={`btn sm ${activeTab === 'students' ? 'btn-primary' : ''}`}
                 style={{ borderRadius: '8px' }}
               >
-                <UserCheck size={16} /> Students
+                <UserCheck size={16} /> Pupils
               </button>
               <button 
                 onClick={() => setActiveTab('subjects')}
@@ -137,10 +140,10 @@ const UserManagement = () => {
            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               {(activeTab === 'teachers' || activeTab === 'students') && (
                 <button onClick={openAddUser} className="btn btn-primary sm">
-                   <UserPlus size={16} /> Add {activeTab === 'teachers' ? 'Teacher' : 'Student'}
+                   <UserPlus size={16} /> Add {activeTab === 'teachers' ? 'Teacher' : 'Pupil'}
                 </button>
               )}
-              <div className="search-bar" style={{ position: 'relative', width: '300px' }}>
+              <div className="search-bar" style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
                  <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                  <input
                    type="text"
@@ -171,7 +174,7 @@ const UserManagement = () => {
                    </thead>
                    <tbody>
                       {(activeTab === 'teachers' ? filteredStaff : filteredStudents).map((user, i) => (
-                        <tr key={i} className="hover-scale" style={{ background: 'var(--bg-surface)' }}>
+                        <tr key={i} className="hover-scale" onClick={() => navigate(`/portal/admin/users/${user.id}`)} style={{ background: 'var(--bg-surface)', cursor: 'pointer' }}>
                            <td style={{ padding: '16px 20px', borderRadius: '12px 0 0 12px', fontWeight: '600' }}>{user.name}</td>
                            <td style={{ padding: '16px 20px', color: 'var(--text-muted)' }}>{user.displayId}</td>
                            <td style={{ padding: '16px 20px' }}>
@@ -185,12 +188,13 @@ const UserManagement = () => {
                               </span>
                            </td>
                            <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
-                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
                                  {user.role === 'teacher_pending' && (
                                    <button onClick={() => handleApproveTeacher(user.id)} className="icon-btn" title="Approve Teacher" style={{ color: 'var(--success)' }}><UserPlus size={16} /></button>
                                  )}
+                                 <button onClick={() => navigate(`/portal/admin/users/${user.id}`)} className="icon-btn" title="View Full Profile"><ExternalLink size={16} /></button>
                                  <button onClick={() => handleResetPassword(user)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
-                                 <button onClick={() => setEditingUser(user)} className="icon-btn" title="Edit"><Edit2 size={16} /></button>
+                                 <button onClick={() => setEditingUser(user)} className="icon-btn" title="Quick Edit"><Edit2 size={16} /></button>
                                  <button onClick={() => handleDeleteUser(user.id)} className="icon-btn" title="Delete" style={{ color: 'var(--error)' }}><Trash2 size={16} /></button>
                               </div>
                            </td>
@@ -236,7 +240,7 @@ const UserManagement = () => {
           <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
              <div className="glass" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px', position: 'relative' }}>
                 <button onClick={() => setAddingUser(null)} style={{ position: 'absolute', right: '20px', top: '20px' }}><X size={20} /></button>
-                <h3 style={{ marginBottom: '24px' }}>Add {activeTab === 'teachers' ? 'Teacher' : 'Student'}</h3>
+                <h3 style={{ marginBottom: '24px' }}>Add {activeTab === 'teachers' ? 'Teacher' : 'Pupil'}</h3>
                 {addUserError && <div className="error-message" style={{ color: 'var(--error)', fontSize: '13px', marginBottom: '16px', background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px' }}>{addUserError}</div>}
                 <form onSubmit={handleAddUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                    <div className="input-group">
@@ -272,10 +276,10 @@ const UserManagement = () => {
                      </div>
                    )}
                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-                      They'll receive an email invite to set their own password. Teachers added this way skip the pending-approval step.
+                      The account is created immediately with a temporary password -- no email is sent. Teachers added this way skip the pending-approval step.
                    </p>
                    <button type="submit" className="btn btn-primary lg" style={{ marginTop: '12px' }} disabled={isAddingUser}>
-                      <UserPlus size={18} /> {isAddingUser ? 'Sending Invite...' : 'Send Invite'}
+                      <UserPlus size={18} /> {isAddingUser ? 'Creating Account...' : 'Add User'}
                    </button>
                 </form>
              </div>

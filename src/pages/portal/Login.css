@@ -213,3 +213,18 @@
   color: var(--primary);
   font-weight: 600;
 }
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 32px 22px;
+  }
+
+  .login-header h1 {
+    font-size: 22px;
+  }
+
+  .form-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
