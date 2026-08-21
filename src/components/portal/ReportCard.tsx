@@ -1,6 +1,7 @@
 import type { User, Result, ReportCardData, SubjectStats } from '../../context/AuthContext';
 import { gradeFromScore, commentFromGrade, pointsForRating, GRADING_SYSTEM } from '../../lib/grading';
 import logo from '../../assets/logo.jpg';
+import { User as UserIcon } from 'lucide-react';
 import './ReportCard.css';
 
 interface ReportCardProps {
@@ -74,7 +75,11 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
           <p>B3, Rock Heaven Opposite Deeperlife Bible Church off Goodluck Jonathan Road, (Former Zaria Road), Jos</p>
           <p>Tel: 08036334689 &nbsp;|&nbsp; Email: citadelofhighflyersintlacademy@gmail.com</p>
         </div>
-        <img src={logo} alt="" className="report-card-logo" />
+        <div className="report-card-photo">
+          {student.avatarUrl
+            ? <img src={student.avatarUrl} alt={student.name} className="report-card-student-photo" />
+            : <div className="report-card-photo-placeholder"><UserIcon size={28} /></div>}
+        </div>
       </div>
 
       <div className="report-card-student-info">

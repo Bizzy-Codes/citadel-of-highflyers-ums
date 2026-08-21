@@ -70,7 +70,7 @@ const Results = () => {
 
         {/* Official Report Card */}
         {currentUser && (
-          <div className="card glass" style={{ padding: '20px', overflowX: 'auto' }}>
+          <div className="card glass report-card-wrapper" style={{ padding: '20px', overflowX: 'auto' }}>
             <ReportCard
               student={currentUser}
               term={reportTerm}

@@ -36,6 +36,31 @@
   flex-shrink: 0;
 }
 
+.report-card-photo {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.report-card-student-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.report-card-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #999;
+}
+
 .report-card-title {
   flex: 1;
   text-align: center;
@@ -218,6 +243,17 @@
     font-size: 11px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* The report card sits inside a scrollable card (overflow: auto), which
+     clips the absolutely-positioned .report-card down to almost nothing at
+     print time, producing a blank page. Neutralize any clipping/height
+     constraints up the ancestor chain so the full card can render. */
+  .report-card-wrapper {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
   }
 
   .report-card table,

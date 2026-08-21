@@ -58,9 +58,9 @@ const Dashboard = () => {
            </div>
            <div className="video-strip" style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '10px' }}>
               {[
-                { title: "Founder's Day Celebration", id: "dQw4w9WgXcQ" },
-                { title: "Inter-House Sports 2024", id: "dQw4w9WgXcQ" },
-                { title: "Cultural Day Highlights", id: "dQw4w9WgXcQ" }
+                { title: "Founder's Day Celebration", id: "2aODtjJmPGA" },
+                { title: "Inter-House Sports 2024", id: "7nHeVsAcVrE" },
+                { title: "Cultural Day Highlights", id: "WN9AFWET2BQ" }
               ].map((v, i) => (
                 <a
                   key={i}
