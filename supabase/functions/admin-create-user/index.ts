@@ -7,6 +7,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// The frontend (Vercel) and this function (supabase.co) are different
+// origins, and the client always sends a custom Authorization header,
+// which forces the browser to preflight with OPTIONS first. Without
+// these headers on every response -- OPTIONS included -- the browser
+// blocks the request before it ever reaches the code below, and
+// supabase-js reports that as a generic "Failed to send a request to
+// the Edge Function", not as any error this function returns.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const bytes = new Uint8Array(10);
@@ -15,13 +35,17 @@ function generateTempPassword(): string {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
+    return json({ error: 'Method not allowed' }, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Missing authorization' }), { status: 401 });
+    return json({ error: 'Missing authorization' }, 401);
   }
 
   // Scoped to the caller's own JWT -- used only to verify who is calling.
@@ -31,7 +55,7 @@ Deno.serve(async (req) => {
 
   const { data: { user: caller }, error: callerError } = await callerClient.auth.getUser();
   if (callerError || !caller) {
-    return new Response(JSON.stringify({ error: 'Invalid session' }), { status: 401 });
+    return json({ error: 'Invalid session' }, 401);
   }
 
   const { data: callerProfile } = await callerClient
@@ -41,7 +65,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (callerProfile?.role !== 'admin') {
-    return new Response(JSON.stringify({ error: 'Admin only' }), { status: 403 });
+    return json({ error: 'Admin only' }, 403);
   }
 
   const body = await req.json();
@@ -51,23 +75,20 @@ Deno.serve(async (req) => {
   if (action === 'set_password') {
     const { userId, newPassword } = body;
     if (!userId || typeof newPassword !== 'string' || newPassword.length < 6) {
-      return new Response(JSON.stringify({ error: 'A user and a password of at least 6 characters are required' }), { status: 400 });
+      return json({ error: 'A user and a password of at least 6 characters are required' }, 400);
     }
 
     const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+      return json({ error: error.message }, 400);
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return json({ ok: true });
   }
 
   const { name, email, role, grade } = body;
   if (!name || !email || !['student', 'teacher'].includes(role)) {
-    return new Response(JSON.stringify({ error: 'Invalid input' }), { status: 400 });
+    return json({ error: 'Invalid input' }, 400);
   }
 
   const tempPassword = generateTempPassword();
@@ -80,7 +101,7 @@ Deno.serve(async (req) => {
   });
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+    return json({ error: error.message }, 400);
   }
 
   // Admin-created accounts are pre-vetted, so a teacher added this way
@@ -90,8 +111,5 @@ Deno.serve(async (req) => {
     await adminClient.from('profiles').update({ role: 'teacher' }).eq('id', data.user.id);
   }
 
-  return new Response(JSON.stringify({ id: data.user?.id, password: tempPassword }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ id: data.user?.id, password: tempPassword });
 });

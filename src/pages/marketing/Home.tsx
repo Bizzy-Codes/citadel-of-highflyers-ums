@@ -13,7 +13,10 @@ import {
   Sun,
   Video,
   CheckCircle,
-  Play
+  Play,
+  Eye,
+  Compass,
+  Star
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -182,6 +185,46 @@ const Home = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Vision, Mission & Values Section */}
+      <section className="vision-mission-section">
+         <div className="container">
+            <h2 className="section-title">Our Vision &amp; Mission</h2>
+            <p className="section-subtitle">The purpose that guides everything we do at Citadel of Highflyers.</p>
+
+            <div className="vm-cards-grid">
+               <motion.div className="vm-card vm-vision" whileHover={{ y: -6 }}>
+                  <div className="vm-icon-badge"><Eye size={28} /></div>
+                  <h3>Our Vision</h3>
+                  <p>We are poised to raise Godly future generals.</p>
+               </motion.div>
+               <motion.div className="vm-card vm-mission" whileHover={{ y: -6 }}>
+                  <div className="vm-icon-badge"><Compass size={28} /></div>
+                  <h3>Our Mission</h3>
+                  <p>To create an enabling environment where children, through divine wisdom, are raised spiritually, socially, emotionally, morally, and academically to become future generals.</p>
+               </motion.div>
+            </div>
+
+            <div className="vm-trust-block glass-purple">
+               <h3><Star size={20} /> You Can Trust Us For</h3>
+               <div className="vm-trust-grid">
+                  {[
+                    'Godly / Moral Standard',
+                    'Minimum Number of Pupils in Class',
+                    'High Academic Standard',
+                    'Practical Usage of Diction',
+                    'Boldness, Confidence & Independence in Each Child',
+                    'Every Child to Be a Star',
+                  ].map((item) => (
+                    <div className="vm-trust-item" key={item}>
+                       <CheckCircle size={18} />
+                       <span>{item}</span>
+                    </div>
+                  ))}
+               </div>
+            </div>
+         </div>
       </section>
 
       {/* Gallery Section */}

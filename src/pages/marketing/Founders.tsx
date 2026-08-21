@@ -55,7 +55,7 @@ const Founders = () => {
           <section className="founder-section reverse animate-fade-in" style={{ animationDelay: '0.2s' }}>
              <div className="founder-content">
                 <div className="founder-text">
-                   <h2>Ambassador Mrs <span>Iwunna Princess</span></h2>
+                   <h2>P.Ambassador (Mrs) <span>Iwunna Princess</span></h2>
                    <p className="founder-role">Proprietress & Lead Educator</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
@@ -76,50 +76,68 @@ const Founders = () => {
              </div>
           </section>
 
-          {/* Head Teacher -- EDIT ME: replace the placeholder name, role,
-              quote, and bio paragraph below with the real details. Save a
-              photo to public/gallery/founder-headteacher.jpg to replace
-              the placeholder tile. */}
+          {/* Head Teacher: Ruth Sankira */}
           <section className="founder-section animate-fade-in">
              <div className="founder-content">
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg"></div>
-                   <PhotoSlot src="/gallery/founder-headteacher.jpg" alt="Head Teacher" label="Photo: Head Teacher" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-headteacher.jpg" alt="Ruth Sankira" label="Photo: Ruth Sankira" className="founder-img" />
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Head Teacher</div>
                 </div>
                 <div className="founder-text">
-                   <h2>[Head Teacher <span>Full Name</span>]</h2>
-                   <p className="founder-role">Head Teacher</p>
+                   <h2>Mrs <span>Ruth Sankira</span></h2>
+                   <p className="founder-role">Head Teacher &amp; Head of Kindergarten, Staff Relations/Operations</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
-                      <p>[A short quote from the Head Teacher about their approach to teaching and school life.]</p>
+                      <p>Every child deserves a teacher who sees their potential, and every teacher deserves a school that stands behind them -- that's the standard we hold ourselves to every day.</p>
                    </div>
                    <p className="description text-muted">
-                      [A paragraph introducing the Head Teacher -- background, experience, and what they bring to Citadel of Highflyers.]
+                      Ruth Sankira is one of Citadel of Highflyers' Management staff, having served the school for over 12 years with dedication and passion -- first as a classroom teacher, and later as Head Teacher. She presently serves as Head of Kindergarten and oversees Staff Relations and Operations, bringing more than a decade of hands-on experience to every child and colleague she works with.
                    </p>
                 </div>
              </div>
           </section>
 
-          {/* Admin -- EDIT ME: same as above. Photo goes at
-              public/gallery/founder-admin.jpg. */}
+          {/* Administrative Officer: Ozoegwu Onyinye Claire */}
           <section className="founder-section reverse animate-fade-in">
              <div className="founder-content">
                 <div className="founder-text">
-                   <h2>[Admin <span>Full Name</span>]</h2>
-                   <p className="founder-role">Administrator</p>
+                   <h2>Mrs <span>Ozoegwu Onyinye Claire</span></h2>
+                   <p className="founder-role">Administrative Officer</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
-                      <p>[A short quote from the Admin about running the school day-to-day.]</p>
+                      <p>A well-run school is felt long before it's seen -- in every form filed correctly, every question answered promptly, and every family made to feel welcome.</p>
                    </div>
                    <p className="description text-muted">
-                      [A paragraph introducing the Admin -- background, experience, and their role at Citadel of Highflyers.]
+                      As Administrative Officer, Ozoegwu Onyinye Claire manages the day-to-day administrative operations of Citadel of Highflyers -- from pupil records and correspondence to coordinating between parents, staff, and management. Her attention to detail and commitment to smooth, efficient operations keep the administrative backbone of the school running seamlessly, so teachers and pupils can focus on what matters most: learning and growth.
                    </p>
                 </div>
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg secondary"></div>
-                   <PhotoSlot src="/gallery/founder-admin.jpg" alt="Admin" label="Photo: Admin" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-admin.jpg" alt="Ozoegwu Onyinye Claire" label="Photo: Ozoegwu Onyinye Claire" className="founder-img" />
                    <div className="founder-badge founder-2"><Sparkles size={16} /> Admin</div>
+                </div>
+             </div>
+          </section>
+
+          {/* School Club/Program Manager (SPC): Eggah Freeda */}
+          <section className="founder-section animate-fade-in">
+             <div className="founder-content">
+                <div className="founder-image-wrapper">
+                   <div className="founder-card-bg"></div>
+                   <PhotoSlot src="/gallery/founder-spc.jpg" alt="Eggah Freeda" label="Photo: Eggah Freeda" className="founder-img" />
+                   <div className="founder-badge founder-1"><Sparkles size={16} /> Program Manager</div>
+                </div>
+                <div className="founder-text">
+                   <h2>Mrs <span>Eggah Freeda</span></h2>
+                   <p className="founder-role">School Club/Program Manager (SPC)</p>
+                   <div className="quote-box glass-purple">
+                      <Quote className="quote-icon" />
+                      <p>Beyond the classroom is where character truly comes alive -- through clubs, programs, and shared experiences that shape confident, well-rounded generals.</p>
+                   </div>
+                   <p className="description text-muted">
+                      Eggah Freeda serves as the School Club/Program Manager (SPC) at Citadel of Highflyers, a role she has grown into over more than seven years of committed service to the school. She is passionate about creating enriching extracurricular experiences for every pupil, always going the extra mile to ensure the school's clubs and programs run smoothly and meaningfully.
+                   </p>
                 </div>
              </div>
           </section>

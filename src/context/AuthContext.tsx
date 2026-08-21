@@ -241,6 +241,8 @@ export interface NewAdmissionApplicationInput {
   surname: string;
   firstName: string;
   otherNames?: string;
+  email: string;
+  classApplyingFor: string;
   sex: 'Male' | 'Female';
   dateOfBirth: string;
   homeAddress: string;
@@ -292,6 +294,25 @@ export interface PaymentReceipt {
   reviewedBy?: string;
   reviewedAt?: string;
   createdAt: string;
+}
+
+export interface AcademicCalendar {
+  term: string;
+  totalWeeks: number;
+  termStartDate: string | null;
+  documentPath: string | null;
+  documentName: string | null;
+  updatedAt: string;
+}
+
+export type AttendanceStatus = 'present' | 'absent' | 'late';
+
+export interface AttendanceRecord {
+  id: string;
+  className: string;
+  studentId: string;
+  attendanceDate: string;
+  status: AttendanceStatus;
 }
 
 export interface ExamViolation {
@@ -385,6 +406,13 @@ interface AuthContextType {
   submitTestAttempt: (attemptId: string) => Promise<{ error: string | null; score?: number; maxScore?: number; status?: string }>;
   recordTestViolation: (attemptId: string) => Promise<{ error: string | null; violationCount?: number; status?: string }>;
   finalizeMyExpiredAttempts: () => Promise<void>;
+  academicCalendar: AcademicCalendar | null;
+  updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null }) => Promise<{ error: string | null }>;
+  uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
+  getAcademicCalendarDocumentUrl: () => string | null;
+  getClassAttendance: (className: string, date: string) => Promise<AttendanceRecord[]>;
+  markClassAttendance: (className: string, date: string, records: { studentId: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
+  getMyAttendance: () => Promise<AttendanceRecord[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -504,11 +532,32 @@ const mapTestAnswerRow = (row: any): TestAnswerForGrading => ({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAcademicCalendarRow = (row: any): AcademicCalendar => ({
+  term: row.term,
+  totalWeeks: row.total_weeks,
+  termStartDate: row.term_start_date,
+  documentPath: row.document_path,
+  documentName: row.document_name,
+  updatedAt: row.updated_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAttendanceRow = (row: any): AttendanceRecord => ({
+  id: row.id,
+  className: row.class_name,
+  studentId: row.student_id,
+  attendanceDate: row.attendance_date,
+  status: row.status,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapAdmissionApplicationRow = (row: any): AdmissionApplication => ({
   id: row.id,
   surname: row.surname,
   firstName: row.first_name,
   otherNames: row.other_names ?? undefined,
+  email: row.email ?? '',
+  classApplyingFor: row.class_applying_for ?? '',
   sex: row.sex,
   dateOfBirth: row.date_of_birth,
   homeAddress: row.home_address,
@@ -606,6 +655,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
   const [tests, setTests] = useState<Test[]>([]);
+  const [academicCalendar, setAcademicCalendar] = useState<AcademicCalendar | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshProfiles = useCallback(async () => {
@@ -669,6 +719,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTests((data ?? []).map(mapTestRow));
   }, []);
 
+  const refreshAcademicCalendar = useCallback(async () => {
+    const { data, error } = await supabase.from('academic_calendar').select('*').eq('id', 1).single();
+    if (error) { console.error('Failed to load academic calendar', error); return; }
+    setAcademicCalendar(mapAcademicCalendarRow(data));
+  }, []);
+
   const refreshAll = useCallback(async (userId: string) => {
     await Promise.all([
       refreshCurrentProfile(userId),
@@ -679,8 +735,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshAssignments(),
       refreshMySubmissions(),
       refreshTests(),
+      refreshAcademicCalendar(),
     ]);
-  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications, refreshAssignments, refreshMySubmissions, refreshTests]);
+  }, [refreshCurrentProfile, refreshProfiles, refreshSubjects, refreshTimetables, refreshNotifications, refreshAssignments, refreshMySubmissions, refreshTests, refreshAcademicCalendar]);
 
   useEffect(() => {
     let isMounted = true;
@@ -706,6 +763,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAssignments([]);
         setMySubmissions({});
         setTests([]);
+        setAcademicCalendar(null);
       }
     });
 
@@ -1412,6 +1470,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       surname: input.surname,
       first_name: input.firstName,
       other_names: input.otherNames || null,
+      email: input.email,
+      class_applying_for: input.classApplyingFor,
       sex: input.sex,
       date_of_birth: input.dateOfBirth,
       home_address: input.homeAddress,
@@ -1523,6 +1583,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.signedUrl;
   };
 
+  const updateAcademicCalendar = async (input: { term: string; totalWeeks: number; termStartDate: string | null }) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('academic_calendar').update({
+      term: input.term, total_weeks: input.totalWeeks, term_start_date: input.termStartDate,
+      updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    if (error) return { error: error.message };
+    await refreshAcademicCalendar();
+    return { error: null };
+  };
+
+  const uploadAcademicCalendarDocument = async (file: File) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const path = `calendar/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from('school-documents').upload(path, file);
+    if (uploadError) return { error: `Failed to upload document: ${uploadError.message}` };
+    const { error } = await supabase.from('academic_calendar').update({
+      document_path: path, document_name: file.name, updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    if (error) return { error: error.message };
+    await refreshAcademicCalendar();
+    return { error: null };
+  };
+
+  // The school-documents bucket is public, so the URL is a plain,
+  // permanent path -- no signed-URL round trip needed like the
+  // private payment-receipts/admission-photos buckets use.
+  const getAcademicCalendarDocumentUrl = (): string | null => {
+    if (!academicCalendar?.documentPath) return null;
+    return supabase.storage.from('school-documents').getPublicUrl(academicCalendar.documentPath).data.publicUrl;
+  };
+
+  const getClassAttendance = async (className: string, date: string): Promise<AttendanceRecord[]> => {
+    const { data, error } = await supabase.from('attendance_records').select('*')
+      .eq('class_name', className).eq('attendance_date', date);
+    if (error) { console.error('getClassAttendance failed', error); return []; }
+    return (data ?? []).map(mapAttendanceRow);
+  };
+
+  const markClassAttendance = async (className: string, date: string, records: { studentId: string; status: AttendanceStatus }[]) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const rows = records.map((r) => ({
+      class_name: className, student_id: r.studentId, attendance_date: date,
+      status: r.status, marked_by: currentUser.id, updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('attendance_records').upsert(rows, { onConflict: 'student_id,attendance_date' });
+    return { error: error?.message ?? null };
+  };
+
+  const getMyAttendance = async (): Promise<AttendanceRecord[]> => {
+    const { data, error } = await supabase.from('attendance_records').select('*').order('attendance_date', { ascending: true });
+    if (error) { console.error('getMyAttendance failed', error); return []; }
+    return (data ?? []).map(mapAttendanceRow);
+  };
+
   const exportData = () => {
     const data = { students, staff, subjects: subjectsByClass, timetables, notifications };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1555,6 +1670,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
+      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl,
+      getClassAttendance, markClassAttendance, getMyAttendance,
     }}>
       {children}
     </AuthContext.Provider>

@@ -29,6 +29,9 @@ import TeacherAssignments from './pages/portal/TeacherAssignments'
 import StudentAssignments from './pages/portal/StudentAssignments'
 import AdminPayments from './pages/portal/AdminPayments'
 import AdminAdmissions from './pages/portal/AdminAdmissions'
+import TeacherRegister from './pages/portal/TeacherRegister'
+import StudentAttendance from './pages/portal/StudentAttendance'
+import AdminCalendar from './pages/portal/AdminCalendar'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
@@ -80,6 +83,9 @@ function App() {
         <Route path="/portal/assignments" element={
           <ProtectedRoute allowedRoles={['student']}><StudentAssignments /></ProtectedRoute>
         } />
+        <Route path="/portal/attendance" element={
+          <ProtectedRoute allowedRoles={['student']}><StudentAttendance /></ProtectedRoute>
+        } />
 
         {/* Shared authenticated routes (student + teacher; results also useful to review as teacher) */}
         <Route path="/portal/results" element={
@@ -120,6 +126,9 @@ function App() {
         <Route path="/portal/teacher/students" element={
           <ProtectedRoute allowedRoles={['teacher']}><MyStudentsRedirect /></ProtectedRoute>
         } />
+        <Route path="/portal/teacher/register" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TeacherRegister /></ProtectedRoute>
+        } />
 
         {/* Admin Routes */}
         <Route path="/portal/admin" element={
@@ -136,6 +145,9 @@ function App() {
         } />
         <Route path="/portal/admin/admissions" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminAdmissions /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/calendar" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminCalendar /></ProtectedRoute>
         } />
 
         {/* Catch-all */}

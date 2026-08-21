@@ -16,8 +16,10 @@ const BANK_DETAILS = {
 
 const WHATSAPP_LINK = "https://wa.me/2347064970003?text=Hello,%20I%20just%20submitted%20my%20child's%20admission%20application%20and%20payment%20receipt.%20I'd%20like%20some%20further%20information.";
 
+const CLASSES = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
+
 const emptyInput: NewAdmissionApplicationInput = {
-  surname: '', firstName: '', otherNames: '', sex: 'Male', dateOfBirth: '',
+  surname: '', firstName: '', otherNames: '', email: '', classApplyingFor: CLASSES[0], sex: 'Male', dateOfBirth: '',
   homeAddress: '', nationality: '', stateOfOrigin: '', lga: '', religion: '',
   bloodGroup: '', genotype: '',
   fatherName: '', fatherOccupation: '', fatherOfficeAddress: '', fatherPhone: '',
@@ -197,6 +199,12 @@ const Admissions = () => {
             <Field label="Surname"><input style={inputStyle} required value={form.surname} onChange={(e) => set({ surname: e.target.value })} /></Field>
             <Field label="First Name"><input style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
             <Field label="Other Names"><input style={inputStyle} value={form.otherNames} onChange={(e) => set({ otherNames: e.target.value })} /></Field>
+            <Field label="Email Address"><input type="email" style={inputStyle} required value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="you@example.com" /></Field>
+            <Field label="Class Applying For">
+              <select style={inputStyle} required value={form.classApplyingFor} onChange={(e) => set({ classApplyingFor: e.target.value })}>
+                {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
             <Field label="Sex">
               <select style={inputStyle} value={form.sex} onChange={(e) => set({ sex: e.target.value as 'Male' | 'Female' })}>
                 <option value="Male">Male</option>

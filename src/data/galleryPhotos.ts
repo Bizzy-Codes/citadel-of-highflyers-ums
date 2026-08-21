@@ -9,7 +9,8 @@ export type GalleryCategory =
   | 'Sports'
   | 'Excursions & Nature'
   | 'School Activities'
-  | 'Playground & Recreation';
+  | 'Playground & Recreation'
+  | 'International School Involvement';
 
 export interface GalleryPhoto {
   file: string;
@@ -23,16 +24,17 @@ export const GALLERY_CATEGORIES: GalleryCategory[] = [
   'Excursions & Nature',
   'School Activities',
   'Playground & Recreation',
+  'International School Involvement',
 ];
 
 export const GALLERY_PHOTOS: GalleryPhoto[] = [
-  { file: 'gallery-1.jpg', label: 'Grade 1 Class', category: 'Academics' },
+  { file: 'gallery-1.jpg', label: 'Class photographs', category: 'Academics' },
   { file: 'gallery-2.jpg', label: 'Playground Fun', category: 'Playground & Recreation' },
   { file: 'gallery-3.jpg', label: 'Outdoor Play', category: 'Playground & Recreation' },
   { file: 'gallery-4.jpg', label: 'Pupil Spotlight', category: 'School Activities' },
-  { file: 'gallery-5.jpg', label: 'Law Day Role-Play', category: 'School Activities' },
-  { file: 'gallery-6.jpg', label: 'Special Guests Visit', category: 'School Activities' },
-  { file: 'gallery-7.jpg', label: 'House Sports Day', category: 'Sports' },
+  { file: 'gallery-5.jpg', label: 'Career-Day', category: 'School Activities' },
+  { file: 'gallery-6.jpg', label: 'Special Guests Visit', category: 'International School Involvement' },
+  { file: 'gallery-7.jpg', label: 'Inter-House Sports Day', category: 'Sports' },
   { file: 'gallery-8.jpg', label: 'Playground Time', category: 'Playground & Recreation' },
   { file: 'gallery-9.jpg', label: 'Nature & Gardening', category: 'Excursions & Nature' },
 ];

@@ -358,6 +358,113 @@
   color: var(--primary);
 }
 
+/* Vision, Mission & Values */
+.vision-mission-section {
+  padding: 60px 0;
+}
+
+.vm-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.vm-card {
+  padding: 36px;
+  border-radius: 28px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.vm-vision {
+  background: linear-gradient(135deg, var(--primary), #4c1d7a);
+}
+
+.vm-mission {
+  background: linear-gradient(135deg, var(--secondary), #b45309);
+}
+
+.vm-icon-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.vm-card h3 {
+  font-size: 22px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.vm-card p {
+  font-size: 15px;
+  line-height: 1.6;
+  opacity: 0.95;
+}
+
+.vm-trust-block {
+  padding: 40px;
+  border-radius: 28px;
+}
+
+.vm-trust-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 24px;
+}
+
+.vm-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.vm-trust-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.vm-trust-item svg {
+  color: var(--success);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+@media (max-width: 768px) {
+  .vision-mission-section {
+    padding: 40px 0;
+  }
+
+  .vm-card {
+    padding: 26px;
+    border-radius: 20px;
+  }
+
+  .vm-trust-block {
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+}
+
 .cta-banner {
   padding: 100px 0;
 }

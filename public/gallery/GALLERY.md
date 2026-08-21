@@ -19,9 +19,10 @@ change needed, just refresh the site after adding the file.
 | `gallery-9.jpg` | Gallery | Nature & Gardening |
 | `founder-chrispraise.jpg` | Founders page | Pastor Chrispraise Iwunna |
 | `founder-princess.jpg` | Founders page | Ambassador Mrs Iwunna Princess |
-| `founder-headteacher.jpg` | Founders page | Head Teacher (placeholder -- add real photo + edit name/bio in Founders.tsx) |
-| `founder-admin.jpg` | Founders page | Admin (placeholder -- add real photo + edit name/bio in Founders.tsx) |
+| `founder-headteacher.jpg` | Founders page | Ruth Sankira (Head Teacher) |
+| `founder-admin.jpg` | Founders page | Ozoegwu Onyinye Claire (Administrative Officer) |
+| `founder-spc.jpg` | Founders page | Eggah Freeda (School Club/Program Manager) |
 
-All 13 filenames above are filled in with real photos as of 2026-08-17.
+All filenames above are filled in with real photos as of 2026-08-21.
 To swap any of them out later, just overwrite that file with a new one
 using the same filename, then refresh the site.

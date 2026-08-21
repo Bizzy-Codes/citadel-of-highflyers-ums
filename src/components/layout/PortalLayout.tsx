@@ -16,7 +16,9 @@ import {
   ClipboardCheck,
   FileText,
   Receipt,
-  UserPlus
+  UserPlus,
+  CalendarCheck,
+  CalendarRange
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -41,6 +43,8 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const navItems = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: isTeacher ? '/portal/teacher' : isAdmin ? '/portal/admin' : '/portal', show: true },
     { label: 'My Pupils', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
+    { label: 'Register', icon: <CalendarCheck size={20} />, path: '/portal/teacher/register', show: isTeacher },
+    { label: 'My Attendance', icon: <CalendarCheck size={20} />, path: '/portal/attendance', show: !isTeacher && !isAdmin },
     { label: 'Tests', icon: <ClipboardCheck size={20} />, path: isTeacher ? '/portal/teacher/tests' : '/portal/tests', show: !isAdmin },
     { label: 'Assignments', icon: <FileText size={20} />, path: isTeacher ? '/portal/teacher/assignments' : '/portal/assignments', show: !isAdmin },
     { label: 'Academic Results', icon: <GraduationCap size={20} />, path: '/portal/results', show: !isAdmin },
@@ -48,6 +52,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },
     { label: 'Payment Receipts', icon: <Receipt size={20} />, path: '/portal/admin/payments', show: isAdmin },
     { label: 'Admissions', icon: <UserPlus size={20} />, path: '/portal/admin/admissions', show: isAdmin },
+    { label: 'Academic Calendar', icon: <CalendarRange size={20} />, path: '/portal/admin/calendar', show: isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },
     { label: 'Timetable', icon: <Calendar size={20} />, path: '/portal/timetable', show: true },
     { label: 'Profile', icon: <User size={20} />, path: '/portal/profile', show: true },

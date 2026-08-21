@@ -24,7 +24,7 @@ const toWhatsAppNumber = (phone: string) => {
 };
 
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser } = useAuth();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
@@ -58,6 +58,41 @@ const AdminAdmissions = () => {
 
   const handleReview = async (status: 'admitted' | 'declined' | 'reviewed') => {
     if (!selected) return;
+
+    // Admitting creates the student's account in the same step, so
+    // the family has login details right away instead of the admin
+    // having to separately remember to go create one afterward.
+    if (status === 'admitted') {
+      let email = selected.email;
+      if (!email) {
+        email = prompt(`No email was captured on this application. Enter an email for ${selected.firstName} ${selected.surname}'s account:`) ?? '';
+        if (!email) return;
+      }
+      let grade = selected.classApplyingFor;
+      if (!grade) {
+        grade = prompt(`Which class should ${selected.firstName} ${selected.surname} be enrolled in?`, 'Grade 1') ?? '';
+        if (!grade) return;
+      }
+
+      setBusy(true);
+      const fullName = `${selected.firstName} ${selected.otherNames ? selected.otherNames + ' ' : ''}${selected.surname}`.trim();
+      const { error: createError, password } = await createUser(fullName, email, 'student', grade);
+      if (createError) {
+        setBusy(false);
+        alert('Application was not admitted -- failed to create the student account: ' + createError);
+        return;
+      }
+
+      const { error } = await reviewAdmissionApplication(selected.id, status, note);
+      setBusy(false);
+      if (error) { alert('Account was created, but failed to mark the application admitted: ' + error); return; }
+
+      alert(`${fullName}'s student account is ready.\n\nTemporary password: ${password}\n\nShare this with the family -- they can log in right away with their name, ID, or email. No email was sent.`);
+      setSelected(null);
+      await load();
+      return;
+    }
+
     setBusy(true);
     const { error } = await reviewAdmissionApplication(selected.id, status, note);
     setBusy(false);
@@ -152,6 +187,8 @@ const AdminAdmissions = () => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '14px', marginBottom: '20px' }}>
+              <p><strong>Email:</strong> {selected.email || '—'}</p>
+              <p><strong>Class Applying For:</strong> {selected.classApplyingFor || '—'}</p>
               <p><strong>Sex:</strong> {selected.sex}</p>
               <p><strong>Date of Birth:</strong> {new Date(selected.dateOfBirth).toLocaleDateString()}</p>
               <p><strong>Nationality:</strong> {selected.nationality}</p>
