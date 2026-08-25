@@ -1,22 +1,25 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  BookOpen, 
-  Users, 
-  Award, 
-  LogIn, 
-  Menu, 
-  X, 
-  Sparkles, 
-  Moon, 
+import {
+  ArrowRight,
+  BookOpen,
+  Users,
+  Award,
+  LogIn,
+  Menu,
+  X,
+  Sparkles,
+  Moon,
   Sun,
   Video,
   CheckCircle,
   Play,
   Eye,
   Compass,
-  Star
+  Star,
+  Home as HomeIcon,
+  GraduationCap,
+  Image as GalleryIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -68,6 +71,16 @@ const Home = () => {
         </div>
       </nav>
 
+      {/* Always-visible quick links for mobile -- the hamburger menu above
+          still works and shows the full list, but these key destinations
+          no longer require opening it first. */}
+      <div className="mobile-quick-nav">
+        <Link to="/"><HomeIcon size={15} /> Home</Link>
+        <Link to="/admissions"><GraduationCap size={15} /> Admissions</Link>
+        <Link to="/gallery"><GalleryIcon size={15} /> Gallery</Link>
+        <Link to="/login" className="primary"><LogIn size={15} /> Portal Login</Link>
+      </div>
+
       {/* Hero Section */}
       <section className="hero">
         <div className="container hero-content">
@@ -99,45 +112,52 @@ const Home = () => {
           
           <div className="hero-visual-area">
             <div className="hero-image-blob"></div>
-            
-            <motion.div 
-              className="floating-card education"
-              initial={{ x: -20, y: 0 }}
-              animate={{ y: [0, -25, 0], x: [-20, -15, -20] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <div className="card-inner premium-glass">
-                <div className="icon-badge academic"><BookOpen size={20} /></div>
-                <span>Academic Excellence</span>
-              </div>
-            </motion.div>
 
-            <motion.div 
-              className="floating-card excellence"
-              initial={{ x: 20, y: 0 }}
-              animate={{ y: [0, 25, 0], x: [20, 15, 20] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-            >
-              <div className="card-inner premium-glass">
-                <div className="icon-badge facility"><Award size={20} /></div>
-                <span>Modern Facilities</span>
+            {/* Cards are anchored to hero-image-frame (sized to match the
+                photo) instead of the much wider hero-visual-area, so their
+                offsets stay sane at every breakpoint instead of pushing
+                them past the viewport edge, where overflow-x:hidden on
+                .home-container was clipping them on tablet/mobile. */}
+            <div className="hero-image-frame">
+              <div className="hero-main-img-wrapper">
+                 <PhotoSlot src="/gallery/hero.jpg" alt="Pupils at Citadel of Highflyers" label="Photo: Pupils at Citadel" className="hero-main-img" />
               </div>
-            </motion.div>
 
-            <motion.div 
-              className="floating-card character"
-              initial={{ x: 30, y: -50 }}
-              animate={{ y: [-50, -30, -50], x: [30, 40, 30] }}
-              transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-            >
-              <div className="card-inner premium-glass">
-                <div className="icon-badge moral"><Sparkles size={20} /></div>
-                <span>Godly Character</span>
-              </div>
-            </motion.div>
+              <motion.div
+                className="floating-card education"
+                initial={{ x: -20, y: 0 }}
+                animate={{ y: [0, -25, 0], x: [-20, -15, -20] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <div className="card-inner premium-glass">
+                  <div className="icon-badge academic"><BookOpen size={20} /></div>
+                  <span>Academic Excellence</span>
+                </div>
+              </motion.div>
 
-            <div className="hero-main-img-wrapper">
-               <PhotoSlot src="/gallery/hero.jpg" alt="Pupils at Citadel of Highflyers" label="Photo: Pupils at Citadel" className="hero-main-img" />
+              <motion.div
+                className="floating-card excellence"
+                initial={{ x: 20, y: 0 }}
+                animate={{ y: [0, 25, 0], x: [20, 15, 20] }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+              >
+                <div className="card-inner premium-glass">
+                  <div className="icon-badge facility"><Award size={20} /></div>
+                  <span>Modern Facilities</span>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className="floating-card character"
+                initial={{ x: 30, y: -50 }}
+                animate={{ y: [-50, -30, -50], x: [30, 40, 30] }}
+                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+              >
+                <div className="card-inner premium-glass">
+                  <div className="icon-badge moral"><Sparkles size={20} /></div>
+                  <span>Godly Character</span>
+                </div>
+              </motion.div>
             </div>
           </div>
         </div>

@@ -5,15 +5,20 @@ import { useAuth, type TestQuestion, type TestQuestionOption } from '../../conte
 import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X } from 'lucide-react';
 import './Tests.css';
 
+// points are kept as raw text, not numbers -- a number-typed value
+// bound straight to a number input snaps back to a literal "0" the
+// instant the field is cleared (Number('') is 0), which reads as a
+// stuck zero that "won't clean" no matter what's typed over it.
+// Converted to a real number only where saved or summed.
 interface QuestionFormState {
   id?: string;
   type: 'objective' | 'essay';
   prompt: string;
-  points: number;
+  points: string;
   options: TestQuestionOption[];
   correctOption: string;
   modelAnswer: string;
-  keywords: { phrase: string; points: number }[];
+  keywords: { phrase: string; points: string }[];
 }
 
 const nextOptionKey = (options: TestQuestionOption[]) => String.fromCharCode(65 + options.length);
@@ -21,7 +26,7 @@ const nextOptionKey = (options: TestQuestionOption[]) => String.fromCharCode(65 
 const blankForm: QuestionFormState = {
   type: 'objective',
   prompt: '',
-  points: 1,
+  points: '1',
   options: [{ key: 'A', text: '' }, { key: 'B', text: '' }],
   correctOption: 'A',
   modelAnswer: '',
@@ -58,11 +63,11 @@ const TestEditor = () => {
       id: q.id,
       type: q.type,
       prompt: q.prompt,
-      points: q.points,
+      points: String(q.points),
       options: q.options ?? [{ key: 'A', text: '' }, { key: 'B', text: '' }],
       correctOption: q.correctOption ?? (q.options?.[0]?.key ?? 'A'),
       modelAnswer: q.modelAnswer ?? '',
-      keywords: q.keywords ?? [],
+      keywords: (q.keywords ?? []).map((k) => ({ phrase: k.phrase, points: String(k.points) })),
     });
     setShowForm(true);
   };
@@ -75,11 +80,11 @@ const TestEditor = () => {
       id: form.id,
       type: form.type,
       prompt: form.prompt,
-      points: form.points,
+      points: Number(form.points) || 0,
       options: form.type === 'objective' ? form.options : undefined,
       correctOption: form.type === 'objective' ? form.correctOption : undefined,
       modelAnswer: form.type === 'essay' ? (form.modelAnswer || undefined) : undefined,
-      keywords: form.type === 'essay' ? form.keywords : undefined,
+      keywords: form.type === 'essay' ? form.keywords.map((k) => ({ phrase: k.phrase, points: Number(k.points) || 0 })) : undefined,
     });
     setSaving(false);
     if (error) { alert('Failed to save question: ' + error); return; }
@@ -110,7 +115,7 @@ const TestEditor = () => {
     setForm({ ...form, options: remaining, correctOption: form.correctOption === key ? (remaining[0]?.key ?? '') : form.correctOption });
   };
 
-  const addKeyword = () => setForm({ ...form, keywords: [...form.keywords, { phrase: '', points: 1 }] });
+  const addKeyword = () => setForm({ ...form, keywords: [...form.keywords, { phrase: '', points: '1' }] });
   const removeKeyword = (i: number) => setForm({ ...form, keywords: form.keywords.filter((_, idx) => idx !== i) });
 
   const keywordPointsSum = form.keywords.reduce((sum, k) => sum + (Number(k.points) || 0), 0);
@@ -229,7 +234,7 @@ const TestEditor = () => {
 
               <div className="input-group">
                 <label>Points</label>
-                <input type="number" min={1} step="0.5" required value={form.points} onChange={(e) => setForm({ ...form, points: Number(e.target.value) })}
+                <input type="number" min={1} step="0.5" required value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })}
                   style={{ width: '140px', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
 
@@ -269,16 +274,16 @@ const TestEditor = () => {
                             onChange={(e) => setForm({ ...form, keywords: form.keywords.map((kw, idx) => idx === i ? { ...kw, phrase: e.target.value } : kw) })}
                             style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                           <input type="number" min={0} step="0.5" placeholder="pts" value={k.points}
-                            onChange={(e) => setForm({ ...form, keywords: form.keywords.map((kw, idx) => idx === i ? { ...kw, points: Number(e.target.value) } : kw) })}
+                            onChange={(e) => setForm({ ...form, keywords: form.keywords.map((kw, idx) => idx === i ? { ...kw, points: e.target.value } : kw) })}
                             style={{ width: '80px', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                           <button type="button" className="icon-btn sm" onClick={() => removeKeyword(i)}><Trash2 size={14} /></button>
                         </div>
                       ))}
                     </div>
                     <button type="button" className="btn btn-outline sm" style={{ marginTop: '8px' }} onClick={addKeyword}><Plus size={14} /> Add Keyword</button>
-                    {keywordPointsSum > form.points && (
+                    {keywordPointsSum > (Number(form.points) || 0) && (
                       <p style={{ fontSize: '12px', color: 'var(--warning)', marginTop: '8px' }}>
-                        Keyword points ({keywordPointsSum}) add up to more than the question's {form.points} points.
+                        Keyword points ({keywordPointsSum}) add up to more than the question's {Number(form.points) || 0} points.
                       </p>
                     )}
                   </div>

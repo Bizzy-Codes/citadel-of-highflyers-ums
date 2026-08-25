@@ -42,7 +42,8 @@ const UserManagement = () => {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-      await updateUser(editingUser.id, editingUser);
+      const { error } = await updateUser(editingUser.id, editingUser);
+      if (error) { alert('Failed to update user: ' + error); return; }
       setEditingUser(null);
       alert("User updated successfully!");
     }
@@ -183,8 +184,8 @@ const UserManagement = () => {
                               </span>
                            </td>
                            <td style={{ padding: '16px 20px' }}>
-                              <span style={{ fontSize: '11px', fontWeight: '700', color: user.status === 'Active' ? 'var(--success)' : 'var(--error)' }}>
-                                 {user.status}
+                              <span style={{ fontSize: '11px', fontWeight: '700', color: user.role === 'teacher_pending' ? 'var(--warning)' : user.status === 'Active' ? 'var(--success)' : 'var(--error)' }}>
+                                 {user.role === 'teacher_pending' ? 'Pending' : user.status}
                               </span>
                            </td>
                            <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>

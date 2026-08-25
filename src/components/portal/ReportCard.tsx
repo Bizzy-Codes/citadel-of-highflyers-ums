@@ -48,6 +48,11 @@ const DomainTable = ({ title, items, reportCard }: { title: string; items: [keyo
   });
   return (
     <table className="report-card-domain-table">
+      <colgroup>
+        <col className="domain-col-item" />
+        <col className="domain-col-rating" />
+        <col className="domain-col-points" />
+      </colgroup>
       <thead>
         <tr><th colSpan={3}>{title}</th></tr>
         <tr><th>Item</th><th>Rating</th><th>Points</th></tr>

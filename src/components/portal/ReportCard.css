@@ -117,6 +117,20 @@
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 16px;
+  /* Without this, a CSS grid track's automatic minimum width is based
+     on its content's intrinsic size -- and an auto-layout table with
+     long labels ("Enjoys Company of Peers...") refuses to shrink below
+     that, so the track (and the whole report card) gets forced wider
+     than the page. That's what was pushing this section off to the
+     side on screen and clipping it when printed. */
+  min-width: 0;
+}
+
+.report-card-domain-table {
+  /* Fixed layout ignores content size when sizing columns, so the
+     percentages below are honored and long labels wrap instead of
+     stretching the table out past its grid column. */
+  table-layout: fixed;
 }
 
 .report-card-domain-table th {
@@ -124,9 +138,22 @@
   font-size: 10px;
 }
 
-.report-card-domain-table td:first-child {
+.report-card-domain-table td,
+.report-card-domain-table th {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  font-size: 10px;
+  padding: 4px 6px;
+}
+
+.report-card-domain-table td:first-child,
+.report-card-domain-table th:first-child {
   text-align: left;
 }
+
+.report-card-domain-table col.domain-col-item { width: 56%; }
+.report-card-domain-table col.domain-col-rating { width: 26%; }
+.report-card-domain-table col.domain-col-points { width: 18%; }
 
 .report-card-domain-table .total-row td {
   font-weight: 700;

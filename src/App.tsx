@@ -11,6 +11,7 @@ import PendingApproval from './pages/portal/PendingApproval'
 import Dashboard from './pages/portal/Dashboard'
 import Profile from './pages/portal/Profile'
 import Results from './pages/portal/Results'
+import TeacherResults from './pages/portal/TeacherResults'
 import Messages from './pages/portal/Messages'
 import TeacherDashboard from './pages/portal/TeacherDashboard'
 import AdminDashboard from './pages/portal/AdminDashboard'
@@ -87,9 +88,9 @@ function App() {
           <ProtectedRoute allowedRoles={['student']}><StudentAttendance /></ProtectedRoute>
         } />
 
-        {/* Shared authenticated routes (student + teacher; results also useful to review as teacher) */}
+        {/* Shared authenticated routes */}
         <Route path="/portal/results" element={
-          <ProtectedRoute allowedRoles={['student', 'teacher']}><Results /></ProtectedRoute>
+          <ProtectedRoute allowedRoles={['student']}><Results /></ProtectedRoute>
         } />
         <Route path="/portal/profile" element={
           <ProtectedRoute><Profile /></ProtectedRoute>
@@ -110,6 +111,9 @@ function App() {
         } />
         <Route path="/portal/teacher/class/:className" element={
           <ProtectedRoute allowedRoles={['teacher']}><ClassManagement /></ProtectedRoute>
+        } />
+        <Route path="/portal/teacher/results" element={
+          <ProtectedRoute allowedRoles={['teacher']}><TeacherResults /></ProtectedRoute>
         } />
         <Route path="/portal/teacher/tests" element={
           <ProtectedRoute allowedRoles={['teacher']}><TeacherTests /></ProtectedRoute>

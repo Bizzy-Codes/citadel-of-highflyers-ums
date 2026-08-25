@@ -6,7 +6,10 @@ import { Save, Upload, FileText, Loader2 } from 'lucide-react';
 const AdminCalendar = () => {
   const { academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl } = useAuth();
   const [term, setTerm] = useState('');
-  const [totalWeeks, setTotalWeeks] = useState(13);
+  // Raw text, not a number -- see the note on the CA score fields in
+  // ClassManagement.tsx for why a number-typed value bound straight
+  // to a number input gets stuck showing a literal "0" once cleared.
+  const [totalWeeks, setTotalWeeks] = useState('13');
   const [termStartDate, setTermStartDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -22,7 +25,7 @@ const AdminCalendar = () => {
   if (academicCalendar && academicCalendar.updatedAt !== syncedAt) {
     setSyncedAt(academicCalendar.updatedAt);
     setTerm(academicCalendar.term);
-    setTotalWeeks(academicCalendar.totalWeeks);
+    setTotalWeeks(String(academicCalendar.totalWeeks));
     setTermStartDate(academicCalendar.termStartDate ?? '');
   }
 
@@ -30,7 +33,7 @@ const AdminCalendar = () => {
     e.preventDefault();
     setSaving(true);
     setSaved(false);
-    const { error } = await updateAcademicCalendar({ term, totalWeeks, termStartDate: termStartDate || null });
+    const { error } = await updateAcademicCalendar({ term, totalWeeks: Number(totalWeeks) || 0, termStartDate: termStartDate || null });
     setSaving(false);
     if (error) { alert('Failed to save: ' + error); return; }
     setSaved(true);
@@ -77,7 +80,7 @@ const AdminCalendar = () => {
                 min={1}
                 max={20}
                 value={totalWeeks}
-                onChange={(e) => setTotalWeeks(Number(e.target.value))}
+                onChange={(e) => setTotalWeeks(e.target.value)}
                 style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
               />
             </div>

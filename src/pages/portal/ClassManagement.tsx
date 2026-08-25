@@ -25,15 +25,19 @@ const ClassManagement = () => {
 
   // Modal state for manual result entry -- CA1/CA2/Exam breakdown,
   // matching the official report sheet; total and grade are computed
-  // from these rather than entered directly.
-  const [newResult, setNewResult] = useState({
-    subject: '',
-    term: '1st Term' as Result['term'],
-    session: '2023/2024',
-    ca1: 0,
-    ca2: 0,
-    exam: 0,
-  });
+  // from these rather than entered directly. The scores are kept as
+  // raw strings (not numbers) so the field can actually sit empty
+  // while a teacher is typing -- binding a number input straight to a
+  // number state means clearing it always snaps back to a literal "0"
+  // (Number('') is 0), and clicking into a field that already shows
+  // "0" often lands the cursor before it, so typing "5" produces "50"
+  // instead of replacing it. Converted to a number only where a score
+  // is actually needed (the total below, and on submit).
+  const BLANK_RESULT = { subject: '', term: '1st Term' as Result['term'], session: '2023/2024', ca1: '', ca2: '', exam: '' };
+  const [newResult, setNewResult] = useState(BLANK_RESULT);
+  const ca1Num = Number(newResult.ca1) || 0;
+  const ca2Num = Number(newResult.ca2) || 0;
+  const examNum = Number(newResult.exam) || 0;
 
   // Modal state for the per-term report card fields (remarks, domain
   // ratings, signatures) that live alongside but separate from
@@ -54,9 +58,9 @@ const ClassManagement = () => {
         subject: newResult.subject,
         term: newResult.term,
         session: newResult.session,
-        ca1: newResult.ca1,
-        ca2: newResult.ca2,
-        exam: newResult.exam,
+        ca1: ca1Num,
+        ca2: ca2Num,
+        exam: examNum,
       });
 
       await addNotification({
@@ -66,7 +70,7 @@ const ClassManagement = () => {
       });
 
       setIsAddingResult(false);
-      setNewResult({ subject: '', term: '1st Term', session: '2023/2024', ca1: 0, ca2: 0, exam: 0 });
+      setNewResult(BLANK_RESULT);
     }
   };
 
@@ -256,7 +260,7 @@ const ClassManagement = () => {
                         <input
                           type="number" max="20" min="0"
                           value={newResult.ca1}
-                          onChange={e => setNewResult({...newResult, ca1: Number(e.target.value)})}
+                          onChange={e => setNewResult({...newResult, ca1: e.target.value})}
                           required
                           style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                         />
@@ -266,7 +270,7 @@ const ClassManagement = () => {
                         <input
                           type="number" max="20" min="0"
                           value={newResult.ca2}
-                          onChange={e => setNewResult({...newResult, ca2: Number(e.target.value)})}
+                          onChange={e => setNewResult({...newResult, ca2: e.target.value})}
                           required
                           style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                         />
@@ -276,14 +280,14 @@ const ClassManagement = () => {
                         <input
                           type="number" max="60" min="0"
                           value={newResult.exam}
-                          onChange={e => setNewResult({...newResult, exam: Number(e.target.value)})}
+                          onChange={e => setNewResult({...newResult, exam: e.target.value})}
                           required
                           style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                         />
                       </div>
                    </div>
                    <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                     Total: <strong>{newResult.ca1 + newResult.ca2 + newResult.exam}</strong> / 100 -- Grade: <strong>{gradeFromScore(newResult.ca1 + newResult.ca2 + newResult.exam).grade}</strong>
+                     Total: <strong>{ca1Num + ca2Num + examNum}</strong> / 100 -- Grade: <strong>{gradeFromScore(ca1Num + ca2Num + examNum).grade}</strong>
                    </p>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
@@ -309,7 +313,7 @@ const ClassManagement = () => {
                       </div>
                    </div>
                    <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                      <button type="button" onClick={() => setIsAddingResult(false)} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
+                      <button type="button" onClick={() => { setIsAddingResult(false); setNewResult(BLANK_RESULT); }} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
                       <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Result</button>
                    </div>
                 </form>

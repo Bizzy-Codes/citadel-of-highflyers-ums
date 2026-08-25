@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type DirectMessage } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown } from 'lucide-react';
+import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown, Search } from 'lucide-react';
 
 const Messages = () => {
   const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
@@ -15,6 +15,7 @@ const Messages = () => {
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<DirectMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
+  const [contactSearch, setContactSearch] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -76,6 +77,7 @@ const Messages = () => {
   };
 
   const selectedContact = messageContacts.find(c => c.id === selectedContactId) ?? null;
+  const filteredContacts = messageContacts.filter(c => c.name.toLowerCase().includes(contactSearch.trim().toLowerCase()));
 
   // WhatsApp State
   const [waMessage, setWaMessage] = useState('');
@@ -229,13 +231,30 @@ const Messages = () => {
              <div className="chats-panel">
                 {/* Contact list */}
                 <div className={`chats-contact-list ${selectedContactId ? 'chats-contact-list-hidden-mobile' : ''}`}>
+                   {messageContacts.length > 0 && (
+                     <div style={{ position: 'relative', padding: '4px 4px 12px' }}>
+                        <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input
+                          type="text"
+                          placeholder="Search chats..."
+                          value={contactSearch}
+                          onChange={(e) => setContactSearch(e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px 10px 38px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)', fontSize: '13px' }}
+                        />
+                     </div>
+                   )}
                    {messageContacts.length === 0 && (
                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                         <User size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
                         <p style={{ fontSize: '13px' }}>No contacts available yet.</p>
                      </div>
                    )}
-                   {messageContacts.map((contact) => (
+                   {messageContacts.length > 0 && filteredContacts.length === 0 && (
+                     <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)' }}>
+                        <p style={{ fontSize: '13px' }}>No chats match "{contactSearch}".</p>
+                     </div>
+                   )}
+                   {filteredContacts.map((contact) => (
                      <button
                       key={contact.id}
                       onClick={() => setSelectedContactId(contact.id)}

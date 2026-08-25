@@ -29,7 +29,8 @@ const Profile = () => {
     const { email: _email, grade: _grade, ...editable } = formData;
     void _email; // email isn't editable here -- see the disabled field below
     void _grade; // grade/class is admin-controlled (promotion flow), not self-editable
-    await updateUser(currentUser.id, editable);
+    const { error } = await updateUser(currentUser.id, editable);
+    if (error) { alert('Failed to update profile: ' + error); return; }
     setIsEditing(false);
     alert("Profile updated successfully!");
   };

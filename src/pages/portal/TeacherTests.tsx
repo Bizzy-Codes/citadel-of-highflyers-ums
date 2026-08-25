@@ -5,21 +5,30 @@ import { useAuth, type NewTestInput } from '../../context/AuthContext';
 import { ClipboardList, Plus, Pencil, Radio, Trash2, Send, Lock } from 'lucide-react';
 import './Tests.css';
 
-const emptyInput: NewTestInput = { subject: '', title: '', instructions: '', durationMinutes: 30 };
+const emptyInput = { subject: '', title: '', instructions: '' };
+const DEFAULT_DURATION = '30';
 
 const TeacherTests = () => {
   const navigate = useNavigate();
   const { currentUser, tests, createTest, publishTest, closeTest, deleteTest } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
-  const [input, setInput] = useState<NewTestInput>(emptyInput);
+  const [input, setInput] = useState(emptyInput);
+  // Kept as raw text, not a number -- a number-typed value bound
+  // straight to a number input snaps back to a literal "0" the
+  // instant the field is cleared (Number('') is 0), which is exactly
+  // the stuck-zero bug this avoids. Converted to a real number only
+  // when the test is actually created.
+  const [durationText, setDurationText] = useState(DEFAULT_DURATION);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error, testId } = await createTest(input);
+    const payload: NewTestInput = { ...input, durationMinutes: Number(durationText) || 0 };
+    const { error, testId } = await createTest(payload);
     if (error) { alert('Failed to create test: ' + error); return; }
     setIsCreating(false);
     setInput(emptyInput);
+    setDurationText(DEFAULT_DURATION);
     if (testId) navigate(`/portal/teacher/tests/${testId}`);
   };
 
@@ -111,7 +120,7 @@ const TeacherTests = () => {
               </div>
               <div className="input-group">
                 <label>Duration (minutes)</label>
-                <input type="number" min={1} required value={input.durationMinutes} onChange={(e) => setInput({ ...input, durationMinutes: Number(e.target.value) })}
+                <input type="number" min={1} required value={durationText} onChange={(e) => setDurationText(e.target.value)}
                   style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>

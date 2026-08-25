@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt } from '../../context/AuthContext';
-import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff } from 'lucide-react';
 
 const CLASSES = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
@@ -38,6 +38,7 @@ const AdminUserDetail = () => {
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [settingPassword, setSettingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -85,7 +86,7 @@ const AdminUserDetail = () => {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
-    await updateUser(user.id, {
+    const { error } = await updateUser(user.id, {
       name: form.name,
       phone: form.phone,
       location: form.location,
@@ -93,6 +94,7 @@ const AdminUserDetail = () => {
       ...(isStudent ? { grade: form.grade } : { assignedClass: form.assignedClass || undefined }),
     });
     setSavingProfile(false);
+    if (error) { alert('Failed to save profile: ' + error); return; }
     alert('Profile updated.');
   };
 
@@ -109,6 +111,22 @@ const AdminUserDetail = () => {
     setNewPassword('');
     setConfirmPassword('');
     setPasswordMessage(`Password updated. ${user.name} can log in with it right away -- no email was sent.`);
+  };
+
+  // Generates a fresh password and fills both fields with it (revealed,
+  // not masked) so the admin can read it straight off the screen and
+  // relay it -- the point being to skip the back-and-forth of a parent
+  // resetting their own password over email.
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const bytes = new Uint8Array(10);
+    crypto.getRandomValues(bytes);
+    const pwd = Array.from(bytes, (b) => chars[b % chars.length]).join('');
+    setNewPassword(pwd);
+    setConfirmPassword(pwd);
+    setShowPassword(true);
+    setPasswordMessage(null);
+    setPasswordError(null);
   };
 
   const handleApprove = async () => {
@@ -150,8 +168,8 @@ const AdminUserDetail = () => {
                 <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: 'var(--accent)', color: 'var(--primary)' }}>
                   {isStudent ? user.grade : (user.role === 'teacher_pending' ? 'Pending Teacher' : user.role)}
                 </span>
-                <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: user.status === 'Active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: user.status === 'Active' ? 'var(--success)' : 'var(--error)' }}>
-                  {user.status}
+                <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: user.role === 'teacher_pending' ? 'rgba(245, 158, 11, 0.1)' : user.status === 'Active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: user.role === 'teacher_pending' ? 'var(--warning)' : user.status === 'Active' ? 'var(--success)' : 'var(--error)' }}>
+                  {user.role === 'teacher_pending' ? 'Pending' : user.status}
                 </span>
               </div>
             </div>
@@ -211,11 +229,31 @@ const AdminUserDetail = () => {
             <form onSubmit={handleSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {passwordError && <div className="admission-form-error">{passwordError}</div>}
               {passwordMessage && <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '12px 16px', borderRadius: '10px', fontSize: '14px' }}>{passwordMessage}</div>}
+              <button type="button" onClick={generatePassword} className="btn btn-outline sm" style={{ alignSelf: 'flex-start' }}>
+                <Wand2 size={14} /> Generate Random Password
+              </button>
               <Field label="New Password">
-                <input type="password" style={inputStyle} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} required />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    style={{ ...inputStyle, paddingRight: '40px' }}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </Field>
               <Field label="Confirm Password">
-                <input type="password" style={inputStyle} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={6} required />
+                <input type={showPassword ? 'text' : 'password'} style={inputStyle} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={6} required />
               </Field>
               <button type="submit" className="btn btn-outline" disabled={settingPassword} style={{ marginTop: '8px' }}>
                 <KeyRound size={16} /> {settingPassword ? 'Updating...' : 'Set Password'}

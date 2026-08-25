@@ -3,6 +3,26 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
 
+// supabase-js's functions.invoke() only ever surfaces a generic
+// "Edge Function returned a non-2xx status code" on error -- the
+// actual reason our function sent back (e.g. "User already
+// registered") is on the raw Response at error.context. This digs
+// that out so the UI can show admins something they can act on.
+async function describeFunctionError(error: unknown): Promise<string> {
+  if (error && typeof error === 'object' && 'context' in error) {
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === 'function') {
+      try {
+        const body = await ctx.json();
+        if (body && typeof body.error === 'string') return body.error;
+      } catch {
+        // response body wasn't JSON -- fall through to the generic message
+      }
+    }
+  }
+  return error instanceof Error ? error.message : 'Something went wrong';
+}
+
 export interface Result {
   id?: string;
   subject: string;
@@ -338,7 +358,7 @@ interface AuthContextType {
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   createUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null; password?: string }>;
   adminSetPassword: (userId: string, newPassword: string) => Promise<{ error: string | null }>;
-  updateUser: (id: string, data: Partial<User>) => Promise<void>;
+  updateUser: (id: string, data: Partial<User>) => Promise<{ error: string | null }>;
   uploadAvatar: (file: File) => Promise<{ error: string | null }>;
   removeAvatar: () => Promise<{ error: string | null }>;
   deleteUser: (id: string) => Promise<void>;
@@ -836,7 +856,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
       body: { action: 'create', name, email, role, grade },
     });
-    if (error) return { error: error.message };
+    if (error) return { error: await describeFunctionError(error) };
     if (data?.error) return { error: data.error as string };
     await refreshProfiles();
     return { error: null, password: data?.password as string | undefined };
@@ -849,7 +869,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data, error } = await supabase.functions.invoke('admin-create-user', {
       body: { action: 'set_password', userId, newPassword },
     });
-    if (error) return { error: error.message };
+    if (error) return { error: await describeFunctionError(error) };
     if (data?.error) return { error: data.error as string };
     return { error: null };
   };
@@ -865,11 +885,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.role !== undefined) patch.role = data.role;
     if (data.avatarUrl !== undefined) patch.avatar_url = data.avatarUrl;
 
-    const { error } = await supabase.from('profiles').update(patch).eq('id', id);
-    if (error) { console.error('updateUser failed', error); return; }
+    // .select() forces Postgres to hand back the rows it actually
+    // touched. Without it, a row-level-security policy that silently
+    // matches zero rows looks identical to a real success -- no error,
+    // just nothing written -- which is exactly the "says Saved but the
+    // change reverts on next login" bug this guards against.
+    const { data: updated, error } = await supabase.from('profiles').update(patch).eq('id', id).select('id');
+    if (error) { console.error('updateUser failed', error); return { error: error.message }; }
+    if (!updated || updated.length === 0) {
+      return { error: 'The save was blocked by a permissions rule and nothing was changed. Contact the developer to check the profiles update policy.' };
+    }
 
     if (session?.user.id === id) await refreshCurrentProfile(id);
     await refreshProfiles();
+    return { error: null };
   };
 
   const uploadAvatar = async (file: File) => {

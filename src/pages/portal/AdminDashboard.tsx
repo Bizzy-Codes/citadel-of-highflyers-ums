@@ -56,14 +56,16 @@ const AdminDashboard = () => {
   const handleUpdateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingStudent) {
-      await updateUser(editingStudent.id, editingStudent);
+      const { error } = await updateUser(editingStudent.id, editingStudent);
+      if (error) { alert('Failed to update pupil: ' + error); return; }
       setEditingStudent(null);
       alert("Pupil updated!");
     }
   };
 
   const toggleStatus = async (student: User) => {
-    await updateUser(student.id, { status: student.status === 'Active' ? 'Inactive' : 'Active' });
+    const { error } = await updateUser(student.id, { status: student.status === 'Active' ? 'Inactive' : 'Active' });
+    if (error) alert('Failed to change status: ' + error);
   };
 
   const resetPassword = async (student: User) => {
