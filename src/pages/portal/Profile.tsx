@@ -198,7 +198,7 @@ const Profile = () => {
                 </div>
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Location / Address</label>
-                  <input type="text" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} placeholder="e.g. Jos North, Plateau State" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                  <input type="text" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} placeholder="e.g. Jos, Plateau State" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                 </div>
                 {currentUser.role === 'student' && (
                   <div className="input-group">

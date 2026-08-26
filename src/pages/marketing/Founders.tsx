@@ -41,7 +41,7 @@ const Founders = () => {
                       <p>Our vision is to build a foundation where every child is not just a pupil, but a 'Future General' equipped with character, competence, and compassion.</p>
                    </div>
                    <p className="description text-muted">
-                      Pastor Ambassador Chrispraise Iwunna is a spiritual leader and a visionary dedicated to educational excellence in Jos North. With years of experience in youth mentorship and leadership, his focus at Citadel of Highflyers is to ensure that every pupil discovers their divine potential...
+                      Pastor Ambassador Chrispraise Iwunna is a spiritual leader and a visionary dedicated to educational excellence in Jos. With years of experience in youth mentorship and leadership, his focus at Citadel of Highflyers is to ensure that every pupil discovers their divine potential...
                    </p>
                    <div className="founder-awards">
                       <div className="award-item"><Award size={18} /> Leadership Excellence 2023</div>
@@ -55,14 +55,14 @@ const Founders = () => {
           <section className="founder-section reverse animate-fade-in" style={{ animationDelay: '0.2s' }}>
              <div className="founder-content">
                 <div className="founder-text">
-                   <h2>P.Ambassador (Mrs) <span>Iwunna Princess</span></h2>
+                   <h2>P.Ambassador <span>Iwunna Princess</span></h2>
                    <p className="founder-role">Proprietress & Lead Educator</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
                       <p>At Citadel, we believe in the 'Total Child'. We nurture the mind, the heart, and the hands to create a holistic learning experience.</p>
                    </div>
                    <p className="description text-muted">
-                      Ambassador Mrs. Iwunna Princess is the heart of Citadel's operations. Her passion for early childhood education and primary school development has made Citadel of Highflyers a top-tier institution in Jos. She oversees the day-to-day academic and emotional well-being of every pupil...
+                      Ambassador Iwunna Princess is the heart of Citadel's operations. Her passion for early childhood education and primary school development has made Citadel of Highflyers a top-tier institution in Jos. She oversees the day-to-day academic and emotional well-being of every pupil...
                    </p>
                    <div className="founder-actions">
                       <a href="https://www.instagram.com/princess_iwunna_321" target="_blank" rel="noopener noreferrer" className="btn btn-outline sm">Follow on Instagram @princess_iwunna_321</a>
@@ -70,7 +70,7 @@ const Founders = () => {
                 </div>
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg secondary"></div>
-                   <PhotoSlot src="/gallery/founder-princess.jpg" alt="Ambassador Mrs Iwunna Princess" label="Photo: Ambassador Mrs Iwunna Princess" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-princess.jpg" alt="Ambassador Iwunna Princess" label="Photo: Ambassador Iwunna Princess" className="founder-img" />
                    <div className="founder-badge founder-2"><Sparkles size={16} /> Proprietress</div>
                 </div>
              </div>
@@ -85,7 +85,7 @@ const Founders = () => {
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Head Teacher</div>
                 </div>
                 <div className="founder-text">
-                   <h2>Mrs <span>Ruth Sankira</span></h2>
+                   <h2><span>Ruth Sankira</span></h2>
                    <p className="founder-role">Head Teacher &amp; Head of Kindergarten, Staff Relations/Operations</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
@@ -102,7 +102,7 @@ const Founders = () => {
           <section className="founder-section reverse animate-fade-in">
              <div className="founder-content">
                 <div className="founder-text">
-                   <h2>Mrs <span>Ozoegwu Onyinye Claire</span></h2>
+                   <h2><span>Ozoegwu Onyinye Claire</span></h2>
                    <p className="founder-role">Administrative Officer</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
@@ -129,7 +129,7 @@ const Founders = () => {
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Program Manager</div>
                 </div>
                 <div className="founder-text">
-                   <h2>Mrs <span>Eggah Freeda</span></h2>
+                   <h2><span>Eggah Freeda</span></h2>
                    <p className="founder-role">School Club/Program Manager (SPC)</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />

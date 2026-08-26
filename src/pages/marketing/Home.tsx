@@ -294,7 +294,7 @@ const Home = () => {
                   <img src="/logo.jpg" alt="Logo" style={{ width: '50px', height: '50px', borderRadius: '50%' }} />
                   <span className="logo-main" style={{ fontSize: '20px' }}>Citadel of Highflyers Int'l Academy</span>
                </div>
-               <p style={{ opacity: 0.8 }}>Foundation for Future Generals. Rock Haven opposite St. Murumba College, Jos North, Nigeria.</p>
+               <p style={{ opacity: 0.8 }}>Foundation for Future Generals. Rock Haven opposite St. Murumba College, Jos, Nigeria.</p>
                <div className="social-links" style={{ display: 'flex', gap: '20px', marginTop: '30px' }}>
                   <a href="https://www.youtube.com/@citadelofhighflyersintlaca7994" target="_blank" rel="noreferrer"><Video size={24} /></a>
                   <a href="https://www.instagram.com/princess_iwunna_321" target="_blank" rel="noreferrer"><Sparkles size={24} /></a>
@@ -311,7 +311,7 @@ const Home = () => {
             </div>
             <div className="footer-contact">
                <h4 style={{ marginBottom: '30px' }}>Get in Touch</h4>
-               <p style={{ marginBottom: '16px' }}>📍 Jos North, Plateau State</p>
+               <p style={{ marginBottom: '16px' }}>📍 Jos, Plateau State</p>
                <p style={{ marginBottom: '16px' }}>📞 +234 706 497 0003</p>
                <p>✉️ citadelofhighflyersintlacademy@gmail.com</p>
             </div>

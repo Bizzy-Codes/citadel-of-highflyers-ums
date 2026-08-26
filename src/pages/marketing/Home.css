@@ -624,21 +624,22 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
-    padding: 10px 15px 14px;
-    border-top: 1px solid var(--glass-border);
+    padding: 4px 15px 10px;
   }
 
+  /* Tinted like the badge/accent chips used elsewhere on this page
+     (not plain white on white-ish glass), so this row reads as a row
+     of branded buttons rather than an empty pale gap under the header. */
   .mobile-quick-nav a {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 7px 13px;
+    padding: 6px 14px;
     border-radius: 50px;
-    background: var(--bg-light);
-    border: 1px solid var(--glass-border);
-    font-size: 12.5px;
+    background: var(--accent);
+    color: var(--primary);
+    font-size: 13px;
     font-weight: 700;
-    color: var(--text-main);
     text-decoration: none;
     white-space: nowrap;
   }
@@ -648,7 +649,7 @@
        nothing here automatically reserves space for it -- this has to
        clear the fixed nav's own height (now two rows) plus its top
        offset by itself. */
-    padding-top: 155px;
+    padding-top: 145px;
     padding-bottom: 60px;
   }
 
@@ -745,13 +746,13 @@
   }
 
   .mobile-quick-nav {
-    padding: 8px 12px 12px;
+    padding: 2px 12px 8px;
     gap: 6px;
   }
 
   .mobile-quick-nav a {
-    padding: 6px 11px;
-    font-size: 12px;
+    padding: 5px 12px;
+    font-size: 12.5px;
   }
 
   .theme-toggle {
