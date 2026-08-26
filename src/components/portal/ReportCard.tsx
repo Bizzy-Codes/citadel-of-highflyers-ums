@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { User, Result, ReportCardData, SubjectStats } from '../../context/AuthContext';
 import { gradeFromScore, commentFromGrade, pointsForRating, GRADING_SYSTEM } from '../../lib/grading';
 import logo from '../../assets/logo.jpg';
@@ -71,8 +72,43 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
   const percentage = totalPossible > 0 ? ((totalScore / totalPossible) * 100).toFixed(1) : '0.0';
   const overall = gradeFromScore(totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0);
 
+  // The subjects table alone has 10 columns of real data (plus the two
+  // domain tables side by side below it) -- there's no column-width
+  // tuning that makes that legible AND scroll-free on a phone. Instead
+  // of fighting that, render the card at its natural, fully-readable
+  // width and scale the whole thing down as one image-like unit to fit
+  // whatever space is actually available, the same way a PDF viewer
+  // fits a page to your screen. Print is unaffected -- the print
+  // stylesheet resets this transform and sizes the card for A4 itself.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+
+    const recompute = () => {
+      const naturalWidth = inner.scrollWidth;
+      const naturalHeight = inner.scrollHeight;
+      if (naturalWidth <= 0) return;
+      const nextScale = Math.min(1, outer.clientWidth / naturalWidth);
+      setScale(nextScale);
+      setScaledHeight(naturalHeight * nextScale);
+    };
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(outer);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [student.id, term, session, results, reportCard, subjectStats]);
+
   return (
-    <div className="report-card">
+    <div ref={outerRef} className="report-card-scale-outer" style={{ height: scaledHeight }}>
+    <div ref={innerRef} className="report-card" style={{ transform: `scale(${scale})` }}>
       <div className="report-card-header">
         <img src={logo} alt="" className="report-card-logo" />
         <div className="report-card-title">
@@ -105,7 +141,6 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
             <th>2nd CA (20)</th>
             <th>Exam (60)</th>
             <th>Total (100)</th>
-            <th>Position</th>
             <th>Lowest</th>
             <th>Average</th>
             <th>Highest</th>
@@ -123,7 +158,6 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
                 <td>{r.ca2 ?? '-'}</td>
                 <td>{r.exam ?? '-'}</td>
                 <td>{r.score}</td>
-                <td>{stats?.classPosition ?? '-'}</td>
                 <td>{stats?.lowest ?? '-'}</td>
                 <td>{stats?.average ?? '-'}</td>
                 <td>{stats?.highest ?? '-'}</td>
@@ -132,7 +166,7 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
               </tr>
             );
           }) : (
-            <tr><td colSpan={11} style={{ textAlign: 'center', padding: '16px' }}>No results recorded for this term yet.</td></tr>
+            <tr><td colSpan={10} style={{ textAlign: 'center', padding: '16px' }}>No results recorded for this term yet.</td></tr>
           )}
         </tbody>
       </table>
@@ -176,6 +210,7 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
           <p className="signature">{reportCard?.classTeacherSignature || ''}</p>
         </div>
       </div>
+    </div>
     </div>
   );
 };

@@ -33,6 +33,7 @@ import AdminAdmissions from './pages/portal/AdminAdmissions'
 import TeacherRegister from './pages/portal/TeacherRegister'
 import StudentAttendance from './pages/portal/StudentAttendance'
 import AdminCalendar from './pages/portal/AdminCalendar'
+import AdminAttendance from './pages/portal/AdminAttendance'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
@@ -152,6 +153,9 @@ function App() {
         } />
         <Route path="/portal/admin/calendar" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminCalendar /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/attendance" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminAttendance /></ProtectedRoute>
         } />
 
         {/* Catch-all */}

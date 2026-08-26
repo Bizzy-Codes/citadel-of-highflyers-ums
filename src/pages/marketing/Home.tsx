@@ -39,47 +39,50 @@ const Home = () => {
 
       {/* Modern Responsive Navigation */}
       <nav className="nav glass">
-        <div className="logo-section">
-          <Link to="/" className="logo-section">
-             <img src="/logo.jpg" alt="Citadel Logo" className="logo-img" />
-             <div className="logo-text">
-               <span className="logo-main glowing-text">Citadel of Highflyers</span>
-               <span className="logo-sub glowing-text">Int'l Academy</span>
-             </div>
-          </Link>
+        <div className="nav-top-row">
+          <div className="logo-section">
+            <Link to="/" className="logo-section">
+               <img src="/logo.jpg" alt="Citadel Logo" className="logo-img" />
+               <div className="logo-text">
+                 <span className="logo-main glowing-text">Citadel of Highflyers</span>
+                 <span className="logo-sub glowing-text">Int'l Academy</span>
+               </div>
+            </Link>
+          </div>
+
+          <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
+            <Link to="/" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Home</Link>
+            <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
+            <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
+            <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
+          </div>
+
+          <div className="nav-actions">
+             <button onClick={toggleTheme} className="theme-toggle">
+              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+             </button>
+             <Link to="/login" className="btn login-btn-ghost">
+               <LogIn size={18} />
+               <span className="login-btn-text-full">Portal Login</span>
+               <span className="login-btn-text-short">Login</span>
+             </Link>
+             <button className="mobile-menu-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+             </button>
+          </div>
         </div>
 
-        <div className={`nav-links ${isMenuOpen ? 'active' : ''}`}>
-          <Link to="/" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Home</Link>
-          <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
-          <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
-          <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
-        </div>
-
-        <div className="nav-actions">
-           <button onClick={toggleTheme} className="theme-toggle">
-            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-           </button>
-           <Link to="/login" className="btn login-btn-ghost">
-             <LogIn size={18} />
-             <span className="login-btn-text-full">Portal Login</span>
-             <span className="login-btn-text-short">Login</span>
-           </Link>
-           <button className="mobile-menu-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-           </button>
+        {/* Always-visible quick links for mobile, living inside the same
+            glass panel as the row above (not floating separately below
+            it) -- the hamburger still opens the full dropdown including
+            Founders. Portal Login isn't repeated here since the pill
+            above is already visible at every width. */}
+        <div className="mobile-quick-nav">
+          <Link to="/"><HomeIcon size={15} /> Home</Link>
+          <Link to="/admissions"><GraduationCap size={15} /> Admissions</Link>
+          <Link to="/gallery"><GalleryIcon size={15} /> Gallery</Link>
         </div>
       </nav>
-
-      {/* Always-visible quick links for mobile -- the hamburger menu above
-          still works and shows the full list, but these key destinations
-          no longer require opening it first. */}
-      <div className="mobile-quick-nav">
-        <Link to="/"><HomeIcon size={15} /> Home</Link>
-        <Link to="/admissions"><GraduationCap size={15} /> Admissions</Link>
-        <Link to="/gallery"><GalleryIcon size={15} /> Gallery</Link>
-        <Link to="/login" className="primary"><LogIn size={15} /> Portal Login</Link>
-      </div>
 
       {/* Hero Section */}
       <section className="hero">

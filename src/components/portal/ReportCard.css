@@ -1,11 +1,23 @@
+.report-card-scale-outer {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
 .report-card {
   background: #fff;
   color: #1a1a1a;
   border: 2px solid #1a1a1a;
   padding: 24px;
   font-size: 12px;
-  max-width: 900px;
+  /* A fixed design width (not max-width) so the card always lays out
+     at its full, comfortably-readable size -- ReportCard.tsx then
+     scales this whole box down with a transform to fit whatever space
+     is actually available, instead of the columns being squeezed or
+     left to overflow off the side of the screen. */
+  width: 900px;
   margin: 0 auto;
+  transform-origin: top left;
 }
 
 .report-card table {
@@ -270,12 +282,19 @@
     font-size: 11px;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    /* Cancel the on-screen fit-to-width transform (a React inline
+       style, so only an !important stylesheet rule can beat it) --
+       print sizes the card for A4 itself via the rules above. */
+    transform: none !important;
   }
 
-  /* The report card sits inside a scrollable card (overflow: auto), which
-     clips the absolutely-positioned .report-card down to almost nothing at
-     print time, producing a blank page. Neutralize any clipping/height
-     constraints up the ancestor chain so the full card can render. */
+  /* The report card sits inside scrollable/height-constrained wrappers
+     (both the scale-to-fit box added in ReportCard.tsx and the scrolling
+     card each page wraps it in), which clip the absolutely-positioned
+     .report-card down to almost nothing at print time, producing a
+     blank page. Neutralize any clipping/height constraints up the
+     ancestor chain so the full card can render. */
+  .report-card-scale-outer,
   .report-card-wrapper {
     overflow: visible !important;
     height: auto !important;

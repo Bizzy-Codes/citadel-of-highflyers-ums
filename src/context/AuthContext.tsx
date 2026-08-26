@@ -335,6 +335,15 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
 }
 
+export interface AttendanceNote {
+  id: string;
+  className: string;
+  studentId: string;
+  weekStart: string;
+  note: string;
+  updatedAt: string;
+}
+
 export interface ExamViolation {
   id: string;
   attemptId: string;
@@ -430,9 +439,11 @@ interface AuthContextType {
   updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null }) => Promise<{ error: string | null }>;
   uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
   getAcademicCalendarDocumentUrl: () => string | null;
-  getClassAttendance: (className: string, date: string) => Promise<AttendanceRecord[]>;
-  markClassAttendance: (className: string, date: string, records: { studentId: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
+  getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
+  markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
   getMyAttendance: () => Promise<AttendanceRecord[]>;
+  getClassAttendanceNotes: (className: string, weekStart: string) => Promise<AttendanceNote[]>;
+  upsertAttendanceNote: (className: string, studentId: string, weekStart: string, note: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -568,6 +579,16 @@ const mapAttendanceRow = (row: any): AttendanceRecord => ({
   studentId: row.student_id,
   attendanceDate: row.attendance_date,
   status: row.status,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAttendanceNoteRow = (row: any): AttendanceNote => ({
+  id: row.id,
+  className: row.class_name,
+  studentId: row.student_id,
+  weekStart: row.week_start,
+  note: row.note,
+  updatedAt: row.updated_at,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1644,17 +1665,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return supabase.storage.from('school-documents').getPublicUrl(academicCalendar.documentPath).data.publicUrl;
   };
 
-  const getClassAttendance = async (className: string, date: string): Promise<AttendanceRecord[]> => {
+  const getClassAttendanceForRange = async (className: string, startDate: string, endDate: string): Promise<AttendanceRecord[]> => {
     const { data, error } = await supabase.from('attendance_records').select('*')
-      .eq('class_name', className).eq('attendance_date', date);
-    if (error) { console.error('getClassAttendance failed', error); return []; }
+      .eq('class_name', className).gte('attendance_date', startDate).lte('attendance_date', endDate);
+    if (error) { console.error('getClassAttendanceForRange failed', error); return []; }
     return (data ?? []).map(mapAttendanceRow);
   };
 
-  const markClassAttendance = async (className: string, date: string, records: { studentId: string; status: AttendanceStatus }[]) => {
+  const markClassAttendanceBulk = async (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => {
     if (!currentUser) return { error: 'Not signed in' };
+    if (records.length === 0) return { error: null };
     const rows = records.map((r) => ({
-      class_name: className, student_id: r.studentId, attendance_date: date,
+      class_name: className, student_id: r.studentId, attendance_date: r.date,
       status: r.status, marked_by: currentUser.id, updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from('attendance_records').upsert(rows, { onConflict: 'student_id,attendance_date' });
@@ -1665,6 +1687,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data, error } = await supabase.from('attendance_records').select('*').order('attendance_date', { ascending: true });
     if (error) { console.error('getMyAttendance failed', error); return []; }
     return (data ?? []).map(mapAttendanceRow);
+  };
+
+  const getClassAttendanceNotes = async (className: string, weekStart: string): Promise<AttendanceNote[]> => {
+    const { data, error } = await supabase.from('attendance_notes').select('*')
+      .eq('class_name', className).eq('week_start', weekStart);
+    if (error) { console.error('getClassAttendanceNotes failed', error); return []; }
+    return (data ?? []).map(mapAttendanceNoteRow);
+  };
+
+  const upsertAttendanceNote = async (className: string, studentId: string, weekStart: string, note: string) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    if (!note.trim()) {
+      const { error } = await supabase.from('attendance_notes').delete()
+        .eq('student_id', studentId).eq('week_start', weekStart);
+      return { error: error?.message ?? null };
+    }
+    const { error } = await supabase.from('attendance_notes').upsert({
+      class_name: className, student_id: studentId, week_start: weekStart,
+      note: note.trim(), updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }, { onConflict: 'student_id,week_start' });
+    return { error: error?.message ?? null };
   };
 
   const exportData = () => {
@@ -1700,7 +1743,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
       academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl,
-      getClassAttendance, markClassAttendance, getMyAttendance,
+      getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance,
+      getClassAttendanceNotes, upsertAttendanceNote,
     }}>
       {children}
     </AuthContext.Provider>

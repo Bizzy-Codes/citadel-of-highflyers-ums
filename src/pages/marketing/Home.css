@@ -30,15 +30,26 @@
   transform: translateX(-50%);
   width: 90%;
   max-width: var(--container-max);
-  height: var(--nav-height);
-  padding: 0 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   border-radius: 50px;
   z-index: 1000;
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  /* Only .nav-top-row is visible above 768px (mobile-quick-nav is
+     display:none there), so this height is effectively just that row's
+     height on desktop -- same look as before this became a column. */
+  height: var(--nav-height);
+  overflow: hidden;
+}
+
+.nav-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-height);
+  padding: 0 30px;
+  flex-shrink: 0;
 }
 
 .logo-section {
@@ -551,8 +562,16 @@
   .nav {
     top: 10px;
     width: 95%;
-    padding: 0 15px;
     border-radius: 20px;
+    /* Two rows now (top-row + mobile-quick-nav) instead of one, so the
+       fixed single-row height from desktop no longer fits -- let it
+       grow to whatever both rows actually need. */
+    height: auto;
+    overflow: visible;
+  }
+
+  .nav-top-row {
+    padding: 0 15px;
   }
 
   .logo-text {
@@ -572,13 +591,18 @@
     display: none;
   }
 
+  /* Positioned relative to .nav itself (top: 100%) rather than a
+     hardcoded nav-height offset -- .nav is no longer a fixed single-row
+     height now that mobile-quick-nav lives inside it, so a calc() here
+     would drift out of sync with the real rendered height. */
   .nav-links.active {
     display: flex;
     flex-direction: column;
     position: absolute;
-    top: calc(var(--nav-height) + 10px);
+    top: 100%;
     left: 0;
     right: 0;
+    margin-top: 10px;
     background: var(--bg-surface);
     padding: 24px;
     border-radius: 20px;
@@ -589,28 +613,28 @@
     animation: fadeIn 0.3s ease-out;
   }
 
-  /* Home/Admissions/Gallery/Login stay visible without opening the
-     hamburger -- the hamburger (still present) opens the same full
-     list for anyone who prefers it. Sits in normal flow right below
-     the fixed nav, so .hero no longer needs a tall padding-top to
-     clear the nav on its own. */
+  /* Home/Admissions/Gallery stay visible without opening the hamburger
+     -- the hamburger (still present) opens the same full list
+     (including Founders) for anyone who prefers it. Portal Login isn't
+     repeated here since the pill in .nav-top-row is already visible.
+     Lives inside the same glass .nav panel as the row above it, so it
+     reads as one control cluster instead of a second floating bar. */
   .mobile-quick-nav {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
-    margin: calc(var(--nav-height) + 24px) auto 0;
-    padding: 0 16px;
-    max-width: var(--container-max);
+    padding: 10px 15px 14px;
+    border-top: 1px solid var(--glass-border);
   }
 
   .mobile-quick-nav a {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
+    padding: 7px 13px;
     border-radius: 50px;
-    background: var(--bg-surface);
+    background: var(--bg-light);
     border: 1px solid var(--glass-border);
     font-size: 12.5px;
     font-weight: 700;
@@ -619,14 +643,12 @@
     white-space: nowrap;
   }
 
-  .mobile-quick-nav a.primary {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-  }
-
   .hero {
-    padding-top: 30px;
+    /* .nav is position:fixed (out of document flow), so unlike before,
+       nothing here automatically reserves space for it -- this has to
+       clear the fixed nav's own height (now two rows) plus its top
+       offset by itself. */
+    padding-top: 155px;
     padding-bottom: 60px;
   }
 
@@ -714,12 +736,22 @@
     font-size: 28px;
   }
 
-  .nav {
+  .nav-top-row {
     padding: 0 12px;
   }
 
   .nav-actions {
     gap: 8px;
+  }
+
+  .mobile-quick-nav {
+    padding: 8px 12px 12px;
+    gap: 6px;
+  }
+
+  .mobile-quick-nav a {
+    padding: 6px 11px;
+    font-size: 12px;
   }
 
   .theme-toggle {
