@@ -325,7 +325,7 @@ export interface AcademicCalendar {
   updatedAt: string;
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'late';
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'holiday';
 
 export interface AttendanceRecord {
   id: string;
@@ -442,6 +442,7 @@ interface AuthContextType {
   getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
   getMyAttendance: () => Promise<AttendanceRecord[]>;
+  getStudentAttendance: (studentId: string) => Promise<AttendanceRecord[]>;
   getClassAttendanceNotes: (className: string, weekStart: string) => Promise<AttendanceNote[]>;
   upsertAttendanceNote: (className: string, studentId: string, weekStart: string, note: string) => Promise<{ error: string | null }>;
 }
@@ -1689,6 +1690,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (data ?? []).map(mapAttendanceRow);
   };
 
+  // For admins (any pupil) and teachers (their own class, per RLS) to
+  // pull one pupil's full attendance history -- getMyAttendance() only
+  // ever returns the signed-in user's own records.
+  const getStudentAttendance = async (studentId: string): Promise<AttendanceRecord[]> => {
+    const { data, error } = await supabase.from('attendance_records').select('*')
+      .eq('student_id', studentId).order('attendance_date', { ascending: true });
+    if (error) { console.error('getStudentAttendance failed', error); return []; }
+    return (data ?? []).map(mapAttendanceRow);
+  };
+
   const getClassAttendanceNotes = async (className: string, weekStart: string): Promise<AttendanceNote[]> => {
     const { data, error } = await supabase.from('attendance_notes').select('*')
       .eq('class_name', className).eq('week_start', weekStart);
@@ -1743,7 +1754,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
       academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl,
-      getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance,
+      getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance, getStudentAttendance,
       getClassAttendanceNotes, upsertAttendanceNote,
     }}>
       {children}

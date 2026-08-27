@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, type AttendanceRecord } from '../../context/AuthContext';
+import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
+import { summarizeAttendance } from '../../lib/attendance';
 import {
   Calendar,
   TrendingUp,
@@ -15,7 +18,7 @@ import './Dashboard.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, assignments, mySubmissions } = useAuth();
+  const { currentUser, assignments, mySubmissions, academicCalendar, getMyAttendance } = useAuth();
   const results = currentUser?.results ?? [];
 
   const averageGrade = results.length > 0
@@ -24,8 +27,19 @@ const Dashboard = () => {
 
   const pendingAssignments = assignments.filter((a) => !mySubmissions[a.id]);
 
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  useEffect(() => {
+    getMyAttendance().then(setAttendanceRecords);
+  }, [getMyAttendance]);
+  const attendanceSummary = summarizeAttendance(attendanceRecords, academicCalendar?.totalWeeks);
+  const hasCalendar = !!academicCalendar?.termStartDate;
+
   const stats = [
-    { label: "Attendance", value: "N/A", icon: <CheckCircle2 className="success" />, trend: "Attendance tracking not yet implemented" },
+    {
+      label: "Attendance", icon: <CheckCircle2 className="success" />,
+      value: hasCalendar ? `${attendanceSummary.percentage}%` : "N/A",
+      trend: hasCalendar ? `${attendanceSummary.present} of ${attendanceSummary.totalSchoolDays} school days` : "Set once the term calendar is published",
+    },
     { label: "Average Score", value: averageGrade !== null ? `${averageGrade}%` : "No results yet", icon: <TrendingUp className="primary" />, trend: `${results.length} subject(s) this term` },
     { label: "Upcoming Exams", value: "N/A", icon: <Calendar className="warning" />, trend: "Exam calendar not yet implemented" },
     { label: "Pending Fees", value: "N/A", icon: <AlertCircle className="success" />, trend: "Fee tracking not yet implemented" },
@@ -172,6 +186,18 @@ const Dashboard = () => {
                   <span>9:00 AM - 4:00 PM</span>
                 </div>
               </div>
+            </section>
+
+            {/* Attendance */}
+            <section className="card glass" style={{ padding: '20px' }}>
+              <div className="card-header">
+                <h3>My Attendance</h3>
+                <CheckCircle2 size={18} />
+              </div>
+              <AttendanceSummaryCard summary={attendanceSummary} hasCalendar={hasCalendar} compact />
+              <button className="btn btn-outline sm" style={{ width: '100%', marginTop: '14px' }} onClick={() => navigate('/portal/attendance')}>
+                View Full Attendance
+              </button>
             </section>
           </div>
         </div>

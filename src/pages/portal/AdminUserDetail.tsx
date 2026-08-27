@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type PaymentReceipt } from '../../context/AuthContext';
+import { useAuth, type PaymentReceipt, type AttendanceRecord } from '../../context/AuthContext';
+import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
+import { summarizeAttendance } from '../../lib/attendance';
 import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff } from 'lucide-react';
 
 const CLASSES = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
@@ -28,7 +30,7 @@ const AdminUserDetail = () => {
   const navigate = useNavigate();
   const {
     students, staff, updateUser, adminSetPassword, deleteUser, approveTeacher,
-    getAllPaymentReceipts, getPaymentReceiptUrl,
+    getAllPaymentReceipts, getPaymentReceiptUrl, getStudentAttendance, academicCalendar,
   } = useAuth();
 
   const user = [...students, ...staff].find((u) => u.id === userId);
@@ -45,6 +47,9 @@ const AdminUserDetail = () => {
 
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [loadingReceipts, setLoadingReceipts] = useState(true);
+
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -69,6 +74,16 @@ const AdminUserDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user || user.role !== 'student') { setLoadingAttendance(false); return; }
+    setLoadingAttendance(true);
+    getStudentAttendance(user.id).then((records) => {
+      setAttendanceRecords(records);
+      setLoadingAttendance(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   if (!user) {
     return (
       <PortalLayout title="User Not Found">
@@ -82,6 +97,7 @@ const AdminUserDetail = () => {
 
   const isStudent = user.role === 'student';
   const getInitials = (name: string) => name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+  const attendanceSummary = summarizeAttendance(attendanceRecords, academicCalendar?.totalWeeks);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,6 +276,17 @@ const AdminUserDetail = () => {
               </button>
             </form>
           </div>
+
+          {isStudent && (
+            <div className="card glass" style={{ padding: '28px', borderRadius: '24px', gridColumn: '1 / -1' }}>
+              <h3 style={{ marginBottom: '16px' }}>Attendance Record</h3>
+              {loadingAttendance ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}><Loader2 className="animate-spin" /></div>
+              ) : (
+                <AttendanceSummaryCard summary={attendanceSummary} hasCalendar={!!academicCalendar?.termStartDate} />
+              )}
+            </div>
+          )}
 
           {isStudent && (
             <div className="card glass" style={{ padding: '28px', borderRadius: '24px', gridColumn: '1 / -1' }}>

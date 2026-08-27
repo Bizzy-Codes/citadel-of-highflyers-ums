@@ -1,12 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceRecord, type AttendanceStatus } from '../../context/AuthContext';
-import { CheckCircle2, XCircle, Clock3, FileText, CalendarClock } from 'lucide-react';
+import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
+import { summarizeAttendance } from '../../lib/attendance';
+import { CheckCircle2, XCircle, Clock3, CalendarOff, FileText, CalendarClock } from 'lucide-react';
 
 const STATUS_META: Record<AttendanceStatus, { label: string; color: string; icon: ReactNode }> = {
   present: { label: 'Present', color: 'var(--success)', icon: <CheckCircle2 size={14} /> },
   absent: { label: 'Absent', color: 'var(--error)', icon: <XCircle size={14} /> },
   late: { label: 'Late', color: 'var(--warning)', icon: <Clock3 size={14} /> },
+  holiday: { label: 'Holiday', color: 'var(--primary)', icon: <CalendarOff size={14} /> },
 };
 
 const addDays = (isoDate: string, days: number) => {
@@ -37,6 +40,8 @@ const StudentAttendance = () => {
 
   const documentUrl = getAcademicCalendarDocumentUrl();
   const isPdf = academicCalendar?.documentName?.toLowerCase().endsWith('.pdf');
+  const summary = summarizeAttendance(records, academicCalendar?.totalWeeks);
+  const hasCalendar = !!academicCalendar?.termStartDate;
 
   const weeks: Week[] = [];
   if (academicCalendar?.termStartDate) {
@@ -72,6 +77,13 @@ const StudentAttendance = () => {
           )}
         </div>
 
+        {!loading && (
+          <div className="card glass" style={{ padding: '24px', borderRadius: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px' }}>Term Summary</h3>
+            <AttendanceSummaryCard summary={summary} hasCalendar={hasCalendar} />
+          </div>
+        )}
+
         {loading ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px' }}>Loading attendance...</p>
         ) : !academicCalendar?.termStartDate ? (
@@ -85,6 +97,7 @@ const StudentAttendance = () => {
               const presentCount = week.records.filter((r) => r.status === 'present').length;
               const absentCount = week.records.filter((r) => r.status === 'absent').length;
               const lateCount = week.records.filter((r) => r.status === 'late').length;
+              const holidayCount = week.records.filter((r) => r.status === 'holiday').length;
               return (
                 <div
                   key={week.weekNumber}
@@ -103,7 +116,7 @@ const StudentAttendance = () => {
                     </div>
                     {week.records.length > 0 && (
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {presentCount} present · {lateCount} late · {absentCount} absent
+                        {presentCount} present · {lateCount} late · {absentCount} absent{holidayCount > 0 ? ` · ${holidayCount} holiday` : ''}
                       </p>
                     )}
                   </div>

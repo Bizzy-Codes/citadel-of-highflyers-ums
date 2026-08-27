@@ -67,7 +67,7 @@ const AdminAttendance = () => {
   }, [className, week?.weekStart, getClassAttendanceForRange, getClassAttendanceNotes]);
 
   const dayTotals = week?.days.map((d) => {
-    const counts: Record<AttendanceStatus, number> = { present: 0, absent: 0, late: 0 };
+    const counts: Record<AttendanceStatus, number> = { present: 0, absent: 0, late: 0, holiday: 0 };
     classStudents.forEach((s) => {
       const status = grid[s.id]?.[d.date];
       if (status) counts[status] += 1;
@@ -113,7 +113,8 @@ const AdminAttendance = () => {
                   {' -- '}
                   <span style={{ color: 'var(--success)' }}>{counts.present}P</span>{' '}
                   <span style={{ color: 'var(--error)' }}>{counts.absent}A</span>{' '}
-                  <span style={{ color: 'var(--warning)' }}>{counts.late}L</span>
+                  <span style={{ color: 'var(--warning)' }}>{counts.late}L</span>{' '}
+                  <span style={{ color: 'var(--primary)' }}>{counts.holiday}H</span>
                 </div>
               ))}
             </div>

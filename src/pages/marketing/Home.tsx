@@ -84,6 +84,16 @@ const Home = () => {
         </div>
       </nav>
 
+      {/* Everything except .nav lives in here. .nav needs to stay a
+          fixed-to-viewport element -- but position:fixed inside an
+          overflow-hidden ancestor gets scoped to that ancestor instead
+          of the real viewport in most browsers, which is exactly what
+          was making the header appear to scroll away with the page.
+          Keeping the overflow-x clip (still needed to guard against any
+          stray horizontal overflow further down the page) on this
+          wrapper instead of .home-container keeps .nav outside of it. */}
+      <div className="home-scroll-content">
+
       {/* Hero Section */}
       <section className="hero">
         <div className="container hero-content">
@@ -320,6 +330,7 @@ const Home = () => {
             <p>&copy; {new Date().getFullYear()} Citadel of Highflyers Int'l Academy. Built for Future Generals.</p>
          </div>
       </footer>
+      </div>
     </div>
   );
 };

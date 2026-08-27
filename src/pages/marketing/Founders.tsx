@@ -34,16 +34,19 @@ const Founders = () => {
                    <div className="founder-badge founder-1"><Sparkles size={16} /> Founder</div>
                 </div>
                 <div className="founder-text">
-                   <h2>Pastor Ambassador <span>Chrispraise Iwunna</span></h2>
-                   <p className="founder-role">Founder & Visionary</p>
+                   <h2>Pastor <span>Chrispraise Iwunna</span></h2>
+                   <p className="founder-role">Founder & Visionary &middot; United Nations Peace Ambassador</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
                       <p>Our vision is to build a foundation where every child is not just a pupil, but a 'Future General' equipped with character, competence, and compassion.</p>
                    </div>
                    <p className="description text-muted">
-                      Pastor Ambassador Chrispraise Iwunna is a spiritual leader and a visionary dedicated to educational excellence in Jos. With years of experience in youth mentorship and leadership, his focus at Citadel of Highflyers is to ensure that every pupil discovers their divine potential...
+                      Pastor Chrispraise Iwunna is a spiritual leader, visionary, and United Nations Peace Ambassador dedicated to educational excellence in Jos. With over 15 years of experience in family building and marriage coaching, alongside a deep, ongoing commitment to children's ministry, his focus at Citadel of Highflyers is to ensure that every pupil discovers their divine potential...
                    </p>
                    <div className="founder-awards">
+                      <div className="award-item"><Award size={18} /> United Nations Peace Ambassador</div>
+                      <div className="award-item"><Award size={18} /> 15+ Years in Family Building & Marriage Coaching</div>
+                      <div className="award-item"><Award size={18} /> Children's Ministry Leadership</div>
                       <div className="award-item"><Award size={18} /> Leadership Excellence 2023</div>
                       <div className="award-item"><Award size={18} /> Community Impact Award</div>
                    </div>
@@ -55,15 +58,22 @@ const Founders = () => {
           <section className="founder-section reverse animate-fade-in" style={{ animationDelay: '0.2s' }}>
              <div className="founder-content">
                 <div className="founder-text">
-                   <h2>P.Ambassador <span>Iwunna Princess</span></h2>
-                   <p className="founder-role">Proprietress & Lead Educator</p>
+                   <h2>Ambassador <span>Iwunna Princess</span></h2>
+                   <p className="founder-role">Proprietress & Lead Educator &middot; United Nations Peace Ambassador</p>
                    <div className="quote-box glass-purple">
                       <Quote className="quote-icon" />
                       <p>At Citadel, we believe in the 'Total Child'. We nurture the mind, the heart, and the hands to create a holistic learning experience.</p>
                    </div>
                    <p className="description text-muted">
-                      Ambassador Iwunna Princess is the heart of Citadel's operations. Her passion for early childhood education and primary school development has made Citadel of Highflyers a top-tier institution in Jos. She oversees the day-to-day academic and emotional well-being of every pupil...
+                      Ambassador Iwunna Princess is the heart of Citadel's operations and a United Nations Peace Ambassador. She holds a Postgraduate Diploma in Education from the National Teachers' Institute, an International Diploma in Education from the University of Buckingham, and is TEFL and TOEFL certified, alongside a B.Sc. in Accountancy from Enugu State University of Science and Technology. Her passion for early childhood education and primary school development has made Citadel of Highflyers a top-tier institution in Jos. She oversees the day-to-day academic and emotional well-being of every pupil...
                    </p>
+                   <div className="founder-awards">
+                      <div className="award-item"><Award size={18} /> United Nations Peace Ambassador</div>
+                      <div className="award-item"><Award size={18} /> International Diploma in Education -- University of Buckingham</div>
+                      <div className="award-item"><Award size={18} /> Postgraduate Diploma in Education -- National Teachers' Institute</div>
+                      <div className="award-item"><Award size={18} /> TEFL & TOEFL Certified</div>
+                      <div className="award-item"><Award size={18} /> B.Sc. Accountancy -- Enugu State University of Science and Technology</div>
+                   </div>
                    <div className="founder-actions">
                       <a href="https://www.instagram.com/princess_iwunna_321" target="_blank" rel="noopener noreferrer" className="btn btn-outline sm">Follow on Instagram @princess_iwunna_321</a>
                    </div>

@@ -7,7 +7,7 @@ import { STATUS_META, computeWeeksInMonth, monthOptions, todayIso, formatShort }
 // Click cycles a cell through the same states a paper register uses,
 // landing back on blank so a mistake is one more click away, not a
 // separate "clear" control.
-const CYCLE: (AttendanceStatus | undefined)[] = ['present', 'absent', 'late', undefined];
+const CYCLE: (AttendanceStatus | undefined)[] = ['present', 'absent', 'late', 'holiday', undefined];
 const nextStatus = (current: AttendanceStatus | undefined) => CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
 
 const TeacherRegister = () => {
@@ -186,7 +186,7 @@ const TeacherRegister = () => {
             {markedThisWeek} of {possibleThisWeek} slots marked for {className} this week.
           </p>
           <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-            <Info size={13} /> Tap a cell to cycle Present &rarr; Absent &rarr; Late &rarr; blank. Tap a day's name to mark the whole class present for that day. Use the note icon to leave a reason or report the admin can see.
+            <Info size={13} /> Tap a cell to cycle Present &rarr; Absent &rarr; Late &rarr; Holiday &rarr; blank. Tap a day's name to mark the whole class present for that day. Use the note icon to leave a reason or report the admin can see.
           </p>
           {saved && <p style={{ color: 'var(--success)', fontSize: '13px', marginTop: '8px', fontWeight: '600' }}>Register saved.</p>}
         </div>

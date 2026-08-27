@@ -1,4 +1,4 @@
-import type { AttendanceStatus } from '../context/AuthContext';
+import type { AttendanceStatus, AttendanceRecord } from '../context/AuthContext';
 
 export const todayIso = () => new Date().toISOString().slice(0, 10);
 export const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -11,6 +11,7 @@ export const STATUS_META: Record<AttendanceStatus, { label: string; short: strin
   present: { label: 'Present', short: 'P', color: 'var(--success)' },
   absent: { label: 'Absent', short: 'A', color: 'var(--error)' },
   late: { label: 'Late', short: 'L', color: 'var(--warning)' },
+  holiday: { label: 'Holiday', short: 'H', color: 'var(--primary)' },
 };
 
 export interface RegisterWeek {
@@ -37,6 +38,40 @@ export const computeWeeksInMonth = (year: number, month: number): RegisterWeek[]
     weeks[weeks.length - 1].days.push({ date, day: d, weekdayName: WEEKDAY_NAMES[weekday - 1] });
   }
   return weeks;
+};
+
+export interface AttendanceSummary {
+  totalSchoolDays: number; // the whole term's expected weekdays, from the academic calendar's week count
+  present: number;
+  absent: number;
+  late: number;
+  holiday: number;
+  percentage: number; // present / totalSchoolDays, 0 if the calendar isn't set up yet
+  absentDates: string[];
+  lateDates: string[];
+  holidayDates: string[];
+}
+
+// The academic calendar only stores a week count, not a day count --
+// this is the one place "13 weeks" becomes "65 school days" (weekdays
+// only, matching the register). Present/absent/late/holiday counts
+// come from whatever's actually been marked so far, which is why the
+// numerator grows over the term while the denominator (the calendar's
+// total) stays fixed.
+export const summarizeAttendance = (records: AttendanceRecord[], totalWeeks: number | undefined): AttendanceSummary => {
+  const totalSchoolDays = (totalWeeks ?? 0) * 5;
+  let present = 0, absent = 0, late = 0, holiday = 0;
+  const absentDates: string[] = [];
+  const lateDates: string[] = [];
+  const holidayDates: string[] = [];
+  for (const r of records) {
+    if (r.status === 'present') present += 1;
+    else if (r.status === 'absent') { absent += 1; absentDates.push(r.attendanceDate); }
+    else if (r.status === 'late') { late += 1; lateDates.push(r.attendanceDate); }
+    else if (r.status === 'holiday') { holiday += 1; holidayDates.push(r.attendanceDate); }
+  }
+  const percentage = totalSchoolDays > 0 ? Math.round((present / totalSchoolDays) * 100) : 0;
+  return { totalSchoolDays, present, absent, late, holiday, percentage, absentDates, lateDates, holidayDates };
 };
 
 export interface MonthOption { key: string; year: number; month: number; label: string }
