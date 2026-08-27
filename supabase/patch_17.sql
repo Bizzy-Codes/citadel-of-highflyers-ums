@@ -43,4 +43,15 @@ create policy "admins view all attendance notes"
   on public.attendance_notes for select
   using (public.current_role() = 'admin');
 
-alter publication supabase_realtime add table public.attendance_notes;
+-- Plain ALTER PUBLICATION ... ADD TABLE has no "if not exists" form and
+-- errors (42710) if this patch is ever re-run after already succeeding
+-- once -- guard it so re-running the file is always safe.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'attendance_notes'
+  ) then
+    alter publication supabase_realtime add table public.attendance_notes;
+  end if;
+end $$;
