@@ -256,6 +256,18 @@
   .dashboard-main-content { grid-template-columns: 1fr; }
 }
 
+/* Tablet/landscape sizing. The 48px banner padding, 32px heading and
+   80px emoji were laptop-scale and made the dashboard feel blown up
+   and loosely spaced on an iPad. */
+@media (max-width: 1100px) {
+  .dashboard-grid { gap: 22px; }
+  .welcome-banner { padding: 28px; }
+  .welcome-text h1 { font-size: 24px; margin-bottom: 8px; }
+  .welcome-text p { font-size: 14px; margin-bottom: 18px; }
+  .welcome-illustration { font-size: 52px; }
+  .stat-value { font-size: 26px; }
+}
+
 @media (max-width: 640px) {
   .stats-row { grid-template-columns: 1fr; }
   .welcome-banner { flex-direction: column; text-align: center; gap: 20px; }

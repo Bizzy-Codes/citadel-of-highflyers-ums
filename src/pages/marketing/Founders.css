@@ -187,10 +187,21 @@
   .reverse .founder-content {
     flex-direction: column;
   }
+  /* The alternating desktop layout puts the text first in the markup
+     for every second person, so stacking in source order left those
+     ones (Iwunna Princess, Ozoegwu Onyinye Claire) showing their
+     write-up above their photo while everyone else showed the photo
+     first. Ordering the photo explicitly makes the sequence identical
+     for all of them: picture, then write-up. */
   .founder-image-wrapper {
     flex: 0 0 100%;
     width: 100%;
     max-width: 500px;
+    order: -1;
+  }
+
+  .founder-text {
+    order: 0;
   }
   .founders-nav {
      padding: 10px 20px;

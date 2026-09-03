@@ -8,6 +8,11 @@ const Messages = () => {
   const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
+  // The notifications table's RLS already lets teachers post ("staff
+  // write notifications" covers admin and teacher) -- the form was just
+  // hidden from them, which left the teacher dashboard's "New
+  // Announcement" button with nowhere useful to go.
+  const canPostAnnouncements = isAdmin || currentUser?.role === 'teacher';
   const forcedView = (location.state as { view?: 'chats' | 'notifications' | 'whatsapp' } | null)?.view;
   const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(forcedView ?? (isAdmin ? 'whatsapp' : 'notifications'));
 
@@ -148,7 +153,7 @@ const Messages = () => {
                    {isAdmin && <span className="badge" style={{ background: 'var(--primary)', color: 'white' }}>Admin View</span>}
                 </div>
 
-                {isAdmin && (
+                {canPostAnnouncements && (
                   <form onSubmit={handlePostNotification} className="blend-bg" style={{ padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                      <h4 style={{ fontSize: '15px' }}>Post New Announcement</h4>
                      <input

@@ -430,7 +430,7 @@ interface AuthContextType {
   getMyAttemptForTest: (testId: string) => Promise<TestAttempt | null>;
   getAttemptById: (attemptId: string) => Promise<TestAttempt | null>;
   startTestAttempt: (testId: string) => Promise<{ error: string | null; attemptId?: string; expiresAt?: string }>;
-  getAttemptQuestions: (attemptId: string) => Promise<AttemptQuestion[]>;
+  getAttemptQuestions: (attemptId: string) => Promise<{ questions: AttemptQuestion[]; error: string | null }>;
   saveTestAnswer: (attemptId: string, questionId: string, answer: { selectedOption?: string; essayText?: string }) => Promise<{ error: string | null }>;
   submitTestAttempt: (attemptId: string) => Promise<{ error: string | null; score?: number; maxScore?: number; status?: string }>;
   recordTestViolation: (attemptId: string) => Promise<{ error: string | null; violationCount?: number; status?: string }>;
@@ -1475,10 +1475,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null, attemptId: row.attempt_id as string, expiresAt: row.expires_at as string };
   };
 
-  const getAttemptQuestions = async (attemptId: string): Promise<AttemptQuestion[]> => {
+  // Returns the error alongside the questions rather than swallowing it
+  // -- a failure here used to leave the pupil staring at a blank test
+  // page with nothing on it and no explanation.
+  const getAttemptQuestions = async (attemptId: string): Promise<{ questions: AttemptQuestion[]; error: string | null }> => {
     const { data, error } = await supabase.rpc('get_attempt_questions', { p_attempt_id: attemptId });
-    if (error) { console.error('getAttemptQuestions failed', error); return []; }
-    return (data ?? []).map(mapAttemptQuestionRow);
+    if (error) { console.error('getAttemptQuestions failed', error); return { questions: [], error: error.message }; }
+    return { questions: (data ?? []).map(mapAttemptQuestionRow), error: null };
   };
 
   const saveTestAnswer = async (attemptId: string, questionId: string, answer: { selectedOption?: string; essayText?: string }) => {

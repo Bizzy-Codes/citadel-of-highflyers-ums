@@ -37,7 +37,12 @@ const TeacherDashboard = () => {
               <p>Manage your class{currentUser?.assignedClass ? ` (${currentUser.assignedClass})` : ''} below.</p>
            </div>
            <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn btn-primary sm"><Plus size={18} /> New Announcement</button>
+              <button
+                className="btn btn-primary sm"
+                onClick={() => navigate('/portal/messages', { state: { view: 'notifications' } })}
+              >
+                <Plus size={18} /> New Announcement
+              </button>
            </div>
         </section>
 

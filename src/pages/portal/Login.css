@@ -214,6 +214,27 @@
   font-weight: 600;
 }
 
+/* Short viewports -- an iPad in landscape is only 768px tall, and the
+   laptop-scale card came to ~790px with its top offset, so it overflowed
+   and had to be scrolled just to reach the Sign In button. */
+@media (max-height: 850px) {
+  .login-card {
+    padding: 28px 32px;
+  }
+
+  .login-header {
+    margin-bottom: 20px;
+  }
+
+  .login-header h1 {
+    font-size: 22px;
+  }
+
+  .back-link {
+    margin-bottom: 14px;
+  }
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 32px 22px;

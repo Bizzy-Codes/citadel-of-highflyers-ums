@@ -23,6 +23,7 @@ const TestTaking = () => {
 
   const [attempt, setAttempt] = useState<TestAttempt | null>(null);
   const [questions, setQuestions] = useState<AttemptQuestion[]>([]);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, AnswerDraft>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -42,7 +43,8 @@ const TestTaking = () => {
     if (!a) { setLoading(false); return; }
     setAttempt(a);
     if (a.status === 'in_progress') {
-      const qs = await getAttemptQuestions(attemptId);
+      const { questions: qs, error: loadError } = await getAttemptQuestions(attemptId);
+      setQuestionsError(loadError);
       setQuestions(qs);
       const drafts: Record<string, AnswerDraft> = {};
       qs.forEach((q) => { drafts[q.questionId] = { selectedOption: q.selectedOption, essayText: q.essayText }; });
@@ -171,6 +173,23 @@ const TestTaking = () => {
       </div>
 
       <div className="test-taking-questions">
+        {questions.length === 0 && (
+          <div className="card glass" style={{ padding: '40px', textAlign: 'center' }}>
+            <h3 style={{ marginBottom: '10px' }}>No questions to show</h3>
+            {questionsError ? (
+              <>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  This test couldn't be loaded, so there's nothing to answer yet. Please tell your teacher what it says below.
+                </p>
+                <p style={{ color: 'var(--error)', fontSize: '13px', fontWeight: 600 }}>{questionsError}</p>
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)' }}>
+                Your teacher hasn't added any questions to this test yet. Let them know, then try again.
+              </p>
+            )}
+          </div>
+        )}
         {questions.map((q, i) => (
           <div key={q.questionId} ref={(el) => { questionRefs.current[q.questionId] = el; }} className="card glass test-question-block">
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
