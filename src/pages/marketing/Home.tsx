@@ -55,6 +55,21 @@ const Home = () => {
             <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
             <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
             <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
+            <button onClick={toggleTheme} className="nav-links-theme-toggle">
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+              {theme === 'light' ? 'Dark mode' : 'Light mode'}
+            </button>
+          </div>
+
+          {/* Key destinations, inline on the same line as the logo and
+              login button rather than stacked on a second row below --
+              the hamburger still opens the full list (Founders included)
+              plus the theme toggle for phones, where there isn't room to
+              keep that toggle in the bar itself. */}
+          <div className="mobile-quick-nav">
+            <Link to="/"><HomeIcon size={14} /> <span>Home</span></Link>
+            <Link to="/admissions"><GraduationCap size={14} /> <span>Admissions</span></Link>
+            <Link to="/gallery"><GalleryIcon size={14} /> <span>Gallery</span></Link>
           </div>
 
           <div className="nav-actions">
@@ -70,17 +85,6 @@ const Home = () => {
                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
              </button>
           </div>
-        </div>
-
-        {/* Always-visible quick links for mobile, living inside the same
-            glass panel as the row above (not floating separately below
-            it) -- the hamburger still opens the full dropdown including
-            Founders. Portal Login isn't repeated here since the pill
-            above is already visible at every width. */}
-        <div className="mobile-quick-nav">
-          <Link to="/"><HomeIcon size={15} /> Home</Link>
-          <Link to="/admissions"><GraduationCap size={15} /> Admissions</Link>
-          <Link to="/gallery"><GalleryIcon size={15} /> Gallery</Link>
         </div>
       </nav>
 

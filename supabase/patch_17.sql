@@ -19,7 +19,7 @@ create table if not exists public.attendance_notes (
 
 create index if not exists attendance_notes_class_week_idx on public.attendance_notes (class_name, week_start);
 
-alter table public.attendance_notes enable row level security;
+alter table public.attendance_notes  enable row level security;
 grant select, insert, update, delete on public.attendance_notes to authenticated;
 
 drop policy if exists "students view own attendance notes" on public.attendance_notes;

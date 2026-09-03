@@ -4,7 +4,10 @@
   --container-max: 1280px;
   --glass: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.4);
-  --accent: #f3e8ff;
+  /* Was #f3e8ff -- so pale it read as white, which flattened the badge
+     pills, theme toggle and the whole "Why Citadel" section wash into
+     looking colourless. Matches the app-wide accent in index.css. */
+  --accent: #E9D5FF;
   --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
@@ -43,22 +46,20 @@
   z-index: 1000;
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(12px);
-  display: flex;
-  flex-direction: column;
-  /* Only .nav-top-row is visible above 768px (mobile-quick-nav is
-     display:none there), so this height is effectively just that row's
-     height on desktop -- same look as before this became a column. */
   height: var(--nav-height);
-  overflow: hidden;
 }
 
+/* One row at every screen size -- logo, links and actions all sit on
+   the same line. The quick-links were previously a second row stacked
+   underneath, which read as a separate broken-off bar with a large
+   empty gap rather than one header. */
 .nav-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--nav-height);
+  height: 100%;
   padding: 0 30px;
-  flex-shrink: 0;
+  gap: 12px;
 }
 
 .logo-section {
@@ -80,16 +81,22 @@
   flex-direction: column;
 }
 
+/* Brand purple in light mode. Dark mode's .glowing-text rule sets
+   white !important, so that still wins there and the glow is unchanged
+   -- this only fills in the light-mode case, where the header was
+   otherwise entirely black text on white. */
 .logo-main {
   font-weight: 800;
   font-size: 18px;
   line-height: 1;
+  color: var(--primary);
 }
 
 .logo-sub {
   font-size: 12px;
   font-weight: 600;
   opacity: 0.8;
+  color: var(--secondary);
 }
 
 .nav-links {
@@ -121,6 +128,10 @@
   width: 100%;
 }
 
+.nav-links a:hover {
+  color: var(--primary);
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
@@ -129,6 +140,22 @@
 
 .mobile-quick-nav {
   display: none;
+}
+
+/* Lives in the hamburger dropdown, where it replaces the round toggle
+   that gets hidden from the bar itself on phones for want of room. */
+.nav-links-theme-toggle {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-main);
+  font-family: inherit;
 }
 
 .theme-toggle {
@@ -575,26 +602,22 @@
   .nav {
     top: 10px;
     width: 95%;
-    border-radius: 20px;
-    /* Two rows now (top-row + mobile-quick-nav) instead of one, so the
-       fixed single-row height from desktop no longer fits -- let it
-       grow to whatever both rows actually need. */
-    height: auto;
-    overflow: visible;
+    border-radius: 18px;
   }
 
   .nav-top-row {
-    padding: 0 15px;
+    padding: 0 10px;
+    gap: 6px;
   }
 
   .logo-img {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
   }
 
   .theme-toggle {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
   }
 
   .logo-text {
@@ -614,10 +637,8 @@
     display: none;
   }
 
-  /* Positioned relative to .nav itself (top: 100%) rather than a
-     hardcoded nav-height offset -- .nav is no longer a fixed single-row
-     height now that mobile-quick-nav lives inside it, so a calc() here
-     would drift out of sync with the real rendered height. */
+  /* Positioned relative to .nav itself (top: 100%) so it always sits
+     just under the bar regardless of the bar's rendered height. */
   .nav-links.active {
     display: flex;
     flex-direction: column;
@@ -636,46 +657,42 @@
     animation: fadeIn 0.3s ease-out;
   }
 
-  /* Home/Admissions/Gallery stay visible without opening the hamburger
-     -- the hamburger (still present) opens the same full list
-     (including Founders) for anyone who prefers it. Portal Login isn't
-     repeated here since the pill in .nav-top-row is already visible.
-     Lives inside the same glass .nav panel as the row above it, so it
-     reads as one control cluster instead of a second floating bar. */
+  /* Home/Admissions/Gallery inline in the bar itself, centred between
+     the logo and the login button. No wrapping -- if it can't fit on
+     the line it shrinks (see the 480px block) rather than dropping to
+     a second row, which is what made the header look broken in two. */
   .mobile-quick-nav {
     display: flex;
-    flex-wrap: wrap;
+    flex: 1;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 6px;
-    padding: 0 12px 8px;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
   }
 
-  /* Tinted like the badge/accent chips used elsewhere on this page
-     (not plain white on white-ish glass), so this row reads as a row
-     of branded buttons rather than an empty pale gap under the header.
-     Padding is tight around the label on purpose -- the chip should be
-     sized to its text, not leave a visibly larger blank margin around it. */
+  /* Tinted with the brand accent rather than plain white on white-ish
+     glass, so these read as branded buttons sitting on the bar. */
   .mobile-quick-nav a {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 11px;
+    gap: 4px;
+    padding: 5px 9px;
     border-radius: 50px;
     background: var(--accent);
     color: var(--primary);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
-    line-height: 1.3;
+    line-height: 1.2;
     text-decoration: none;
     white-space: nowrap;
   }
 
   .hero {
-    /* .nav is position:fixed (out of document flow), so unlike before,
-       nothing here automatically reserves space for it -- this has to
-       clear the fixed nav's own height (now two rows) plus its top
-       offset by itself. */
-    padding-top: 115px;
+    /* .nav is position:fixed (out of document flow), so nothing here
+       automatically reserves space for it -- this has to clear the
+       fixed bar's height plus its top offset by itself. */
+    padding-top: 90px;
     padding-bottom: 60px;
   }
 
@@ -764,16 +781,42 @@
   }
 
   .nav-top-row {
-    padding: 0 12px;
+    padding: 0 8px;
+    gap: 4px;
   }
 
   .nav-actions {
-    gap: 8px;
+    gap: 6px;
   }
 
+  /* A phone can't fit logo + three links + theme toggle + login +
+     hamburger on one line, and the links and login button matter more
+     here -- the toggle moves into the hamburger dropdown instead. */
   .theme-toggle {
-    width: 34px;
-    height: 34px;
+    display: none;
+  }
+
+  .nav-links.active .nav-links-theme-toggle {
+    display: flex;
+  }
+
+  /* At phone widths the three labels plus their icons are wider than
+     the space between the logo and the login button, and the chips
+     spill over both. The words are what actually needs to be readable
+     here, so the icons drop out and the labels stay. */
+  .mobile-quick-nav a {
+    padding: 5px 8px;
+    font-size: 10.5px;
+    gap: 0;
+  }
+
+  .mobile-quick-nav a svg {
+    display: none;
+  }
+
+  .logo-img {
+    width: 28px;
+    height: 28px;
   }
 }
 
