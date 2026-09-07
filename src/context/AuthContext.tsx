@@ -325,7 +325,7 @@ export interface AcademicCalendar {
   updatedAt: string;
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'holiday';
+export type AttendanceStatus = 'present' | 'absent' | 'holiday';
 
 export interface AttendanceRecord {
   id: string;
@@ -339,7 +339,7 @@ export interface AttendanceNote {
   id: string;
   className: string;
   studentId: string;
-  weekStart: string;
+  noteDate: string; // the specific school day this note is about
   note: string;
   updatedAt: string;
 }
@@ -443,8 +443,8 @@ interface AuthContextType {
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
   getMyAttendance: () => Promise<AttendanceRecord[]>;
   getStudentAttendance: (studentId: string) => Promise<AttendanceRecord[]>;
-  getClassAttendanceNotes: (className: string, weekStart: string) => Promise<AttendanceNote[]>;
-  upsertAttendanceNote: (className: string, studentId: string, weekStart: string, note: string) => Promise<{ error: string | null }>;
+  getClassAttendanceNotes: (className: string, fromDate: string, toDate: string) => Promise<AttendanceNote[]>;
+  upsertAttendanceNote: (className: string, studentId: string, noteDate: string, note: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -587,7 +587,7 @@ const mapAttendanceNoteRow = (row: any): AttendanceNote => ({
   id: row.id,
   className: row.class_name,
   studentId: row.student_id,
-  weekStart: row.week_start,
+  noteDate: row.note_date,
   note: row.note,
   updatedAt: row.updated_at,
 });
@@ -1703,24 +1703,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (data ?? []).map(mapAttendanceRow);
   };
 
-  const getClassAttendanceNotes = async (className: string, weekStart: string): Promise<AttendanceNote[]> => {
+  const getClassAttendanceNotes = async (className: string, fromDate: string, toDate: string): Promise<AttendanceNote[]> => {
     const { data, error } = await supabase.from('attendance_notes').select('*')
-      .eq('class_name', className).eq('week_start', weekStart);
+      .eq('class_name', className).gte('note_date', fromDate).lte('note_date', toDate);
     if (error) { console.error('getClassAttendanceNotes failed', error); return []; }
     return (data ?? []).map(mapAttendanceNoteRow);
   };
 
-  const upsertAttendanceNote = async (className: string, studentId: string, weekStart: string, note: string) => {
+  const upsertAttendanceNote = async (className: string, studentId: string, noteDate: string, note: string) => {
     if (!currentUser) return { error: 'Not signed in' };
     if (!note.trim()) {
       const { error } = await supabase.from('attendance_notes').delete()
-        .eq('student_id', studentId).eq('week_start', weekStart);
+        .eq('student_id', studentId).eq('note_date', noteDate);
       return { error: error?.message ?? null };
     }
     const { error } = await supabase.from('attendance_notes').upsert({
-      class_name: className, student_id: studentId, week_start: weekStart,
+      class_name: className, student_id: studentId, note_date: noteDate,
       note: note.trim(), updated_by: currentUser.id, updated_at: new Date().toISOString(),
-    }, { onConflict: 'student_id,week_start' });
+    }, { onConflict: 'student_id,note_date' });
     return { error: error?.message ?? null };
   };
 

@@ -3,12 +3,11 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceRecord, type AttendanceStatus } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
 import { summarizeAttendance } from '../../lib/attendance';
-import { CheckCircle2, XCircle, Clock3, CalendarOff, FileText, CalendarClock } from 'lucide-react';
+import { CheckCircle2, XCircle, CalendarOff, FileText, CalendarClock } from 'lucide-react';
 
 const STATUS_META: Record<AttendanceStatus, { label: string; color: string; icon: ReactNode }> = {
   present: { label: 'Present', color: 'var(--success)', icon: <CheckCircle2 size={14} /> },
   absent: { label: 'Absent', color: 'var(--error)', icon: <XCircle size={14} /> },
-  late: { label: 'Late', color: 'var(--warning)', icon: <Clock3 size={14} /> },
   holiday: { label: 'Holiday', color: 'var(--primary)', icon: <CalendarOff size={14} /> },
 };
 
@@ -96,7 +95,6 @@ const StudentAttendance = () => {
             {weeks.map((week) => {
               const presentCount = week.records.filter((r) => r.status === 'present').length;
               const absentCount = week.records.filter((r) => r.status === 'absent').length;
-              const lateCount = week.records.filter((r) => r.status === 'late').length;
               const holidayCount = week.records.filter((r) => r.status === 'holiday').length;
               return (
                 <div
@@ -116,7 +114,7 @@ const StudentAttendance = () => {
                     </div>
                     {week.records.length > 0 && (
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {presentCount} present · {lateCount} late · {absentCount} absent{holidayCount > 0 ? ` · ${holidayCount} holiday` : ''}
+                        {presentCount} present · {absentCount} absent{holidayCount > 0 ? ` · ${holidayCount} holiday` : ''}
                       </p>
                     )}
                   </div>
