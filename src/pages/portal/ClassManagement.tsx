@@ -16,7 +16,7 @@ import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 
 const ClassManagement = () => {
   const { className } = useParams();
-  const { students, addResult, promoteStudent, addNotification, getReportCard, upsertReportCard } = useAuth();
+  const { students, addResult, promoteStudent, addNotification, getReportCard, upsertReportCard, subjectsByClass } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [isAddingResult, setIsAddingResult] = useState(false);
@@ -252,14 +252,23 @@ const ClassManagement = () => {
                 <form onSubmit={handleAddResult} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                    <div className="input-group">
                       <label>Subject Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Mathematics" 
-                        value={newResult.subject}
-                        onChange={e => setNewResult({...newResult, subject: e.target.value})}
-                        required
-                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                      />
+                      {(subjectsByClass[className || ''] || []).length > 0 ? (
+                        <select
+                          value={newResult.subject}
+                          onChange={e => setNewResult({...newResult, subject: e.target.value})}
+                          required
+                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        >
+                          <option value="">-- Select a subject --</option>
+                          {(subjectsByClass[className || ''] || []).map((sub) => (
+                            <option key={sub} value={sub}>{sub}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '12px', borderRadius: '10px', background: 'var(--bg-light)', border: '1px dashed var(--glass-border)' }}>
+                          No subjects defined for {className}. Go to User Management &gt; Subjects to add them.
+                        </div>
+                      )}
                    </div>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
