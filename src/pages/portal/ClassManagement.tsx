@@ -54,6 +54,8 @@ const ClassManagement = () => {
   const handleAddResult = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedStudent && newResult.subject) {
+      const score = ca1Num + ca2Num + examNum;
+      const gradeInfo = gradeFromScore(score);
       await addResult(selectedStudent.id, {
         subject: newResult.subject,
         term: newResult.term,
@@ -61,6 +63,8 @@ const ClassManagement = () => {
         ca1: ca1Num,
         ca2: ca2Num,
         exam: examNum,
+        score,
+        grade: gradeInfo.grade,
       });
 
       await addNotification({
@@ -112,6 +116,7 @@ const ClassManagement = () => {
         // OCR only gives a single total, not a CA/exam breakdown, so it
         // all goes into "exam" -- the printed report just shows blank
         // CA columns for these subjects until a teacher fills them in.
+        const gradeInfo = gradeFromScore(item.score);
         await addResult(selectedStudent.id, {
           subject: item.subject,
           term: '1st Term', // Default or could be selected
@@ -119,6 +124,8 @@ const ClassManagement = () => {
           ca1: 0,
           ca2: 0,
           exam: item.score,
+          score: item.score,
+          grade: gradeInfo.grade,
         });
       }
 
