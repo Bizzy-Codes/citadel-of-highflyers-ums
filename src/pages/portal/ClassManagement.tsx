@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type Result, type ReportCardData, type User } from '../../context/AuthContext';
 import { gradeFromScore, RATING_OPTIONS } from '../../lib/grading';
+import { getSuggestedComments, addCommentToHistory } from '../../lib/commentHistory';
 import {
   Plus,
   FileText,
@@ -10,7 +11,9 @@ import {
   Sparkles,
   Search,
   ArrowUpCircle,
-  ClipboardList
+  ClipboardList,
+  Save,
+  AlertCircle
 } from 'lucide-react';
 import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 
@@ -45,6 +48,10 @@ const ClassManagement = () => {
   const [reportCardTerm, setReportCardTerm] = useState<Result['term']>('1st Term');
   const [reportCardSession, setReportCardSession] = useState('2023/2024');
   const [reportCard, setReportCard] = useState<ReportCardData>({});
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [classTeacherSuggestions, setClassTeacherSuggestions] = useState<string[]>([]);
+  const [headmasterSuggestions, setHeadmasterSuggestions] = useState<string[]>([]);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout>();
 
   const classStudents = students.filter(s => s.grade === className && (
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -82,12 +89,58 @@ const ClassManagement = () => {
     setSelectedStudent(student);
     const existing = await getReportCard(student.id, reportCardTerm, reportCardSession);
     setReportCard(existing ?? {});
+    setAutoSaveStatus('idle');
+    setClassTeacherSuggestions(getSuggestedComments('classTeacher'));
+    setHeadmasterSuggestions(getSuggestedComments('headmaster'));
     setIsEditingReportCard(true);
   };
+
+  // Auto-save report card on changes
+  useEffect(() => {
+    if (!isEditingReportCard || !selectedStudent) return;
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    setAutoSaveStatus('saving');
+
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
+        // Save comments to history
+        if (reportCard.classTeacherComment) {
+          addCommentToHistory('classTeacher', reportCard.classTeacherComment);
+        }
+        if (reportCard.headmasterComment) {
+          addCommentToHistory('headmaster', reportCard.headmasterComment);
+        }
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      } catch (error) {
+        setAutoSaveStatus('idle');
+      }
+    }, 1500); // Auto-save after 1.5 seconds of inactivity
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [reportCard, isEditingReportCard, selectedStudent, reportCardTerm, reportCardSession, upsertReportCard]);
 
   const handleSaveReportCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent) return;
+
+    // Save comments to history
+    if (reportCard.classTeacherComment) {
+      addCommentToHistory('classTeacher', reportCard.classTeacherComment);
+    }
+    if (reportCard.headmasterComment) {
+      addCommentToHistory('headmaster', reportCard.headmasterComment);
+    }
+
     await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
     await addNotification({
       title: "Report Card Updated",
@@ -457,24 +510,94 @@ const ClassManagement = () => {
                       ))}
                    </div>
 
-                   <h4 style={{ marginTop: '8px' }}>Comments & Signatures</h4>
+                   <h4 style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     Comments & Signatures
+                     {autoSaveStatus === 'saving' && (
+                       <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>saving...</span>
+                     )}
+                     {autoSaveStatus === 'saved' && (
+                       <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                         <Save size={12} /> saved
+                       </span>
+                     )}
+                   </h4>
                    <div className="input-group">
                       <label>Head Master's Comment</label>
                       <input
                         type="text"
+                        placeholder="Enter comment..."
                         value={reportCard.headmasterComment ?? ''}
                         onChange={e => setReportCard({...reportCard, headmasterComment: e.target.value})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
+                      {headmasterSuggestions.length > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <p style={{ margin: '0 0 4px' }}>Recently used:</p>
+                          {headmasterSuggestions.slice(0, 3).map((suggestion, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setReportCard({...reportCard, headmasterComment: suggestion})}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 8px',
+                                margin: '2px 0',
+                                background: 'var(--bg-light)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                color: 'var(--text-main)',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-light)')}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                    </div>
                    <div className="input-group">
                       <label>Class Teacher's Comment</label>
                       <input
                         type="text"
+                        placeholder="Enter comment..."
                         value={reportCard.classTeacherComment ?? ''}
                         onChange={e => setReportCard({...reportCard, classTeacherComment: e.target.value})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
+                      {classTeacherSuggestions.length > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <p style={{ margin: '0 0 4px' }}>Recently used:</p>
+                          {classTeacherSuggestions.slice(0, 3).map((suggestion, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setReportCard({...reportCard, classTeacherComment: suggestion})}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 8px',
+                                margin: '2px 0',
+                                background: 'var(--bg-light)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                color: 'var(--text-main)',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-light)')}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                    </div>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
