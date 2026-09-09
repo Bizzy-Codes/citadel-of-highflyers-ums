@@ -259,68 +259,99 @@
 
 @media print {
   @page {
-    size: A4;
-    margin: 8mm;
+    size: A4 portrait;
+    /* The only page margin -- the card adds no extra padding at print
+       time (see below), so it is never doubled up. */
+    margin: 10mm;
   }
 
+  /* Show ONLY the report card. visibility (not display) is used so the
+     card keeps its place in the document while everything around it
+     goes blank -- combined with the absolute positioning below, the
+     card then prints from the top-left of the page. */
   body * {
     visibility: hidden;
   }
-  .report-card, .report-card * {
+  .report-card,
+  .report-card * {
     visibility: visible;
   }
+
+  /* The fixed sidebar / header have no report-card content -- drop them
+     completely so a fixed box can't overlay the printed page. */
+  .portal-sidebar,
+  .portal-header,
+  .sidebar-overlay {
+    display: none !important;
+  }
+
+  /* Flatten the ancestor chain. The bug: .report-card was positioned
+     against .report-card-scale-outer (position: relative), which lives
+     inside .portal-main (margin-left: 280px) -- so the card printed
+     shifted right and clipped across two pages. Forcing every ancestor
+     to static / full-width / no-offset / no-transform makes the
+     absolute card below resolve against the PAGE instead. */
+  html, body,
+  #root,
+  .portal-root,
+  .portal-main,
+  .sidebar-closed .portal-main,
+  .portal-content,
+  .portal-content > .animate-fade-in,
+  .animate-fade-in,
+  .report-card-wrapper,
+  .report-card-scale-outer {
+    position: static !important;
+    animation: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    background: #fff !important;
+  }
+
   .report-card {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    max-width: 100%;
-    border: none;
-    padding: 8mm;
-    font-size: 10px;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    font-size: 9.5px;
+    display: flex;
+    flex-direction: column;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     /* Cancel the on-screen fit-to-width transform (a React inline
-       style, so only an !important stylesheet rule can beat it) --
-       print sizes the card for A4 itself via the rules above. */
+       style, so only an !important stylesheet rule can beat it). */
     transform: none !important;
   }
 
-  /* The report card sits inside scrollable/height-constrained wrappers
-     (both the scale-to-fit box added in ReportCard.tsx and the scrolling
-     card each page wraps it in), which clip the absolutely-positioned
-     .report-card down to almost nothing at print time, producing a
-     blank page. Neutralize any clipping/height constraints up the
-     ancestor chain so the full card can render. */
-  .report-card-scale-outer,
-  .report-card-wrapper {
-    overflow: visible !important;
-    height: auto !important;
-    max-height: none !important;
-    padding: 0 !important;
-  }
+  /* Tighten spacing so the whole card lands on a single A4 page. */
+  .report-card-header { padding-bottom: 6px; margin-bottom: 8px; }
+  .report-card-student-info,
+  .report-card-subjects,
+  .report-card-domains,
+  .report-card-summary { margin-bottom: 8px; }
+  .report-card th,
+  .report-card td { padding: 2px 4px; }
 
-  /* Prevent page breaks inside sections to keep content together */
-  .report-card-table,
+  /* Keep related blocks from splitting across a page break. */
+  .report-card-header,
+  .report-card-student-info,
   .report-card-domains,
   .report-card-summary,
-  .report-card-footer,
-  .report-card-student-info,
-  .report-card-header {
+  .report-card-footer {
     break-inside: avoid;
   }
-
   .report-card-subjects tr {
     break-inside: avoid;
-  }
-
-  /* Ensure footer always stays at bottom and doesn't get cut off */
-  .report-card {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .report-card-footer {
-    page-break-inside: avoid;
   }
 }
