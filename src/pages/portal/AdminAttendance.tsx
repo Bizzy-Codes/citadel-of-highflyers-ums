@@ -18,7 +18,10 @@ const AdminAttendance = () => {
   const currentMonthKey = `${today.slice(0, 4)}-${today.slice(5, 7)}`;
 
   const [className, setClassName] = useState(CLASSES[5]); // Grade 1, a sane default
-  const [monthKey, setMonthKey] = useState(MONTH_OPTIONS.some((o) => o.key === currentMonthKey) ? currentMonthKey : MONTH_OPTIONS[MONTH_OPTIONS.length - 1].key);
+  // The "month" picker was removed -- the Week dropdown covers navigation.
+  // monthKey is still derived from today as the week-numbering fallback
+  // for when no term start date is set.
+  const [monthKey] = useState(MONTH_OPTIONS.some((o) => o.key === currentMonthKey) ? currentMonthKey : MONTH_OPTIONS[MONTH_OPTIONS.length - 1].key);
   const selectedMonth = MONTH_OPTIONS.find((o) => o.key === monthKey) ?? MONTH_OPTIONS[MONTH_OPTIONS.length - 1];
 
   // Same continuous term-week numbering the teacher's register uses, so
@@ -103,12 +106,6 @@ const AdminAttendance = () => {
               </select>
             </div>
             <div className="input-group">
-              <label>Month</label>
-              <select value={monthKey} onChange={(e) => setMonthKey(e.target.value)} style={inputStyle}>
-                {MONTH_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="input-group">
               <label>Week</label>
               <select value={weekIndex} onChange={(e) => setWeekIndex(Number(e.target.value))} style={inputStyle}>
                 {weeks.map((w, i) => (
@@ -144,32 +141,32 @@ const AdminAttendance = () => {
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', border: '2px solid var(--glass-border)' }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left', padding: '12px 16px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--glass-border)', minWidth: '160px' }}>
+                    <th style={{ textAlign: 'left', padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', minWidth: '160px' }}>
                       Pupil
                     </th>
                     {week.days.map(({ date, day, weekdayName }) => (
-                      <th key={date} style={{ padding: '10px 6px', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
+                      <th key={date} style={{ padding: '10px 6px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{weekdayName.slice(0, 3)}</div>
                         <div style={{ fontSize: '13px', fontWeight: 700 }}>{day}</div>
                       </th>
                     ))}
-                    <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>Note</th>
+                    <th style={{ textAlign: 'left', padding: '12px 16px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>Note</th>
                   </tr>
                 </thead>
                 <tbody>
                   {classStudents.map((student, rowIdx) => (
                     <tr key={student.id} style={{ background: rowIdx % 2 === 0 ? 'transparent' : 'var(--bg-light)' }}>
-                      <td style={{ padding: '10px 16px', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', borderBottom: '1px solid var(--glass-border)' }}>
+                      <td style={{ padding: '10px 16px', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', border: '1px solid var(--glass-border)' }}>
                         {student.name}
                       </td>
                       {week.days.map(({ date }) => {
                         const status = grid[student.id]?.[date];
                         const meta = status ? STATUS_META[status] : null;
                         return (
-                          <td key={date} style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid var(--glass-border)' }}>
+                          <td key={date} style={{ padding: '4px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
                             <span
                               style={{
                                 display: 'inline-flex', width: '30px', height: '30px', borderRadius: '8px', alignItems: 'center', justifyContent: 'center',
@@ -182,7 +179,7 @@ const AdminAttendance = () => {
                           </td>
                         );
                       })}
-                      <td style={{ padding: '8px 16px', fontSize: '12px', color: 'var(--text-muted)', borderBottom: '1px solid var(--glass-border)', maxWidth: '300px' }}>
+                      <td style={{ padding: '8px 16px', fontSize: '12px', color: 'var(--text-muted)', border: '1px solid var(--glass-border)', maxWidth: '300px' }}>
                         {(() => {
                           const dayNotes = week.days
                             .map((d) => ({ d, text: notes[student.id]?.[d.date]?.trim() }))

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceStatus } from '../../context/AuthContext';
-import { Save, Loader2, Info, MessageSquarePlus, Check, X, Sun, CalendarDays } from 'lucide-react';
+import { Save, Loader2, Info, MessageSquarePlus, CalendarDays } from 'lucide-react';
 import { STATUS_META, computeTermWeeks, computeWeeksInMonth, monthOptions, todayIso, formatShort } from '../../lib/attendance';
 
 // Click cycles a cell through the same states a paper register uses,
@@ -10,10 +10,13 @@ import { STATUS_META, computeTermWeeks, computeWeeksInMonth, monthOptions, today
 const CYCLE: (AttendanceStatus | undefined)[] = ['present', 'absent', 'holiday', undefined];
 const nextStatus = (current: AttendanceStatus | undefined) => CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
 
-const CELL_ICON: Record<AttendanceStatus, React.ReactNode> = {
-  present: <Check size={17} strokeWidth={3.5} />,
-  absent: <X size={17} strokeWidth={3.5} />,
-  holiday: <Sun size={16} strokeWidth={3} />,
+// Back to the paper-register shorthand: a single bold letter per cell
+// (P / A / H) instead of an icon, so a teacher reads the column the
+// same way they would a printed sheet.
+const CELL_LETTER: Record<AttendanceStatus, string> = {
+  present: 'P',
+  absent: 'A',
+  holiday: 'H',
 };
 
 const TeacherRegister = () => {
@@ -23,10 +26,13 @@ const TeacherRegister = () => {
   } = useAuth();
   const className = currentUser?.assignedClass;
 
+  // The "jump to month" picker was removed -- the Week dropdown already
+  // covers navigation. The month key is still derived (from today) as
+  // the fallback for numbering weeks when no term start date is set.
   const MONTH_OPTIONS = useMemo(monthOptions, []);
   const today = todayIso();
   const currentMonthKey = `${today.slice(0, 4)}-${today.slice(5, 7)}`;
-  const [monthKey, setMonthKey] = useState(MONTH_OPTIONS.some((o) => o.key === currentMonthKey) ? currentMonthKey : MONTH_OPTIONS[MONTH_OPTIONS.length - 1].key);
+  const [monthKey] = useState(MONTH_OPTIONS.some((o) => o.key === currentMonthKey) ? currentMonthKey : MONTH_OPTIONS[MONTH_OPTIONS.length - 1].key);
   const selectedMonth = MONTH_OPTIONS.find((o) => o.key === monthKey) ?? MONTH_OPTIONS[MONTH_OPTIONS.length - 1];
 
   // Week numbers run 1..totalWeeks straight through the term, so the
@@ -193,12 +199,6 @@ const TeacherRegister = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <div className="input-group">
-                <label>Jump to month</label>
-                <select value={monthKey} onChange={(e) => setMonthKey(e.target.value)} style={selectStyle}>
-                  {MONTH_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="input-group">
                 <label>Week</label>
                 <select value={weekIndex} onChange={(e) => setWeekIndex(Number(e.target.value))} style={selectStyle}>
                   {weeks.map((w, i) => (
@@ -212,8 +212,12 @@ const TeacherRegister = () => {
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
                 {(Object.keys(STATUS_META) as AttendanceStatus[]).map((s) => (
-                  <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: STATUS_META[s].color, display: 'inline-block' }} />
+                  <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{
+                      width: '18px', height: '18px', borderRadius: '5px', background: STATUS_META[s].color,
+                      color: 'white', fontSize: '11px', fontWeight: 800,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>{CELL_LETTER[s]}</span>
                     {STATUS_META[s].label}
                   </span>
                 ))}
@@ -278,7 +282,7 @@ const TeacherRegister = () => {
             {markedThisWeek} of {possibleThisWeek} slots marked for {className} this week.
           </p>
           <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-            <Info size={13} /> Tap a cell to cycle Present &rarr; Absent &rarr; Holiday &rarr; blank. Tap a day's name to mark the whole class present for that day. The note icon opens a box for each day, so you can record something for Monday and something different for Tuesday.
+            <Info size={13} /> Tap a cell to cycle P (Present) &rarr; A (Absent) &rarr; H (Holiday) &rarr; blank. Tap a day's name to mark the whole class present for that day. The note icon opens a box for each day, so you can record something for Monday and something different for Tuesday.
           </p>
           {!termStart && (
             <p style={{ fontSize: '12px', color: 'var(--warning)', marginTop: '6px' }}>
@@ -295,16 +299,16 @@ const TeacherRegister = () => {
             <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px' }}>No pupils in {className} yet.</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <table style={{ borderCollapse: 'collapse', width: '100%', border: '2px solid var(--glass-border)' }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left', padding: '12px 16px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--glass-border)', minWidth: '160px' }}>
+                    <th style={{ textAlign: 'left', padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--glass-border)', minWidth: '160px' }}>
                       Pupil
                     </th>
                     {week.days.map(({ date, day, weekdayName }) => {
                       const isFuture = date > today;
                       return (
-                        <th key={date} style={{ padding: 0, borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
+                        <th key={date} style={{ padding: 0, border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>
                           <button
                             type="button"
                             disabled={isFuture}
@@ -326,17 +330,18 @@ const TeacherRegister = () => {
                         </th>
                       );
                     })}
-                    <th style={{ padding: '12px', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>Notes</th>
+                    <th style={{ padding: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}>Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {classStudents.map((student, rowIdx) => {
                     const open = openNoteFor === student.id;
                     const count = noteCount(student.id);
+                    const cellBorder = '1px solid var(--glass-border)';
                     return (
                       <Fragment key={student.id}>
                         <tr style={{ background: rowIdx % 2 === 0 ? 'transparent' : 'var(--bg-light)' }}>
-                          <td style={{ padding: '10px 16px', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', borderBottom: open ? 'none' : '1px solid var(--glass-border)' }}>
+                          <td style={{ padding: '10px 16px', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', border: cellBorder, borderBottom: open ? 'none' : cellBorder }}>
                             {student.name}
                           </td>
                           {week.days.map(({ date }) => {
@@ -344,7 +349,7 @@ const TeacherRegister = () => {
                             const meta = status ? STATUS_META[status] : null;
                             const isFuture = date > today;
                             return (
-                              <td key={date} style={{ padding: '5px', textAlign: 'center', borderBottom: open ? 'none' : '1px solid var(--glass-border)' }}>
+                              <td key={date} style={{ padding: '5px', textAlign: 'center', border: cellBorder, borderBottom: open ? 'none' : cellBorder, background: isFuture ? 'var(--bg-surface)' : undefined }}>
                                 <button
                                   type="button"
                                   disabled={isFuture}
@@ -352,8 +357,9 @@ const TeacherRegister = () => {
                                   title={meta?.label ?? 'Not marked'}
                                   aria-label={`${student.name}, ${formatShort(date)}: ${meta?.label ?? 'not marked'}`}
                                   style={{
-                                    width: '34px', height: '34px', borderRadius: '9px',
+                                    width: '36px', height: '36px', borderRadius: '8px',
                                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '15px', fontWeight: 800, letterSpacing: '0.5px',
                                     border: meta ? `2px solid ${meta.color}` : '2px dashed var(--glass-border)',
                                     background: meta ? meta.color : 'transparent',
                                     color: meta ? 'white' : 'var(--text-muted)',
@@ -362,12 +368,12 @@ const TeacherRegister = () => {
                                     transition: 'background 120ms ease, border-color 120ms ease',
                                   }}
                                 >
-                                  {status ? CELL_ICON[status] : null}
+                                  {status ? CELL_LETTER[status] : ''}
                                 </button>
                               </td>
                             );
                           })}
-                          <td style={{ padding: '4px 12px', textAlign: 'center', borderBottom: open ? 'none' : '1px solid var(--glass-border)' }}>
+                          <td style={{ padding: '4px 12px', textAlign: 'center', border: cellBorder, borderBottom: open ? 'none' : cellBorder }}>
                             <button
                               type="button"
                               className="icon-btn"
@@ -388,7 +394,7 @@ const TeacherRegister = () => {
                         </tr>
                         {open && (
                           <tr style={{ background: rowIdx % 2 === 0 ? 'transparent' : 'var(--bg-light)' }}>
-                            <td colSpan={week.days.length + 2} style={{ padding: '4px 16px 16px', borderBottom: '1px solid var(--glass-border)' }}>
+                            <td colSpan={week.days.length + 2} style={{ padding: '4px 16px 16px', border: cellBorder }}>
                               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 10px' }}>
                                 Daily notes for {student.name} - one box per school day.
                               </p>
