@@ -1,89 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type Result, type ReportCardData, type User } from '../../context/AuthContext';
-import { gradeFromScore, RATING_OPTIONS } from '../../lib/grading';
+import { RATING_OPTIONS } from '../../lib/grading';
+import { getSuggestedComments, addCommentToHistory } from '../../lib/commentHistory';
 import {
-  Plus,
-  FileText,
   CheckCircle,
   Sparkles,
   Search,
   ArrowUpCircle,
-  ClipboardList
+  ClipboardList,
+  Save
 } from 'lucide-react';
 import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 
 const ClassManagement = () => {
   const { className } = useParams();
-  const { students, addResult, promoteStudent, addNotification, getReportCard, upsertReportCard } = useAuth();
+  const { students, saveSubjectResults, promoteStudent, addNotification, getReportCard, upsertReportCard, academicCalendar } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
-  const [isAddingResult, setIsAddingResult] = useState(false);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [isEditingReportCard, setIsEditingReportCard] = useState(false);
 
-  // Modal state for manual result entry -- CA1/CA2/Exam breakdown,
-  // matching the official report sheet; total and grade are computed
-  // from these rather than entered directly. The scores are kept as
-  // raw strings (not numbers) so the field can actually sit empty
-  // while a teacher is typing -- binding a number input straight to a
-  // number state means clearing it always snaps back to a literal "0"
-  // (Number('') is 0), and clicking into a field that already shows
-  // "0" often lands the cursor before it, so typing "5" produces "50"
-  // instead of replacing it. Converted to a number only where a score
-  // is actually needed (the total below, and on submit).
-  const BLANK_RESULT = { subject: '', term: '1st Term' as Result['term'], session: '2023/2024', ca1: '', ca2: '', exam: '' };
-  const [newResult, setNewResult] = useState(BLANK_RESULT);
-  const ca1Num = Number(newResult.ca1) || 0;
-  const ca2Num = Number(newResult.ca2) || 0;
-  const examNum = Number(newResult.exam) || 0;
-
-  // Modal state for the per-term report card fields (remarks, domain
-  // ratings, signatures) that live alongside but separate from
-  // per-subject results.
-  const [reportCardTerm, setReportCardTerm] = useState<Result['term']>('1st Term');
-  const [reportCardSession, setReportCardSession] = useState('2023/2024');
+  // Term and session come from the Academic Calendar -- never typed in
+  // per pupil. Subject scores are entered on the Report Cards page
+  // now; this screen manages the pupil list, the report-card remarks/
+  // ratings, promotions, and the AI result scan.
+  const reportCardTerm: Result['term'] = academicCalendar?.currentTerm ?? '1st Term';
+  const reportCardSession = academicCalendar?.currentSession ?? '';
   const [reportCard, setReportCard] = useState<ReportCardData>({});
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [classTeacherSuggestions, setClassTeacherSuggestions] = useState<string[]>([]);
+  const [headmasterSuggestions, setHeadmasterSuggestions] = useState<string[]>([]);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const classStudents = students.filter(s => s.grade === className && (
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   ));
 
-  const handleAddResult = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedStudent && newResult.subject) {
-      await addResult(selectedStudent.id, {
-        subject: newResult.subject,
-        term: newResult.term,
-        session: newResult.session,
-        ca1: ca1Num,
-        ca2: ca2Num,
-        exam: examNum,
-      });
-
-      await addNotification({
-        title: "Result Added",
-        message: `New result for ${selectedStudent.name} in ${newResult.subject} has been uploaded.`,
-        type: 'success'
-      });
-
-      setIsAddingResult(false);
-      setNewResult(BLANK_RESULT);
-    }
-  };
-
   const openReportCard = async (student: User) => {
     setSelectedStudent(student);
     const existing = await getReportCard(student.id, reportCardTerm, reportCardSession);
     setReportCard(existing ?? {});
+    setAutoSaveStatus('idle');
+    setClassTeacherSuggestions(getSuggestedComments('classTeacher'));
+    setHeadmasterSuggestions(getSuggestedComments('headmaster'));
     setIsEditingReportCard(true);
   };
+
+  // Auto-save report card on changes
+  useEffect(() => {
+    if (!isEditingReportCard || !selectedStudent) return;
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    setAutoSaveStatus('saving');
+
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
+        // Save comments to history
+        if (reportCard.classTeacherComment) {
+          addCommentToHistory('classTeacher', reportCard.classTeacherComment);
+        }
+        if (reportCard.headmasterComment) {
+          addCommentToHistory('headmaster', reportCard.headmasterComment);
+        }
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      } catch (error) {
+        setAutoSaveStatus('idle');
+      }
+    }, 1500); // Auto-save after 1.5 seconds of inactivity
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [reportCard, isEditingReportCard, selectedStudent, reportCardTerm, reportCardSession, upsertReportCard]);
 
   const handleSaveReportCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudent) return;
+
+    // Save comments to history
+    if (reportCard.classTeacherComment) {
+      addCommentToHistory('classTeacher', reportCard.classTeacherComment);
+    }
+    if (reportCard.headmasterComment) {
+      addCommentToHistory('headmaster', reportCard.headmasterComment);
+    }
+
     await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
     await addNotification({
       title: "Report Card Updated",
@@ -107,30 +118,24 @@ const ClassManagement = () => {
   };
 
   const handleExtractedResults = async (extracted: { subject: string; score: number }[]) => {
-    if (selectedStudent) {
-      for (const item of extracted) {
-        // OCR only gives a single total, not a CA/exam breakdown, so it
-        // all goes into "exam" -- the printed report just shows blank
-        // CA columns for these subjects until a teacher fills them in.
-        await addResult(selectedStudent.id, {
-          subject: item.subject,
-          term: '1st Term', // Default or could be selected
-          session: '2023/2024',
-          ca1: 0,
-          ca2: 0,
-          exam: item.score,
-        });
-      }
+    if (!selectedStudent) return;
+    if (!reportCardSession) { alert('Set the Current Session on the Academic Calendar page first.'); return; }
+    // OCR only gives a single total, not a CA/exam breakdown, so it all
+    // goes into "exam" -- the printed report shows blank CA columns for
+    // these subjects until a teacher fills them in on the Report Cards
+    // page. Term/session come from the Academic Calendar.
+    const rows = extracted.map((item) => ({ subject: item.subject, ca1: 0, ca2: 0, exam: item.score }));
+    const { error } = await saveSubjectResults(selectedStudent.id, reportCardTerm, reportCardSession, rows);
+    if (error) { alert('Failed to save scanned results: ' + error); return; }
 
-      await addNotification({
-        title: "AI Extraction Success",
-        message: `Automatically extracted ${extracted.length} results for ${selectedStudent.name}.`,
-        type: 'success'
-      });
+    await addNotification({
+      title: "AI Extraction Success",
+      message: `Automatically extracted ${extracted.length} results for ${selectedStudent.name}.`,
+      type: 'success'
+    });
 
-      setIsAIProcessing(false);
-      alert(`Successfully extracted and added ${extracted.length} results!`);
-    }
+    setIsAIProcessing(false);
+    alert(`Successfully extracted and added ${extracted.length} results!`);
   };
 
   return (
@@ -185,12 +190,6 @@ const ClassManagement = () => {
                     <td style={{ padding: '20px', borderRadius: '0 16px 16px 0', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                         <button
-                          onClick={() => { setSelectedStudent(student); setIsAddingResult(true); }}
-                          className="btn btn-outline sm"
-                        >
-                          <Plus size={16} /> Add Result
-                        </button>
-                        <button
                           onClick={() => openReportCard(student)}
                           className="btn btn-outline sm"
                         >
@@ -235,92 +234,6 @@ const ClassManagement = () => {
           </div>
         )}
 
-        {/* Manual Result Modal */}
-        {isAddingResult && selectedStudent && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-             <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '90%', maxWidth: '400px' }}>
-                <h3 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                   <FileText size={20} /> Add Result: {selectedStudent.name}
-                </h3>
-                <form onSubmit={handleAddResult} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                   <div className="input-group">
-                      <label>Subject Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Mathematics" 
-                        value={newResult.subject}
-                        onChange={e => setNewResult({...newResult, subject: e.target.value})}
-                        required
-                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                      />
-                   </div>
-                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                      <div className="input-group">
-                        <label>1st CA (20)</label>
-                        <input
-                          type="number" max="20" min="0"
-                          value={newResult.ca1}
-                          onChange={e => setNewResult({...newResult, ca1: e.target.value})}
-                          required
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        />
-                      </div>
-                      <div className="input-group">
-                        <label>2nd CA (20)</label>
-                        <input
-                          type="number" max="20" min="0"
-                          value={newResult.ca2}
-                          onChange={e => setNewResult({...newResult, ca2: e.target.value})}
-                          required
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        />
-                      </div>
-                      <div className="input-group">
-                        <label>Exam (60)</label>
-                        <input
-                          type="number" max="60" min="0"
-                          value={newResult.exam}
-                          onChange={e => setNewResult({...newResult, exam: e.target.value})}
-                          required
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        />
-                      </div>
-                   </div>
-                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                     Total: <strong>{ca1Num + ca2Num + examNum}</strong> / 100 -- Grade: <strong>{gradeFromScore(ca1Num + ca2Num + examNum).grade}</strong>
-                   </p>
-                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div className="input-group">
-                        <label>Term</label>
-                        <select 
-                          value={newResult.term}
-                          onChange={e => setNewResult({...newResult, term: e.target.value as any})}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        >
-                          <option>1st Term</option>
-                          <option>2nd Term</option>
-                          <option>3rd Term</option>
-                        </select>
-                      </div>
-                      <div className="input-group">
-                        <label>Session</label>
-                        <input 
-                          type="text" 
-                          value={newResult.session}
-                          onChange={e => setNewResult({...newResult, session: e.target.value})}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        />
-                      </div>
-                   </div>
-                   <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                      <button type="button" onClick={() => { setIsAddingResult(false); setNewResult(BLANK_RESULT); }} className="btn btn-outline" style={{ flex: 1 }}>Cancel</button>
-                      <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Result</button>
-                   </div>
-                </form>
-             </div>
-          </div>
-        )}
-
         {/* Report Card Modal -- term dates, remarks/signatures, and
             psychomotor/affective domain ratings for the printed sheet. */}
         {isEditingReportCard && selectedStudent && (
@@ -330,37 +243,10 @@ const ClassManagement = () => {
                    <ClipboardList size={20} /> Report Card: {selectedStudent.name}
                 </h3>
                 <form onSubmit={handleSaveReportCard} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div className="input-group">
-                        <label>Term</label>
-                        <select
-                          value={reportCardTerm}
-                          onChange={async e => {
-                            const term = e.target.value as Result['term'];
-                            setReportCardTerm(term);
-                            setReportCard(await getReportCard(selectedStudent.id, term, reportCardSession) ?? {});
-                          }}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        >
-                          <option>1st Term</option>
-                          <option>2nd Term</option>
-                          <option>3rd Term</option>
-                        </select>
-                      </div>
-                      <div className="input-group">
-                        <label>Session</label>
-                        <input
-                          type="text"
-                          value={reportCardSession}
-                          onChange={async e => {
-                            const value = e.target.value;
-                            setReportCardSession(value);
-                            setReportCard(await getReportCard(selectedStudent.id, reportCardTerm, value) ?? {});
-                          }}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        />
-                      </div>
-                   </div>
+                   <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+                     {reportCardTerm} &middot; {reportCardSession || 'session not set'}
+                     <span style={{ display: 'block', fontSize: '11px' }}>Term &amp; session come from the Academic Calendar. Subject scores are entered on the Report Cards page.</span>
+                   </p>
 
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
@@ -441,24 +327,94 @@ const ClassManagement = () => {
                       ))}
                    </div>
 
-                   <h4 style={{ marginTop: '8px' }}>Comments & Signatures</h4>
+                   <h4 style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                     Comments & Signatures
+                     {autoSaveStatus === 'saving' && (
+                       <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal' }}>saving...</span>
+                     )}
+                     {autoSaveStatus === 'saved' && (
+                       <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                         <Save size={12} /> saved
+                       </span>
+                     )}
+                   </h4>
                    <div className="input-group">
                       <label>Head Master's Comment</label>
                       <input
                         type="text"
+                        placeholder="Enter comment..."
                         value={reportCard.headmasterComment ?? ''}
                         onChange={e => setReportCard({...reportCard, headmasterComment: e.target.value})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
+                      {headmasterSuggestions.length > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <p style={{ margin: '0 0 4px' }}>Recently used:</p>
+                          {headmasterSuggestions.slice(0, 3).map((suggestion, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setReportCard({...reportCard, headmasterComment: suggestion})}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 8px',
+                                margin: '2px 0',
+                                background: 'var(--bg-light)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                color: 'var(--text-main)',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-light)')}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                    </div>
                    <div className="input-group">
                       <label>Class Teacher's Comment</label>
                       <input
                         type="text"
+                        placeholder="Enter comment..."
                         value={reportCard.classTeacherComment ?? ''}
                         onChange={e => setReportCard({...reportCard, classTeacherComment: e.target.value})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
+                      {classTeacherSuggestions.length > 0 && (
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <p style={{ margin: '0 0 4px' }}>Recently used:</p>
+                          {classTeacherSuggestions.slice(0, 3).map((suggestion, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setReportCard({...reportCard, classTeacherComment: suggestion})}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '6px 8px',
+                                margin: '2px 0',
+                                background: 'var(--bg-light)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                color: 'var(--text-main)',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-light)')}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                    </div>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">

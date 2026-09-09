@@ -57,8 +57,8 @@ const Dashboard = () => {
             <h1>Welcome back, <span>{currentUser?.name || 'Pupil'}!</span> 👋</h1>
             <p>You have {pendingAssignments.length} assignment{pendingAssignments.length === 1 ? '' : 's'} awaiting submission.</p>
             <div style={{ display: 'flex', gap: '12px' }}>
-               <button className="btn btn-primary sm"><Download size={18} /> Download Result Sheet</button>
-               <button className="btn btn-outline sm">View Schedule</button>
+               <button className="btn btn-primary sm" onClick={() => navigate('/portal/results')}><Download size={18} /> Download Result Sheet</button>
+               <button className="btn btn-outline sm" onClick={() => navigate('/portal/timetable')}>View Schedule</button>
             </div>
           </div>
           <div className="welcome-illustration">🚀</div>

@@ -13,6 +13,10 @@ interface ReportCardProps {
   reportCard: ReportCardData | null;
   subjectStats: Record<string, SubjectStats>;
   totalInClass: number;
+  // Every subject the class offers. When given, the subjects table
+  // lists all of them -- subjects with no marks yet show blank cells --
+  // so the printed sheet matches the class's full subject list.
+  classSubjects?: string[];
 }
 
 const PSYCHOMOTOR_ITEMS: [keyof ReportCardData, string][] = [
@@ -66,7 +70,18 @@ const DomainTable = ({ title, items, reportCard }: { title: string; items: [keyo
   );
 };
 
-const ReportCard = ({ student, term, session, results, reportCard, subjectStats, totalInClass }: ReportCardProps) => {
+const ReportCard = ({ student, term, session, results, reportCard, subjectStats, totalInClass, classSubjects }: ReportCardProps) => {
+  // Rows to print: every class subject (blank where unmarked) merged
+  // with any result whose subject isn't on the class list. Falls back
+  // to just the results when no class list was supplied.
+  const rows: (Result | { subject: string; placeholder: true })[] = (() => {
+    if (!classSubjects || classSubjects.length === 0) return results;
+    const bySubject = new Map(results.map((r) => [r.subject, r] as const));
+    const ordered = classSubjects.map((subject) => bySubject.get(subject) ?? { subject, placeholder: true as const });
+    const extra = results.filter((r) => !classSubjects.includes(r.subject));
+    return [...ordered, ...extra];
+  })();
+
   const totalScore = results.reduce((sum, r) => sum + r.score, 0);
   const totalPossible = results.length * 100;
   const percentage = totalPossible > 0 ? ((totalScore / totalPossible) * 100).toFixed(1) : '0.0';
@@ -104,7 +119,7 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
     ro.observe(outer);
     ro.observe(inner);
     return () => ro.disconnect();
-  }, [student.id, term, session, results, reportCard, subjectStats]);
+  }, [student.id, term, session, results, reportCard, subjectStats, classSubjects]);
 
   return (
     <div ref={outerRef} className="report-card-scale-outer" style={{ height: scaledHeight }}>
@@ -149,20 +164,28 @@ const ReportCard = ({ student, term, session, results, reportCard, subjectStats,
           </tr>
         </thead>
         <tbody>
-          {results.length > 0 ? results.map((r, i) => {
-            const stats = subjectStats[r.subject];
+          {rows.length > 0 ? rows.map((row, i) => {
+            if ('placeholder' in row) {
+              return (
+                <tr key={`ph-${i}`}>
+                  <td>{row.subject}</td>
+                  <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+                </tr>
+              );
+            }
+            const stats = subjectStats[row.subject];
             return (
               <tr key={i}>
-                <td>{r.subject}</td>
-                <td>{r.ca1 ?? '-'}</td>
-                <td>{r.ca2 ?? '-'}</td>
-                <td>{r.exam ?? '-'}</td>
-                <td>{r.score}</td>
+                <td>{row.subject}</td>
+                <td>{row.ca1 ?? '-'}</td>
+                <td>{row.ca2 ?? '-'}</td>
+                <td>{row.exam ?? '-'}</td>
+                <td>{row.score}</td>
                 <td>{stats?.lowest ?? '-'}</td>
                 <td>{stats?.average ?? '-'}</td>
                 <td>{stats?.highest ?? '-'}</td>
-                <td>{r.grade}</td>
-                <td>{commentFromGrade(r.grade)}</td>
+                <td>{row.grade}</td>
+                <td>{commentFromGrade(row.grade)}</td>
               </tr>
             );
           }) : (

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type TestQuestion, type TestQuestionOption } from '../../context/AuthContext';
-import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X, Eye, EyeOff } from 'lucide-react';
 import './Tests.css';
 
 // points are kept as raw text, not numbers -- a number-typed value
@@ -28,7 +28,10 @@ const blankForm: QuestionFormState = {
   prompt: '',
   points: '1',
   options: [{ key: 'A', text: '' }, { key: 'B', text: '' }],
-  correctOption: 'A',
+  // Nothing pre-selected -- the teacher actively marks the correct
+  // answer, so an option is never "already highlighted" before they
+  // choose. Enforced on save for objective questions.
+  correctOption: '',
   modelAnswer: '',
   keywords: [],
 };
@@ -43,6 +46,9 @@ const TestEditor = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<QuestionFormState>(blankForm);
   const [saving, setSaving] = useState(false);
+  // Correct answers / rubric stay hidden until the teacher explicitly
+  // reveals them, so the answer key isn't just sitting on screen.
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const loadQuestions = async () => {
     if (!testId) return;
@@ -75,6 +81,10 @@ const TestEditor = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testId) return;
+    if (form.type === 'objective' && !form.correctOption) {
+      alert('Mark which option is the correct answer before saving.');
+      return;
+    }
     setSaving(true);
     const { error } = await saveQuestion(testId, {
       id: form.id,
@@ -162,9 +172,14 @@ const TestEditor = () => {
         </div>
 
         <div className="card glass" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <h3>Questions ({questions.length})</h3>
-            <button className="btn btn-primary sm" onClick={startNew}><Plus size={16} /> Add Question</button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="btn btn-outline sm" type="button" onClick={() => setShowAnswers((v) => !v)} title="Toggle whether correct answers and rubric are visible on this page">
+                {showAnswers ? <><EyeOff size={16} /> Hide answer key</> : <><Eye size={16} /> Show answer key</>}
+              </button>
+              <button className="btn btn-primary sm" onClick={startNew}><Plus size={16} /> Add Question</button>
+            </div>
           </div>
 
           {loading && <p style={{ color: 'var(--text-muted)' }}>Loading questions...</p>}
@@ -187,16 +202,24 @@ const TestEditor = () => {
                   <p style={{ fontWeight: '600' }}>{q.prompt}</p>
                   {q.type === 'objective' && (
                     <ul className="question-options-preview">
-                      {q.options?.map((o) => (
-                        <li key={o.key} style={{ fontWeight: o.key === q.correctOption ? 700 : 400, color: o.key === q.correctOption ? 'var(--success)' : 'var(--text-main)' }}>
-                          {o.key}. {o.text}
-                        </li>
-                      ))}
+                      {q.options?.map((o) => {
+                        const isCorrect = showAnswers && o.key === q.correctOption;
+                        return (
+                          <li key={o.key} style={{ fontWeight: isCorrect ? 700 : 400, color: isCorrect ? 'var(--success)' : 'var(--text-main)' }}>
+                            {o.key}. {o.text}{isCorrect ? '  ✓' : ''}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
-                  {q.type === 'essay' && q.keywords && q.keywords.length > 0 && (
+                  {showAnswers && q.type === 'essay' && q.keywords && q.keywords.length > 0 && (
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                       Rubric keywords: {q.keywords.map((k) => `"${k.phrase}" (${k.points}pt)`).join(', ')}
+                    </p>
+                  )}
+                  {showAnswers && q.type === 'essay' && q.modelAnswer && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Model answer: {q.modelAnswer}
                     </p>
                   )}
                 </div>

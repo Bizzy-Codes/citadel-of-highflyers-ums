@@ -7,12 +7,12 @@ interface AttendanceSummaryCardProps {
   compact?: boolean;
 }
 
-const SEGMENTS: { key: 'present' | 'absent' | 'late' | 'holiday' }[] = [
-  { key: 'present' }, { key: 'absent' }, { key: 'late' }, { key: 'holiday' },
+const SEGMENTS: { key: 'present' | 'absent' | 'holiday' }[] = [
+  { key: 'present' }, { key: 'absent' }, { key: 'holiday' },
 ];
 
 // A small hand-rolled SVG donut -- no charting library in this project,
-// and four static segments don't need one. Each arc's length is its
+// and three static segments don't need one. Each arc's length is its
 // share of totalSchoolDays (not just of the marked days), so the ring
 // visibly fills in as the term goes on rather than always looking 100%
 // full from day one.
@@ -87,7 +87,6 @@ const AttendanceSummaryCard = ({ summary, hasCalendar, compact }: AttendanceSumm
           </div>
           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '12px' }}>
             <span style={{ color: STATUS_META.absent.color, fontWeight: 700 }}>{summary.absent} absent</span>
-            <span style={{ color: STATUS_META.late.color, fontWeight: 700 }}>{summary.late} late</span>
             <span style={{ color: STATUS_META.holiday.color, fontWeight: 700 }}>{summary.holiday} holiday</span>
           </div>
         </div>
@@ -95,10 +94,9 @@ const AttendanceSummaryCard = ({ summary, hasCalendar, compact }: AttendanceSumm
       {!compact && (
         <div>
           <DateChips label="Absent" dates={summary.absentDates} color={STATUS_META.absent.color} />
-          <DateChips label="Late" dates={summary.lateDates} color={STATUS_META.late.color} />
           <DateChips label="Holiday" dates={summary.holidayDates} color={STATUS_META.holiday.color} />
-          {summary.absentDates.length === 0 && summary.lateDates.length === 0 && summary.holidayDates.length === 0 && (
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No absences or late marks recorded yet.</p>
+          {summary.absentDates.length === 0 && summary.holidayDates.length === 0 && (
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No absences recorded yet.</p>
           )}
         </div>
       )}

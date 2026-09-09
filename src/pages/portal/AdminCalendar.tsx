@@ -11,6 +11,10 @@ const AdminCalendar = () => {
   // to a number input gets stuck showing a literal "0" once cleared.
   const [totalWeeks, setTotalWeeks] = useState('13');
   const [termStartDate, setTermStartDate] = useState('');
+  // The structured term/session results & report cards read, so
+  // teachers never re-type them per pupil.
+  const [currentTerm, setCurrentTerm] = useState<'1st Term' | '2nd Term' | '3rd Term'>('1st Term');
+  const [currentSession, setCurrentSession] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -27,13 +31,18 @@ const AdminCalendar = () => {
     setTerm(academicCalendar.term);
     setTotalWeeks(String(academicCalendar.totalWeeks));
     setTermStartDate(academicCalendar.termStartDate ?? '');
+    setCurrentTerm(academicCalendar.currentTerm);
+    setCurrentSession(academicCalendar.currentSession);
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setSaved(false);
-    const { error } = await updateAcademicCalendar({ term, totalWeeks: Number(totalWeeks) || 0, termStartDate: termStartDate || null });
+    const { error } = await updateAcademicCalendar({
+      term, totalWeeks: Number(totalWeeks) || 0, termStartDate: termStartDate || null,
+      currentTerm, currentSession: currentSession.trim() || undefined,
+    });
     setSaving(false);
     if (error) { alert('Failed to save: ' + error); return; }
     setSaved(true);
@@ -84,6 +93,33 @@ const AdminCalendar = () => {
                 style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
               />
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="input-group">
+                <label>Current Term</label>
+                <select
+                  value={currentTerm}
+                  onChange={(e) => setCurrentTerm(e.target.value as '1st Term' | '2nd Term' | '3rd Term')}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
+                >
+                  <option>1st Term</option>
+                  <option>2nd Term</option>
+                  <option>3rd Term</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Current Session</label>
+                <input
+                  type="text"
+                  value={currentSession}
+                  onChange={(e) => setCurrentSession(e.target.value)}
+                  placeholder="e.g. 2025/2026"
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
+                />
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '-4px' }}>
+              Teachers' result sheets and report cards use this term and session automatically &mdash; they never type it in per pupil.
+            </p>
             <div className="input-group">
               <label>Term Start Date</label>
               <input

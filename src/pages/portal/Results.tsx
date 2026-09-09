@@ -5,10 +5,11 @@ import { Download, ChevronRight, Calendar } from 'lucide-react';
 import { useAuth, type Result, type ReportCardData, type SubjectStats } from '../../context/AuthContext';
 
 const Results = () => {
-  const { currentUser, getReportCard, getSubjectStats } = useAuth();
+  const { currentUser, getReportCard, getSubjectStats, subjectsByClass } = useAuth();
 
   const currentResults = currentUser?.results || [];
   const history = currentUser?.history || [];
+  const classSubjects = subjectsByClass[currentUser?.grade ?? ''] ?? [];
 
   const [reportCard, setReportCard] = useState<ReportCardData | null>(null);
   const [subjectStats, setSubjectStats] = useState<Record<string, SubjectStats>>({});
@@ -79,6 +80,7 @@ const Results = () => {
               reportCard={reportCard}
               subjectStats={subjectStats}
               totalInClass={Object.values(subjectStats)[0]?.totalInClass ?? 0}
+              classSubjects={classSubjects}
             />
           </div>
         )}

@@ -7,6 +7,12 @@ import './Founders.css';
 // quotes, bio paragraphs, or awards directly below to update the
 // page copy. Photos come from public/gallery/ (see GALLERY.md there
 // for the full filename list).
+//
+// Structure: the two Founders come first, then a divider, then the
+// "Leadership Team" -- the management staff who run the school day to
+// day. To rename that group, change LEADERSHIP_SECTION_TITLE below.
+const LEADERSHIP_SECTION_TITLE = 'The Leadership Team';
+
 const Founders = () => {
   return (
     <div className="founders-root">
@@ -25,6 +31,10 @@ const Founders = () => {
        </header>
 
        <main className="founders-main container">
+          {/* ============================================================
+              FOUNDERS
+              ============================================================ */}
+
           {/* Founder: Chrispraise Iwunna */}
           <section className="founder-section animate-fade-in">
              <div className="founder-content">
@@ -54,7 +64,7 @@ const Founders = () => {
              </div>
           </section>
 
-          {/* Proprietress: Iwunna Princess */}
+          {/* Founder: Iwunna Princess */}
           <section className="founder-section reverse animate-fade-in" style={{ animationDelay: '0.2s' }}>
              <div className="founder-content">
                 <div className="founder-text">
@@ -80,11 +90,20 @@ const Founders = () => {
                 </div>
                 <div className="founder-image-wrapper">
                    <div className="founder-card-bg secondary"></div>
-                   <PhotoSlot src="/gallery/founder-princess.jpg" alt="Ambassador Iwunna Princess" label="Photo: Ambassador Iwunna Princess" className="founder-img" />
+                   <PhotoSlot src="/gallery/founder-princess.jpg?v=2" alt="Ambassador Iwunna Princess" label="Photo: Ambassador Iwunna Princess" className="founder-img" />
                    <div className="founder-badge founder-2"><Sparkles size={16} /> Proprietress</div>
                 </div>
              </div>
           </section>
+
+          {/* ============================================================
+              LEADERSHIP TEAM  (management staff -- not founders)
+              ============================================================ */}
+          <div className="leadership-divider animate-fade-in">
+             <span className="badge">Management &amp; Operations</span>
+             <h2>{LEADERSHIP_SECTION_TITLE}</h2>
+             <p>The people who keep Citadel of Highflyers running every day &mdash; leading classrooms, coordinating staff, and looking after every pupil and family.</p>
+          </div>
 
           {/* Head Teacher: Ruth Sankira */}
           <section className="founder-section animate-fade-in">
@@ -108,9 +127,36 @@ const Founders = () => {
              </div>
           </section>
 
-          {/* Administrative Officer: Ozoegwu Onyinye Claire */}
+          {/* HOD Graders Arm: Lene Temi */}
           <section className="founder-section reverse animate-fade-in">
              <div className="founder-content">
+                <div className="founder-text">
+                   <h2><span>Lene Temi</span></h2>
+                   <p className="founder-role">HOD, Graders Arm</p>
+                   <div className="quote-box glass-purple">
+                      <Quote className="quote-icon" />
+                      <p>The Graders years are where habits, confidence, and a love of learning take root -- my job is to make sure every classroom in the arm delivers on that.</p>
+                   </div>
+                   <p className="description text-muted">
+                      Lene Temi leads the Graders Arm at Citadel of Highflyers as Head of Department, overseeing academic standards, lesson delivery, and pupil progress across the primary grades. She works closely with class teachers to keep the curriculum consistent and rigorous, mentors newer staff, and keeps a close eye on how every child in the arm is doing -- academically and personally.
+                   </p>
+                </div>
+                <div className="founder-image-wrapper">
+                   <div className="founder-card-bg secondary"></div>
+                   <PhotoSlot src="/gallery/staff-lene-temi.jpg" alt="Lene Temi" label="Photo: Lene Temi" className="founder-img" />
+                   <div className="founder-badge founder-2"><Sparkles size={16} /> HOD Graders Arm</div>
+                </div>
+             </div>
+          </section>
+
+          {/* Administrative Officer: Ozoegwu Onyinye Claire */}
+          <section className="founder-section animate-fade-in">
+             <div className="founder-content">
+                <div className="founder-image-wrapper">
+                   <div className="founder-card-bg"></div>
+                   <PhotoSlot src="/gallery/founder-admin.jpg" alt="Ozoegwu Onyinye Claire" label="Photo: Ozoegwu Onyinye Claire" className="founder-img" />
+                   <div className="founder-badge founder-1"><Sparkles size={16} /> Admin</div>
+                </div>
                 <div className="founder-text">
                    <h2><span>Ozoegwu Onyinye Claire</span></h2>
                    <p className="founder-role">Administrative Officer</p>
@@ -122,22 +168,12 @@ const Founders = () => {
                       As Administrative Officer, Ozoegwu Onyinye Claire manages the day-to-day administrative operations of Citadel of Highflyers -- from pupil records and correspondence to coordinating between parents, staff, and management. Her attention to detail and commitment to smooth, efficient operations keep the administrative backbone of the school running seamlessly, so teachers and pupils can focus on what matters most: learning and growth.
                    </p>
                 </div>
-                <div className="founder-image-wrapper">
-                   <div className="founder-card-bg secondary"></div>
-                   <PhotoSlot src="/gallery/founder-admin.jpg" alt="Ozoegwu Onyinye Claire" label="Photo: Ozoegwu Onyinye Claire" className="founder-img" />
-                   <div className="founder-badge founder-2"><Sparkles size={16} /> Admin</div>
-                </div>
              </div>
           </section>
 
           {/* School Club/Program Manager (SPC): Eggah Freeda */}
-          <section className="founder-section animate-fade-in">
+          <section className="founder-section reverse animate-fade-in">
              <div className="founder-content">
-                <div className="founder-image-wrapper">
-                   <div className="founder-card-bg"></div>
-                   <PhotoSlot src="/gallery/founder-spc.jpg" alt="Eggah Freeda" label="Photo: Eggah Freeda" className="founder-img" />
-                   <div className="founder-badge founder-1"><Sparkles size={16} /> Program Manager</div>
-                </div>
                 <div className="founder-text">
                    <h2><span>Eggah Freeda</span></h2>
                    <p className="founder-role">School Club/Program Manager (SPC)</p>
@@ -148,6 +184,11 @@ const Founders = () => {
                    <p className="description text-muted">
                       Eggah Freeda serves as the School Club/Program Manager (SPC) at Citadel of Highflyers, a role she has grown into over more than seven years of committed service to the school. She is passionate about creating enriching extracurricular experiences for every pupil, always going the extra mile to ensure the school's clubs and programs run smoothly and meaningfully.
                    </p>
+                </div>
+                <div className="founder-image-wrapper">
+                   <div className="founder-card-bg secondary"></div>
+                   <PhotoSlot src="/gallery/founder-spc.jpg" alt="Eggah Freeda" label="Photo: Eggah Freeda" className="founder-img" />
+                   <div className="founder-badge founder-2"><Sparkles size={16} /> Program Manager</div>
                 </div>
              </div>
           </section>

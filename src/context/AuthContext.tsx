@@ -255,6 +255,7 @@ export interface TestAnswerForGrading {
   isCorrect?: boolean;
   pointsAwarded?: number;
   feedback?: string;
+  aiFeedback?: string; // note left by the rubric auto-scorer (essays)
 }
 
 export interface NewAdmissionApplicationInput {
@@ -323,9 +324,15 @@ export interface AcademicCalendar {
   documentPath: string | null;
   documentName: string | null;
   updatedAt: string;
+  // The structured "which term/session are we in right now" that
+  // results and report cards read so teachers never re-type it per
+  // pupil. Always resolved by mapAcademicCalendarRow (parsed from the
+  // free-text `term` when the dedicated columns aren't set yet).
+  currentTerm: '1st Term' | '2nd Term' | '3rd Term';
+  currentSession: string;
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'holiday';
+export type AttendanceStatus = 'present' | 'absent' | 'holiday';
 
 export interface AttendanceRecord {
   id: string;
@@ -339,7 +346,7 @@ export interface AttendanceNote {
   id: string;
   className: string;
   studentId: string;
-  weekStart: string;
+  noteDate: string; // the specific school day this note is about
   note: string;
   updatedAt: string;
 }
@@ -351,6 +358,24 @@ export interface ExamViolation {
   studentId: string;
   studentName?: string;
   occurredAt: string;
+}
+
+// Live "how far along is each pupil" row for the teacher's monitor.
+export interface AttemptProgress {
+  attemptId: string;
+  answeredCount: number;
+  totalQuestions: number;
+  lastActivityAt: string | null;
+}
+
+// One ephemeral webcam frame, relayed over a Realtime broadcast channel
+// and never stored anywhere.
+export interface TestSnapshot {
+  attemptId: string;
+  studentId: string;
+  studentName: string;
+  image: string; // small JPEG data URL
+  at: number;    // epoch ms, captured client-side
 }
 
 interface AuthContextType {
@@ -374,6 +399,12 @@ interface AuthContextType {
   approveTeacher: (id: string) => Promise<void>;
   promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
   addResult: (studentId: string, result: NewResultInput) => Promise<void>;
+  saveSubjectResults: (
+    studentId: string,
+    term: Result['term'],
+    sessionValue: string,
+    rows: { subject: string; ca1: number; ca2: number; exam: number }[],
+  ) => Promise<{ error: string | null }>;
   getReportCard: (studentId: string, term: Result['term'], session: string) => Promise<ReportCardData | null>;
   upsertReportCard: (studentId: string, term: Result['term'], session: string, data: ReportCardData) => Promise<void>;
   getSubjectStats: (studentId: string, subject: string, term: Result['term'], session: string) => Promise<SubjectStats | null>;
@@ -427,6 +458,9 @@ interface AuthContextType {
   subscribeToTestAttempts: (testId: string, onChange: (attempt: TestAttempt) => void) => () => void;
   subscribeToTestViolations: (testId: string, onViolation: (violation: ExamViolation) => void) => () => void;
   sweepExpiredAttempts: (testId: string) => Promise<void>;
+  getAttemptProgress: (testId: string) => Promise<AttemptProgress[]>;
+  createTestSnapshotSender: (testId: string) => { send: (payload: TestSnapshot) => void; close: () => void };
+  subscribeToTestSnapshots: (testId: string, onSnap: (s: TestSnapshot) => void) => () => void;
   getMyAttemptForTest: (testId: string) => Promise<TestAttempt | null>;
   getAttemptById: (attemptId: string) => Promise<TestAttempt | null>;
   startTestAttempt: (testId: string) => Promise<{ error: string | null; attemptId?: string; expiresAt?: string }>;
@@ -436,15 +470,15 @@ interface AuthContextType {
   recordTestViolation: (attemptId: string) => Promise<{ error: string | null; violationCount?: number; status?: string }>;
   finalizeMyExpiredAttempts: () => Promise<void>;
   academicCalendar: AcademicCalendar | null;
-  updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null }) => Promise<{ error: string | null }>;
+  updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null; currentTerm?: string; currentSession?: string }) => Promise<{ error: string | null }>;
   uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
   getAcademicCalendarDocumentUrl: () => string | null;
   getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
   getMyAttendance: () => Promise<AttendanceRecord[]>;
   getStudentAttendance: (studentId: string) => Promise<AttendanceRecord[]>;
-  getClassAttendanceNotes: (className: string, weekStart: string) => Promise<AttendanceNote[]>;
-  upsertAttendanceNote: (className: string, studentId: string, weekStart: string, note: string) => Promise<{ error: string | null }>;
+  getClassAttendanceNotes: (className: string, fromDate: string, toDate: string) => Promise<AttendanceNote[]>;
+  upsertAttendanceNote: (className: string, studentId: string, noteDate: string, note: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -561,17 +595,42 @@ const mapTestAnswerRow = (row: any): TestAnswerForGrading => ({
   isCorrect: row.is_correct ?? undefined,
   pointsAwarded: row.points_awarded != null ? Number(row.points_awarded) : undefined,
   feedback: row.feedback ?? undefined,
+  aiFeedback: row.ai_feedback ?? undefined,
 });
 
+// Pull "1st/2nd/3rd Term" and a "2024/2025"-style session out of the
+// free-text term name, so the structured currentTerm/currentSession are
+// still populated on installs where patch_21 (the dedicated columns)
+// hasn't been applied yet.
+const parseTermName = (name: string | null | undefined): { term: AcademicCalendar['currentTerm']; session: string } => {
+  const text = (name ?? '').toLowerCase();
+  const term: AcademicCalendar['currentTerm'] =
+    text.includes('2nd') || text.includes('second') ? '2nd Term'
+    : text.includes('3rd') || text.includes('third') ? '3rd Term'
+    : '1st Term';
+  const sessionMatch = (name ?? '').match(/\d{4}\s*\/\s*\d{4}/);
+  const now = new Date();
+  const fallbackSession = now.getMonth() >= 7 // Aug+ -> new session started
+    ? `${now.getFullYear()}/${now.getFullYear() + 1}`
+    : `${now.getFullYear() - 1}/${now.getFullYear()}`;
+  return { term, session: sessionMatch ? sessionMatch[0].replace(/\s+/g, '') : fallbackSession };
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mapAcademicCalendarRow = (row: any): AcademicCalendar => ({
-  term: row.term,
-  totalWeeks: row.total_weeks,
-  termStartDate: row.term_start_date,
-  documentPath: row.document_path,
-  documentName: row.document_name,
-  updatedAt: row.updated_at,
-});
+const mapAcademicCalendarRow = (row: any): AcademicCalendar => {
+  const parsed = parseTermName(row.term);
+  const validTerm = row.current_term === '1st Term' || row.current_term === '2nd Term' || row.current_term === '3rd Term';
+  return {
+    term: row.term,
+    totalWeeks: row.total_weeks,
+    termStartDate: row.term_start_date,
+    documentPath: row.document_path,
+    documentName: row.document_name,
+    updatedAt: row.updated_at,
+    currentTerm: validTerm ? row.current_term : parsed.term,
+    currentSession: row.current_session || parsed.session,
+  };
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapAttendanceRow = (row: any): AttendanceRecord => ({
@@ -587,7 +646,7 @@ const mapAttendanceNoteRow = (row: any): AttendanceNote => ({
   id: row.id,
   className: row.class_name,
   studentId: row.student_id,
-  weekStart: row.week_start,
+  noteDate: row.note_date,
   note: row.note,
   updatedAt: row.updated_at,
 });
@@ -1020,6 +1079,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshProfiles();
   };
 
+  // Save a whole subject-score grid for one pupil in one term/session.
+  // Replaces that pupil's rows for exactly the subjects passed in (so
+  // re-saving the grid can't create duplicates even though `results`
+  // has no unique key on databases without patch_21), then inserts the
+  // rows that actually have marks. Totals + grades are computed here so
+  // the sheet "adds up like a spreadsheet" with no extra entry step.
+  const saveSubjectResults = async (
+    studentId: string,
+    term: Result['term'],
+    sessionValue: string,
+    rows: { subject: string; ca1: number; ca2: number; exam: number }[],
+  ): Promise<{ error: string | null }> => {
+    const subjects = rows.map((r) => r.subject).filter(Boolean);
+    if (subjects.length === 0) return { error: null };
+
+    const { error: delError } = await supabase.from('results').delete()
+      .eq('student_id', studentId).eq('term', term).eq('session', sessionValue)
+      .in('subject', subjects);
+    if (delError) return { error: delError.message };
+
+    const payload = rows
+      .filter((r) => r.subject && ((r.ca1 || 0) > 0 || (r.ca2 || 0) > 0 || (r.exam || 0) > 0))
+      .map((r) => {
+        const ca1 = r.ca1 || 0, ca2 = r.ca2 || 0, exam = r.exam || 0;
+        // results.score is an int column bounded 0-100 -- round the sum
+        // and clamp so a typo in one field can't fail the whole save
+        // with a raw check-constraint error.
+        const score = Math.min(100, Math.max(0, Math.round(ca1 + ca2 + exam)));
+        return {
+          student_id: studentId, subject: r.subject, term, session: sessionValue,
+          ca1, ca2, exam, score, grade: gradeFromScore(score).grade,
+        };
+      });
+
+    if (payload.length > 0) {
+      const { error: insError } = await supabase.from('results').insert(payload);
+      if (insError) return { error: insError.message };
+    }
+    if (session?.user.id === studentId) await refreshCurrentProfile(studentId);
+    await refreshProfiles();
+    return { error: null };
+  };
+
   const REPORT_CARD_COLUMNS = 'term_ends, next_term_begins, remark, headmaster_comment, class_teacher_comment, headmaster_signature, class_teacher_signature, comm_oral_rating, creativity_rating, drawing_painting_rating, music_rating, sports_rating, honesty_rating, punctuality_rating, attentiveness_rating, politeness_rating, obedience_rating, independence_rating, social_rating';
 
   const getReportCard = async (studentId: string, term: Result['term'], session: string): Promise<ReportCardData | null> => {
@@ -1445,6 +1547,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ------------------------------------------------------------
+  // Live test monitor -- progress feed + ephemeral camera snapshots.
+  // Snapshots go over a Realtime *broadcast* channel: they are relayed
+  // to whoever's listening and never written to the database or
+  // storage, so there is nothing to clean up and no storage cost.
+  // ------------------------------------------------------------
+  const getAttemptProgress = async (testId: string): Promise<AttemptProgress[]> => {
+    const { data, error } = await supabase.rpc('get_attempt_progress', { p_test_id: testId });
+    // The RPC ships in patch_21 -- if it isn't applied yet the monitor
+    // just falls back to status-only rows, so swallow that one error.
+    if (error) {
+      if (!/get_attempt_progress|does not exist|schema cache/i.test(error.message)) {
+        console.error('getAttemptProgress failed', error);
+      }
+      return [];
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({
+      attemptId: r.attempt_id,
+      answeredCount: Number(r.answered_count ?? 0),
+      totalQuestions: Number(r.total_questions ?? 0),
+      lastActivityAt: r.last_activity_at ?? null,
+    }));
+  };
+
+  // One persistent channel per pupil for the length of their attempt --
+  // send() pushes an ephemeral frame, close() tears it down on submit /
+  // unmount. Returns a no-op sender when the pupil has no camera.
+  const createTestSnapshotSender = (testId: string) => {
+    const channel = supabase.channel(`test-snapshots-${testId}`, { config: { broadcast: { ack: false, self: false } } });
+    let ready = false;
+    channel.subscribe((status) => { ready = status === 'SUBSCRIBED'; });
+    return {
+      send: (payload: TestSnapshot) => {
+        if (ready) channel.send({ type: 'broadcast', event: 'snap', payload });
+      },
+      close: () => { supabase.removeChannel(channel); },
+    };
+  };
+
+  const subscribeToTestSnapshots = (testId: string, onSnap: (s: TestSnapshot) => void) => {
+    const channel = supabase
+      .channel(`test-snapshots-${testId}`, { config: { broadcast: { self: false } } })
+      .on('broadcast', { event: 'snap' }, ({ payload }) => onSnap(payload as TestSnapshot))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  // ------------------------------------------------------------
   // Tests / Exams -- student side. Every mutation goes through a
   // SECURITY DEFINER RPC -- see supabase/patch_7.sql -- so timers,
   // one-attempt enforcement, grading, and strike counts can't be
@@ -1493,10 +1643,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitTestAttempt = async (attemptId: string) => {
-    const { data, error } = await supabase.rpc('submit_test_attempt', { p_attempt_id: attemptId });
-    if (error) return { error: error.message };
-    const row = Array.isArray(data) ? data[0] : data;
-    return { error: null, score: Number(row.score), maxScore: Number(row.max_score), status: row.status as string };
+    try {
+      const { data, error } = await supabase.rpc('submit_test_attempt', { p_attempt_id: attemptId });
+      if (error) return { error: error.message };
+      // PostgREST returns the TABLE(...) result as an array. If it ever
+      // comes back empty/null, DON'T let `row.score` throw -- the test
+      // was still closed server-side, so report a soft success and let
+      // the caller refetch the authoritative score.
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return { error: null, status: 'submitted' as string };
+      return {
+        error: null,
+        score: row.score != null ? Number(row.score) : undefined,
+        maxScore: row.max_score != null ? Number(row.max_score) : undefined,
+        status: (row.status as string) ?? 'submitted',
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Could not submit the test.' };
+    }
   };
 
   const recordTestViolation = async (attemptId: string) => {
@@ -1637,12 +1801,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.signedUrl;
   };
 
-  const updateAcademicCalendar = async (input: { term: string; totalWeeks: number; termStartDate: string | null }) => {
+  const updateAcademicCalendar = async (
+    input: { term: string; totalWeeks: number; termStartDate: string | null; currentTerm?: string; currentSession?: string }
+  ) => {
     if (!currentUser) return { error: 'Not signed in' };
-    const { error } = await supabase.from('academic_calendar').update({
+    const base = {
       term: input.term, total_weeks: input.totalWeeks, term_start_date: input.termStartDate,
       updated_by: currentUser.id, updated_at: new Date().toISOString(),
-    }).eq('id', 1);
+    };
+    const withCurrent = {
+      ...base,
+      ...(input.currentTerm ? { current_term: input.currentTerm } : {}),
+      ...(input.currentSession ? { current_session: input.currentSession } : {}),
+    };
+    let { error } = await supabase.from('academic_calendar').update(withCurrent).eq('id', 1);
+    // Fall back gracefully if patch_21 (current_term / current_session
+    // columns) hasn't been applied on this database yet.
+    if (error && /current_term|current_session|column/i.test(error.message)) {
+      ({ error } = await supabase.from('academic_calendar').update(base).eq('id', 1));
+    }
     if (error) return { error: error.message };
     await refreshAcademicCalendar();
     return { error: null };
@@ -1703,24 +1880,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (data ?? []).map(mapAttendanceRow);
   };
 
-  const getClassAttendanceNotes = async (className: string, weekStart: string): Promise<AttendanceNote[]> => {
+  const getClassAttendanceNotes = async (className: string, fromDate: string, toDate: string): Promise<AttendanceNote[]> => {
     const { data, error } = await supabase.from('attendance_notes').select('*')
-      .eq('class_name', className).eq('week_start', weekStart);
+      .eq('class_name', className).gte('note_date', fromDate).lte('note_date', toDate);
     if (error) { console.error('getClassAttendanceNotes failed', error); return []; }
     return (data ?? []).map(mapAttendanceNoteRow);
   };
 
-  const upsertAttendanceNote = async (className: string, studentId: string, weekStart: string, note: string) => {
+  const upsertAttendanceNote = async (className: string, studentId: string, noteDate: string, note: string) => {
     if (!currentUser) return { error: 'Not signed in' };
     if (!note.trim()) {
       const { error } = await supabase.from('attendance_notes').delete()
-        .eq('student_id', studentId).eq('week_start', weekStart);
+        .eq('student_id', studentId).eq('note_date', noteDate);
       return { error: error?.message ?? null };
     }
     const { error } = await supabase.from('attendance_notes').upsert({
-      class_name: className, student_id: studentId, week_start: weekStart,
+      class_name: className, student_id: studentId, note_date: noteDate,
       note: note.trim(), updated_by: currentUser.id, updated_at: new Date().toISOString(),
-    }, { onConflict: 'student_id,week_start' });
+    }, { onConflict: 'student_id,note_date' });
     return { error: error?.message ?? null };
   };
 
@@ -1739,7 +1916,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       students, staff, currentUser, loading,
       login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
-      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult,
+      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
       notifications, addNotification, exportData,
@@ -1753,6 +1930,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
       getAttemptsForTest, getAnswersForAttempt, gradeEssayAnswer, getViolationsForTest,
       subscribeToTestAttempts, subscribeToTestViolations, sweepExpiredAttempts,
+      getAttemptProgress, createTestSnapshotSender, subscribeToTestSnapshots,
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,

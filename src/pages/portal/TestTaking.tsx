@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, type AttemptQuestion, type TestAttempt } from '../../context/AuthContext';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useAntiCheat } from '../../hooks/useAntiCheat';
-import CameraPreview from '../../components/portal/CameraPreview';
+import TestCameraBroadcaster from '../../components/portal/TestCameraBroadcaster';
 import { AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import './Tests.css';
 
@@ -19,7 +19,7 @@ type AnswerDraft = { selectedOption?: string; essayText?: string };
 const TestTaking = () => {
   const { attemptId } = useParams();
   const navigate = useNavigate();
-  const { getAttemptById, getAttemptQuestions, saveTestAnswer, submitTestAttempt, recordTestViolation } = useAuth();
+  const { currentUser, getAttemptById, getAttemptQuestions, saveTestAnswer, submitTestAttempt, recordTestViolation } = useAuth();
 
   const [attempt, setAttempt] = useState<TestAttempt | null>(null);
   const [questions, setQuestions] = useState<AttemptQuestion[]>([]);
@@ -28,6 +28,7 @@ const TestTaking = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [finalResult, setFinalResult] = useState<{ score: number; maxScore: number } | null>(null);
 
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -61,17 +62,31 @@ const TestTaking = () => {
   const handleSubmit = useCallback(async () => {
     if (!attemptId || submitting) return;
     setSubmitting(true);
-    const { error, score, maxScore, status: newStatus } = await submitTestAttempt(attemptId);
-    setSubmitting(false);
-    if (error) {
-      // Attempt may have already been auto-closed server-side (e.g. by
-      // save_test_answer's own expiry check) -- refetch to get the
-      // authoritative final state instead of surfacing a raw error.
-      await loadAll();
-      return;
+    setSubmitError(null);
+    try {
+      const { error, score, maxScore, status: newStatus } = await submitTestAttempt(attemptId);
+      if (error) {
+        // The attempt may already have been closed server-side (expiry,
+        // strike limit, a double-tap). Refetch the authoritative state:
+        // if it's finished, show the result screen; only if it's really
+        // still open do we surface the error so the pupil can retry
+        // instead of being stuck on a dead "Submitting..." button.
+        await loadAll();
+        const fresh = await getAttemptById(attemptId);
+        if (fresh && fresh.status !== 'in_progress') {
+          setFinalResult({ score: fresh.score ?? 0, maxScore: fresh.maxScore });
+        } else {
+          setSubmitError(error);
+        }
+        return;
+      }
+      setFinalResult({ score: score ?? 0, maxScore: maxScore ?? 0 });
+      setAttempt((prev) => prev ? { ...prev, status: (newStatus as TestAttempt['status']) ?? 'submitted' } : prev);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Could not submit. Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setFinalResult({ score: score ?? 0, maxScore: maxScore ?? 0 });
-    setAttempt((prev) => prev ? { ...prev, status: (newStatus as TestAttempt['status']) ?? 'submitted' } : prev);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId, submitting]);
 
@@ -138,10 +153,29 @@ const TestTaking = () => {
 
   return (
     <div className="test-taking-root">
-      <CameraPreview active={isActive} />
+      <TestCameraBroadcaster
+        active={isActive}
+        testId={attempt.testId}
+        attemptId={attemptId}
+        studentId={currentUser?.id}
+        studentName={currentUser?.name}
+      />
 
       {warning && (
         <div className="test-warning-banner"><AlertTriangle size={18} /> {warning}</div>
+      )}
+
+      {submitError && (
+        <div className="test-warning-banner" style={{ background: 'var(--error, #dc2626)' }}>
+          <AlertTriangle size={18} />
+          <span style={{ flex: 1 }}>Couldn't submit your test: {submitError}</span>
+          <button className="btn sm" style={{ background: '#fff', color: 'var(--error, #dc2626)' }} onClick={handleSubmit} disabled={submitting}>
+            Try again
+          </button>
+          <button className="btn sm btn-outline" style={{ borderColor: '#fff', color: '#fff' }} onClick={() => navigate('/portal/tests')}>
+            Leave &amp; tell teacher
+          </button>
+        </div>
       )}
 
       <div className="test-taking-header">
