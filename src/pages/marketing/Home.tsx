@@ -19,7 +19,8 @@ import {
   Star,
   Home as HomeIcon,
   GraduationCap,
-  Image as GalleryIcon
+  Image as GalleryIcon,
+  Phone
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
@@ -55,6 +56,7 @@ const Home = () => {
             <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
             <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
             <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
+            <a href="#contact-section" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Contact Us</a>
             <button onClick={toggleTheme} className="nav-links-theme-toggle">
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
               {theme === 'light' ? 'Dark mode' : 'Light mode'}
@@ -70,6 +72,7 @@ const Home = () => {
             <Link to="/"><HomeIcon size={14} /> <span>Home</span></Link>
             <Link to="/admissions"><GraduationCap size={14} /> <span>Admissions</span></Link>
             <Link to="/gallery"><GalleryIcon size={14} /> <span>Gallery</span></Link>
+            <a href="#contact-section"><Phone size={14} /> <span>Contact</span></a>
           </div>
 
           <div className="nav-actions">
@@ -323,11 +326,14 @@ const Home = () => {
                   <Link to="/login">Portal Dashboard</Link>
                </div>
             </div>
-            <div className="footer-contact">
+            <div className="footer-contact" id="contact-section" style={{ scrollMarginTop: '120px' }}>
                <h4 style={{ marginBottom: '30px' }}>Get in Touch</h4>
-               <p style={{ marginBottom: '16px' }}>📍 Jos, Plateau State</p>
-               <p style={{ marginBottom: '16px' }}>📞 +234 706 497 0003</p>
-               <p>✉️ citadelofhighflyersintlacademy@gmail.com</p>
+               <p style={{ marginBottom: '16px' }}>📍 Rock Haven, opposite St. Murumba College, Jos, Plateau State</p>
+               <p style={{ marginBottom: '16px' }}>📞 <a href="tel:+2347064970003">+234 706 497 0003</a></p>
+               <p style={{ marginBottom: '16px' }}>✉️ <a href="mailto:citadelofhighflyersintlacademy@gmail.com">citadelofhighflyersintlacademy@gmail.com</a></p>
+               <a href={whatsappLink} target="_blank" rel="noreferrer" className="btn btn-outline sm" style={{ marginTop: '4px' }}>
+                  Chat with Us on WhatsApp
+               </a>
             </div>
          </div>
          <div className="footer-bottom" style={{ textAlign: 'center', padding: '30px 0', borderTop: '1px solid rgba(0,0,0,0.05)' }}>

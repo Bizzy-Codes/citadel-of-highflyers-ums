@@ -99,7 +99,41 @@ export interface User {
   avatarUrl?: string;
   results?: Result[];
   history?: PastRecord[];
+  // Pupil bio + guardian details (patch_22). Filled either by the admit
+  // step copying them off the admission application, or by a returning
+  // pupil filling them in when they create their own account. Visible
+  // to the pupil, their class teacher and admins -- same as the rest of
+  // the profile row.
+  sex?: 'Male' | 'Female';
+  dateOfBirth?: string;
+  homeAddress?: string;
+  nationality?: string;
+  stateOfOrigin?: string;
+  lga?: string;
+  religion?: string;
+  bloodGroup?: string;
+  genotype?: string;
+  healthNotes?: string;
+  fatherName?: string;
+  fatherOccupation?: string;
+  fatherPhone?: string;
+  motherName?: string;
+  motherOccupation?: string;
+  motherPhone?: string;
+  pickupPerson?: string;
+  pickupPhone?: string;
+  welcomeSeenAt?: string;
 }
+
+// The bio/guardian half of a pupil's profile -- the block the admission
+// form, the sign-up form and the admin profile screen all read & write.
+export type StudentDetails = Pick<User,
+  | 'sex' | 'dateOfBirth' | 'homeAddress' | 'nationality' | 'stateOfOrigin' | 'lga'
+  | 'religion' | 'bloodGroup' | 'genotype' | 'healthNotes'
+  | 'fatherName' | 'fatherOccupation' | 'fatherPhone'
+  | 'motherName' | 'motherOccupation' | 'motherPhone'
+  | 'pickupPerson' | 'pickupPhone'
+>;
 
 export interface Assignment {
   id: string;
@@ -263,7 +297,11 @@ export interface NewAdmissionApplicationInput {
   firstName: string;
   otherNames?: string;
   email: string;
-  classApplyingFor: string;
+  // Optional since patch_22: families no longer pick a class on the
+  // form -- the admin chooses one when they admit the child, which is
+  // when the school actually knows where they fit. Older applications
+  // still carry whatever was chosen at the time.
+  classApplyingFor?: string;
   sex: 'Male' | 'Female';
   dateOfBirth: string;
   homeAddress: string;
@@ -385,12 +423,13 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
-  registerStudent: (name: string, email: string, password: string, grade: string) => Promise<{ error: string | null }>;
+  registerStudent: (name: string, email: string, password: string, grade: string, details?: StudentDetails, photo?: File | null) => Promise<{ error: string | null }>;
+  markWelcomeSeen: () => Promise<void>;
   registerStaff: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
   requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
   verifyRecoveryOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
-  createUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null; password?: string }>;
+  createUser: (name: string, email: string, role: 'student' | 'teacher', grade?: string) => Promise<{ error: string | null; password?: string; userId?: string }>;
   adminSetPassword: (userId: string, newPassword: string) => Promise<{ error: string | null }>;
   updateUser: (id: string, data: Partial<User>) => Promise<{ error: string | null }>;
   uploadAvatar: (file: File) => Promise<{ error: string | null }>;
@@ -497,6 +536,25 @@ const mapProfileRow = (row: any): User => ({
   location: row.location ?? undefined,
   assignedClass: row.assigned_class ?? undefined,
   avatarUrl: row.avatar_url ?? undefined,
+  sex: row.sex ?? undefined,
+  dateOfBirth: row.date_of_birth ?? undefined,
+  homeAddress: row.home_address ?? undefined,
+  nationality: row.nationality ?? undefined,
+  stateOfOrigin: row.state_of_origin ?? undefined,
+  lga: row.lga ?? undefined,
+  religion: row.religion ?? undefined,
+  bloodGroup: row.blood_group ?? undefined,
+  genotype: row.genotype ?? undefined,
+  healthNotes: row.health_notes ?? undefined,
+  fatherName: row.father_name ?? undefined,
+  fatherOccupation: row.father_occupation ?? undefined,
+  fatherPhone: row.father_phone ?? undefined,
+  motherName: row.mother_name ?? undefined,
+  motherOccupation: row.mother_occupation ?? undefined,
+  motherPhone: row.mother_phone ?? undefined,
+  pickupPerson: row.pickup_person ?? undefined,
+  pickupPhone: row.pickup_phone ?? undefined,
+  welcomeSeenAt: row.welcome_seen_at ?? undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: (row.results ?? []).map((r: any) => ({
     id: r.id, subject: r.subject, score: r.score, grade: r.grade, term: r.term, session: r.session, createdAt: r.created_at,
@@ -893,12 +951,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
   };
 
-  const registerStudent = async (name: string, email: string, password: string, grade: string) => {
-    const { error } = await supabase.auth.signUp({
+  // Stamped the first time a pupil sees the welcome letter, so it shows
+  // once on their first visit and not on every login afterwards.
+  const markWelcomeSeen = async () => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    const { error } = await supabase.from('profiles')
+      .update({ welcome_seen_at: new Date().toISOString() }).eq('id', userId);
+    if (error) { console.error('markWelcomeSeen failed', error); return; }
+    await refreshCurrentProfile(userId);
+  };
+
+  // A returning pupil creating their own account now fills in the same
+  // bio/guardian block a new applicant does. signUp only carries name /
+  // role / grade into the profile-creation trigger, so the rest is
+  // written straight after, on the session the sign-up just established.
+  const registerStudent = async (
+    name: string, email: string, password: string, grade: string,
+    details?: StudentDetails, photo?: File | null,
+  ) => {
+    const { data, error } = await supabase.auth.signUp({
       email, password,
       options: { data: { name, role: 'student', grade } },
     });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+
+    const newId = data.user?.id;
+    if (newId && details) {
+      // Best-effort: the account exists and the pupil is signed in
+      // either way, so a failure here must not read as "sign-up
+      // failed". It surfaces as a console warning and the admin can
+      // fill the gaps from the pupil's profile screen.
+      const { error: detailsError } = await supabase.from('profiles').update({
+        sex: details.sex || null,
+        date_of_birth: details.dateOfBirth || null,
+        home_address: details.homeAddress || null,
+        nationality: details.nationality || null,
+        state_of_origin: details.stateOfOrigin || null,
+        lga: details.lga || null,
+        religion: details.religion || null,
+        blood_group: details.bloodGroup || null,
+        genotype: details.genotype || null,
+        health_notes: details.healthNotes || null,
+        father_name: details.fatherName || null,
+        father_occupation: details.fatherOccupation || null,
+        father_phone: details.fatherPhone || null,
+        mother_name: details.motherName || null,
+        mother_occupation: details.motherOccupation || null,
+        mother_phone: details.motherPhone || null,
+        pickup_person: details.pickupPerson || null,
+        pickup_phone: details.pickupPhone || null,
+      }).eq('id', newId);
+      if (detailsError) console.error('registerStudent: saving pupil details failed', detailsError);
+    }
+
+    if (photo) {
+      const { error: photoError } = await uploadAvatarFor(newId, photo);
+      if (photoError) console.error('registerStudent: photo upload failed', photoError);
+    }
+
+    return { error: null };
   };
 
   const registerStaff = async (name: string, email: string, password: string) => {
@@ -940,7 +1052,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) return { error: await describeFunctionError(error) };
     if (data?.error) return { error: data.error as string };
     await refreshProfiles();
-    return { error: null, password: data?.password as string | undefined };
+    return { error: null, password: data?.password as string | undefined, userId: data?.id as string | undefined };
   };
 
   // Sets a user's password directly, no reset email involved -- for
@@ -964,6 +1076,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.assignedClass !== undefined) patch.assigned_class = data.assignedClass;
     if (data.status !== undefined) patch.status = data.status;
     if (data.role !== undefined) patch.role = data.role;
+    // Pupil bio + guardian details (patch_22). Empty strings are stored
+    // as NULL so a cleared field reads back as "not provided" rather
+    // than as a blank that looks filled in.
+    const BIO_COLUMNS: [keyof User, string][] = [
+      ['sex', 'sex'], ['dateOfBirth', 'date_of_birth'], ['homeAddress', 'home_address'],
+      ['nationality', 'nationality'], ['stateOfOrigin', 'state_of_origin'], ['lga', 'lga'],
+      ['religion', 'religion'], ['bloodGroup', 'blood_group'], ['genotype', 'genotype'],
+      ['healthNotes', 'health_notes'],
+      ['fatherName', 'father_name'], ['fatherOccupation', 'father_occupation'], ['fatherPhone', 'father_phone'],
+      ['motherName', 'mother_name'], ['motherOccupation', 'mother_occupation'], ['motherPhone', 'mother_phone'],
+      ['pickupPerson', 'pickup_person'], ['pickupPhone', 'pickup_phone'],
+    ];
+    for (const [key, column] of BIO_COLUMNS) {
+      if (data[key] !== undefined) patch[column] = (data[key] as string) || null;
+    }
     if (data.avatarUrl !== undefined) patch.avatar_url = data.avatarUrl;
 
     // .select() forces Postgres to hand back the rows it actually
@@ -978,6 +1105,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (session?.user.id === id) await refreshCurrentProfile(id);
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  // Shared by uploadAvatar (the signed-in user's own photo) and the
+  // sign-up form, which uploads the child's photo for the account it
+  // has just created.
+  const uploadAvatarFor = async (userId: string | undefined, file: File) => {
+    if (!userId) return { error: 'No account to attach the photo to' };
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${userId}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true });
+    if (uploadError) return { error: uploadError.message };
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
+
+    const { error: dbError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+    if (dbError) return { error: dbError.message };
+
+    await refreshCurrentProfile(userId);
     await refreshProfiles();
     return { error: null };
   };
@@ -1916,6 +2067,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       students, staff, currentUser, loading,
       login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
+      markWelcomeSeen,
       updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,

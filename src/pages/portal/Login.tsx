@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, Upload } from 'lucide-react';
+import { useAuth, type StudentDetails } from '../../context/AuthContext';
 import './Login.css';
+
+const regFieldStyle: React.CSSProperties = {
+  width: '100%', padding: '12px', borderRadius: '12px',
+  border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)',
+};
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +23,14 @@ const Login = () => {
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<'student' | 'teacher'>('student');
   const [regGrade, setRegGrade] = useState('Grade 1');
+
+  // A returning pupil fills in the same bio/guardian block a new
+  // applicant does, so the school ends up with one complete record
+  // either way instead of a half-empty one for anybody who didn't come
+  // through the admissions form.
+  const [details, setDetails] = useState<StudentDetails>({});
+  const [regPhoto, setRegPhoto] = useState<File | null>(null);
+  const setDetail = (patch: Partial<StudentDetails>) => setDetails((d) => ({ ...d, ...patch }));
 
   const navigate = useNavigate();
   const { login, registerStudent, registerStaff, currentUser } = useAuth();
@@ -53,7 +66,7 @@ const Login = () => {
     setIsLoading(true);
 
     const { error } = regRole === 'student'
-      ? await registerStudent(regName, regEmail, regPassword, regGrade)
+      ? await registerStudent(regName, regEmail, regPassword, regGrade, details, regPhoto)
       : await registerStaff(regName, regEmail, regPassword);
 
     if (error) {
@@ -228,6 +241,105 @@ const Login = () => {
                     {classes.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
+              )}
+
+              {regRole === 'student' && (
+                <>
+                  <p style={{ fontSize: '13px', fontWeight: 700, margin: '20px 0 4px' }}>Pupil Details</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>
+                    The school keeps these on your child's record. Everything here is optional &mdash;
+                    but the more you fill in now, the less the office has to chase later.
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="input-group">
+                      <label>Sex</label>
+                      <select value={details.sex ?? ''} onChange={(e) => setDetail({ sex: (e.target.value || undefined) as StudentDetails['sex'] })} style={regFieldStyle}>
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label>Date of Birth</label>
+                      <input type="date" value={details.dateOfBirth ?? ''} onChange={(e) => setDetail({ dateOfBirth: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Nationality</label>
+                      <input value={details.nationality ?? ''} onChange={(e) => setDetail({ nationality: e.target.value })} placeholder="Nigerian" style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>State of Origin</label>
+                      <input value={details.stateOfOrigin ?? ''} onChange={(e) => setDetail({ stateOfOrigin: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>L.G.A</label>
+                      <input value={details.lga ?? ''} onChange={(e) => setDetail({ lga: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Religion</label>
+                      <input value={details.religion ?? ''} onChange={(e) => setDetail({ religion: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Blood Group</label>
+                      <input value={details.bloodGroup ?? ''} onChange={(e) => setDetail({ bloodGroup: e.target.value })} placeholder="e.g. O+" style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Genotype</label>
+                      <input value={details.genotype ?? ''} onChange={(e) => setDetail({ genotype: e.target.value })} placeholder="e.g. AA" style={regFieldStyle} />
+                    </div>
+                  </div>
+
+                  <div className="input-group">
+                    <label>Home Address</label>
+                    <input value={details.homeAddress ?? ''} onChange={(e) => setDetail({ homeAddress: e.target.value })} style={regFieldStyle} />
+                  </div>
+
+                  <p style={{ fontSize: '13px', fontWeight: 700, margin: '18px 0 10px' }}>Father / Guardian</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="input-group">
+                      <label>Name</label>
+                      <input value={details.fatherName ?? ''} onChange={(e) => setDetail({ fatherName: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Occupation</label>
+                      <input value={details.fatherOccupation ?? ''} onChange={(e) => setDetail({ fatherOccupation: e.target.value })} style={regFieldStyle} />
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label>Phone Number</label>
+                    <input type="tel" value={details.fatherPhone ?? ''} onChange={(e) => setDetail({ fatherPhone: e.target.value })} style={regFieldStyle} />
+                  </div>
+
+                  <p style={{ fontSize: '13px', fontWeight: 700, margin: '18px 0 10px' }}>Mother / Guardian</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="input-group">
+                      <label>Name</label>
+                      <input value={details.motherName ?? ''} onChange={(e) => setDetail({ motherName: e.target.value })} style={regFieldStyle} />
+                    </div>
+                    <div className="input-group">
+                      <label>Occupation</label>
+                      <input value={details.motherOccupation ?? ''} onChange={(e) => setDetail({ motherOccupation: e.target.value })} style={regFieldStyle} />
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label>Phone Number</label>
+                    <input type="tel" value={details.motherPhone ?? ''} onChange={(e) => setDetail({ motherPhone: e.target.value })} style={regFieldStyle} />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Child's Photo (optional)</label>
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '12px',
+                      border: '1.5px dashed var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-muted)',
+                      cursor: 'pointer', fontSize: '14px',
+                    }}>
+                      <Upload size={18} />
+                      <span>{regPhoto ? regPhoto.name : 'Choose a photo...'}</span>
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => setRegPhoto(e.target.files?.[0] ?? null)} />
+                    </label>
+                  </div>
+                </>
               )}
 
               <div className="input-group">

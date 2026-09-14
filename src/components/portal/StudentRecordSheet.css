@@ -1,0 +1,223 @@
+.student-record-sheet {
+  background: #fff;
+  color: #1a1a1a;
+  border: 2px solid #1a1a1a;
+  padding: 24px;
+  font-size: 12px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.record-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 2px solid #1a1a1a;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.record-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.record-title {
+  flex: 1;
+  text-align: center;
+}
+
+.record-title h1 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+
+.record-title p {
+  font-size: 10.5px;
+  margin: 2px 0;
+}
+
+.record-title h2 {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 8px;
+  color: #6B21A8;
+}
+
+.record-photo {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.record-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.record-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #999;
+}
+
+.record-section {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #fff;
+  background: #6B21A8;
+  padding: 5px 10px;
+  margin: 14px 0 8px;
+}
+
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid #333;
+  border-bottom: none;
+}
+
+.record-wide {
+  border: 1px solid #333;
+  border-bottom: none;
+}
+
+.record-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #333;
+  border-right: 1px solid #333;
+  min-width: 0;
+}
+
+.record-grid .record-row:nth-child(3n) {
+  border-right: none;
+}
+
+.record-wide .record-row {
+  border-right: none;
+}
+
+.record-row span {
+  font-size: 9px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.record-row strong {
+  font-size: 12.5px;
+  overflow-wrap: break-word;
+}
+
+.record-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #333;
+  font-size: 9.5px;
+  color: #555;
+}
+
+@media (max-width: 700px) {
+  .record-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .record-grid .record-row:nth-child(3n) {
+    border-right: 1px solid #333;
+  }
+  .record-grid .record-row:nth-child(2n) {
+    border-right: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Print: same approach as the report card -- hide the portal shell,
+   flatten the layout chain so the sheet lays out against the page
+   rather than against a sidebar-offset container, and show only this.
+   ------------------------------------------------------------------ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  body.printing-record * {
+    visibility: hidden;
+  }
+  body.printing-record .student-record-sheet,
+  body.printing-record .student-record-sheet * {
+    visibility: visible;
+  }
+
+  body.printing-record .portal-sidebar,
+  body.printing-record .portal-header,
+  body.printing-record .sidebar-overlay {
+    display: none !important;
+  }
+
+  body.printing-record html,
+  body.printing-record,
+  body.printing-record #root,
+  body.printing-record .portal-root,
+  body.printing-record .portal-main,
+  body.printing-record .sidebar-closed .portal-main,
+  body.printing-record .portal-content,
+  body.printing-record .animate-fade-in,
+  body.printing-record .student-record-wrapper {
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    transform: none !important;
+    animation: none !important;
+    background: #fff !important;
+  }
+
+  body.printing-record .student-record-sheet {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    font-size: 10.5px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .record-header,
+  .record-grid,
+  .record-wide,
+  .record-footer {
+    break-inside: avoid;
+  }
+}

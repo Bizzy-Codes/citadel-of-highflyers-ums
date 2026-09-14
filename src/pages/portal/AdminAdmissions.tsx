@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AdmissionApplication } from '../../context/AuthContext';
-import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt } from 'lucide-react';
+import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell } from 'lucide-react';
+import { CLASSES } from '../../lib/accounts';
+import { buildReceiptReminderMessage, whatsappLink, toWhatsAppNumber } from '../../lib/outreach';
 
 const STATUS_STYLE: Record<AdmissionApplication['status'], { bg: string; color: string; label: string }> = {
   pending: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', label: 'Pending' },
@@ -16,21 +18,21 @@ const PAYMENT_STATUS_STYLE: Record<AdmissionApplication['paymentStatus'], { bg: 
   confirmed: { bg: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', label: 'Payment Confirmed' },
 };
 
-// Normalizes a Nigerian local number (e.g. "08036334689") into the
-// international format wa.me needs (e.g. "2348036334689").
-const toWhatsAppNumber = (phone: string) => {
-  const digits = phone.replace(/\D/g, '');
-  return digits.startsWith('0') ? '234' + digits.slice(1) : digits;
-};
-
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser } = useAuth();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const [filter, setFilter] = useState<'pending' | 'awaiting-receipt' | 'all'>('pending');
   const [selected, setSelected] = useState<AdmissionApplication | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Admitting opens a dialog that asks which class the child is going
+  // into -- families no longer pick one on the form, so this is where
+  // placement is actually decided.
+  const [admitting, setAdmitting] = useState<AdmissionApplication | null>(null);
+  const [admitClass, setAdmitClass] = useState<string>(CLASSES[0]);
+  const [admitEmail, setAdmitEmail] = useState('');
 
   const load = async () => {
     const data = await getAdmissionApplications();
@@ -43,7 +45,20 @@ const AdminAdmissions = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visible = filter === 'pending' ? applications.filter((a) => a.status === 'pending') : applications;
+  // Families who applied but never came back to upload their receipt --
+  // the single biggest source of stalled applications, so they get
+  // their own tab and a one-tap WhatsApp chase rather than being
+  // buried in the full list.
+  const awaitingReceipt = applications.filter((a) => a.paymentStatus === 'unpaid' && a.status !== 'declined');
+
+  const visible =
+    filter === 'pending' ? applications.filter((a) => a.status === 'pending')
+    : filter === 'awaiting-receipt' ? awaitingReceipt
+    : applications;
+
+  // Best phone we hold for a family, in wa.me format.
+  const contactNumber = (a: AdmissionApplication) =>
+    toWhatsAppNumber(a.fatherPhone || a.motherPhone || a.pickupPhone || '');
 
   const openDetail = (app: AdmissionApplication) => {
     setSelected(app);
@@ -56,43 +71,79 @@ const AdminAdmissions = () => {
     else alert('Could not open this photo.');
   };
 
-  const handleReview = async (status: 'admitted' | 'declined' | 'reviewed') => {
-    if (!selected) return;
+  const openAdmitDialog = (app: AdmissionApplication) => {
+    setAdmitClass(app.classApplyingFor && CLASSES.includes(app.classApplyingFor as typeof CLASSES[number])
+      ? app.classApplyingFor
+      : CLASSES[0]);
+    setAdmitEmail(app.email ?? '');
+    setAdmitting(app);
+  };
 
-    // Admitting creates the student's account in the same step, so
-    // the family has login details right away instead of the admin
-    // having to separately remember to go create one afterward.
-    if (status === 'admitted') {
-      let email = selected.email;
-      if (!email) {
-        email = prompt(`No email was captured on this application. Enter an email for ${selected.firstName} ${selected.surname}'s account:`) ?? '';
-        if (!email) return;
-      }
-      let grade = selected.classApplyingFor;
-      if (!grade) {
-        grade = prompt(`Which class should ${selected.firstName} ${selected.surname} be enrolled in?`, 'Grade 1') ?? '';
-        if (!grade) return;
-      }
+  // Admitting creates the pupil's account in the same step -- with the
+  // class the admin just chose -- and copies everything the family
+  // filled in on the application across onto the new profile, so the
+  // office never has to re-key it or go digging back through the form.
+  const handleAdmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!admitting) return;
+    const app = admitting;
+    const email = admitEmail.trim();
+    if (!email) return;
 
-      setBusy(true);
-      const fullName = `${selected.firstName} ${selected.otherNames ? selected.otherNames + ' ' : ''}${selected.surname}`.trim();
-      const { error: createError, password } = await createUser(fullName, email, 'student', grade);
-      if (createError) {
-        setBusy(false);
-        alert('Application was not admitted -- failed to create the student account: ' + createError);
-        return;
-      }
-
-      const { error } = await reviewAdmissionApplication(selected.id, status, note);
+    setBusy(true);
+    const fullName = `${app.firstName} ${app.otherNames ? app.otherNames + ' ' : ''}${app.surname}`.trim();
+    const { error: createError, password, userId } = await createUser(fullName, email, 'student', admitClass);
+    if (createError) {
       setBusy(false);
-      if (error) { alert('Account was created, but failed to mark the application admitted: ' + error); return; }
-
-      alert(`${fullName}'s student account is ready.\n\nTemporary password: ${password}\n\nShare this with the family -- they can log in right away with their name, ID, or email. No email was sent.`);
-      setSelected(null);
-      await load();
+      alert('Application was not admitted -- failed to create the pupil account: ' + createError);
       return;
     }
 
+    if (userId) {
+      const { error: detailsError } = await updateUser(userId, {
+        sex: app.sex,
+        dateOfBirth: app.dateOfBirth,
+        homeAddress: app.homeAddress,
+        nationality: app.nationality,
+        stateOfOrigin: app.stateOfOrigin,
+        lga: app.lga,
+        religion: app.religion ?? '',
+        bloodGroup: app.bloodGroup ?? '',
+        genotype: app.genotype ?? '',
+        healthNotes: [app.healthChallenge, app.healthChallengeDetails].filter(Boolean).join(' — '),
+        fatherName: app.fatherName ?? '',
+        fatherOccupation: app.fatherOccupation ?? '',
+        fatherPhone: app.fatherPhone ?? '',
+        motherName: app.motherName ?? '',
+        motherOccupation: app.motherOccupation ?? '',
+        motherPhone: app.motherPhone ?? '',
+        pickupPerson: app.pickupPerson,
+        pickupPhone: app.pickupPhone,
+        phone: app.fatherPhone || app.motherPhone || app.pickupPhone || '',
+      });
+      // The account exists either way -- a failure here is a gap in the
+      // record, not a failed admission, so say so rather than rolling back.
+      if (detailsError) {
+        console.error('admit: copying application details onto the profile failed', detailsError);
+      }
+    }
+
+    const { error } = await reviewAdmissionApplication(app.id, 'admitted', note);
+    setBusy(false);
+    if (error) { alert('Account was created, but failed to mark the application admitted: ' + error); return; }
+
+    alert(
+      `${fullName} has been admitted into ${admitClass}.\n\n` +
+      `Login email: ${email}\nPassword: ${password}\n\n` +
+      `Share this with the family -- they can log in right away with their name, pupil ID, or email. No email was sent.`
+    );
+    setAdmitting(null);
+    setSelected(null);
+    await load();
+  };
+
+  const handleReview = async (status: 'declined' | 'reviewed') => {
+    if (!selected) return;
     setBusy(true);
     const { error } = await reviewAdmissionApplication(selected.id, status, note);
     setBusy(false);
@@ -119,8 +170,11 @@ const AdminAdmissions = () => {
             <h2 style={{ marginBottom: '4px' }}>Admission Applications</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Applications submitted through the public website's admissions form.</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button className={`btn sm ${filter === 'pending' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter('pending')}>Pending</button>
+            <button className={`btn sm ${filter === 'awaiting-receipt' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter('awaiting-receipt')}>
+              Awaiting Receipt{awaitingReceipt.length > 0 ? ` (${awaitingReceipt.length})` : ''}
+            </button>
             <button className={`btn sm ${filter === 'all' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter('all')}>All</button>
           </div>
         </div>
@@ -143,7 +197,19 @@ const AdminAdmissions = () => {
                     {a.sex} · DOB {new Date(a.dateOfBirth).toLocaleDateString()} · Submitted {new Date(a.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {a.paymentStatus === 'unpaid' && contactNumber(a) && (
+                    <a
+                      className="btn btn-outline sm"
+                      href={whatsappLink(contactNumber(a), buildReceiptReminderMessage(`${a.firstName} ${a.surname}`))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Open WhatsApp with a reminder to upload their receipt"
+                    >
+                      <Bell size={14} /> Chase Receipt
+                    </a>
+                  )}
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: p.bg, color: p.color }}>{p.label}</span>
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
                 </div>
@@ -213,12 +279,61 @@ const AdminAdmissions = () => {
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('admitted')}><CheckCircle2 size={16} /> Admit</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={() => openAdmitDialog(selected)}><CheckCircle2 size={16} /> Admit</button>
               <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('reviewed')}><FileCheck size={16} /> Mark Reviewed</button>
               <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('declined')}><XCircle size={16} /> Decline</button>
             </div>
             <button className="btn btn-outline" style={{ width: '100%', marginTop: '10px' }} onClick={() => setSelected(null)}>Close</button>
           </div>
+        </div>
+      )}
+
+      {/* Admit dialog -- where the child's class is actually decided. */}
+      {admitting && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <form onSubmit={handleAdmit} className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '460px' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <GraduationCap size={20} /> Admit {admitting.firstName} {admitting.surname}
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
+              Choose the class this child is being admitted into. Their pupil account is created
+              straight away, with everything from their application already on the record.
+            </p>
+
+            <div className="input-group" style={{ marginBottom: '14px' }}>
+              <label>Class Admitted Into</label>
+              <select
+                required
+                value={admitClass}
+                onChange={(e) => setAdmitClass(e.target.value)}
+                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+              >
+                {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="input-group">
+              <label>Login Email</label>
+              <input
+                type="email"
+                required
+                value={admitEmail}
+                onChange={(e) => setAdmitEmail(e.target.value)}
+                placeholder="parent@example.com"
+                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+              />
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {admitting.email ? 'Taken from the application — change it if the family gave a different one.' : 'No email was captured on this application, so one is needed here.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setAdmitting(null)} disabled={busy}>Cancel</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={busy}>
+                <CheckCircle2 size={16} /> {busy ? 'Admitting...' : 'Admit & Create Account'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </PortalLayout>

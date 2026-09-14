@@ -13,8 +13,10 @@ import {
   Save,
   X,
   Key,
-  ExternalLink
+  ExternalLink,
+  FileSpreadsheet
 } from 'lucide-react';
+import { exportStudentsToSpreadsheet } from '../../lib/exportCsv';
 
 const UserManagement = () => {
   const navigate = useNavigate();
@@ -139,6 +141,16 @@ const UserManagement = () => {
            </div>
 
            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {activeTab === 'students' && (
+                <button
+                  onClick={() => exportStudentsToSpreadsheet(students)}
+                  className="btn btn-outline sm"
+                  title="Download every pupil's full record as a spreadsheet"
+                  disabled={students.length === 0}
+                >
+                   <FileSpreadsheet size={16} /> Export All Pupils
+                </button>
+              )}
               {(activeTab === 'teachers' || activeTab === 'students') && (
                 <button onClick={openAddUser} className="btn btn-primary sm">
                    <UserPlus size={16} /> Add {activeTab === 'teachers' ? 'Teacher' : 'Pupil'}

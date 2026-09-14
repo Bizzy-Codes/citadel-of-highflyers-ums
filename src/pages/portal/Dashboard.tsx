@@ -12,14 +12,42 @@ import {
   Download,
   Video,
   ClipboardCheck,
-  CheckCircle2
+  CheckCircle2,
+  Printer,
+  Mail
 } from 'lucide-react';
+import WelcomeLetter from '../../components/portal/WelcomeLetter';
 import './Dashboard.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, assignments, mySubmissions, academicCalendar, getMyAttendance } = useAuth();
+  const { currentUser, assignments, mySubmissions, academicCalendar, getMyAttendance, markWelcomeSeen } = useAuth();
   const results = currentUser?.results ?? [];
+
+  // The welcome letter greets a pupil the first time they ever sign in,
+  // then never again -- welcome_seen_at is stamped when they close it.
+  // It can always be reopened from the button in the banner.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const isFirstVisit = !!currentUser && !currentUser.welcomeSeenAt && !welcomeDismissed;
+  const showWelcome = welcomeOpen || isFirstVisit;
+
+  const closeWelcome = async () => {
+    setWelcomeOpen(false);
+    setWelcomeDismissed(true);
+    if (currentUser && !currentUser.welcomeSeenAt) await markWelcomeSeen();
+  };
+
+  const printWelcome = () => {
+    document.body.classList.add('printing-letter');
+    const cleanup = () => {
+      document.body.classList.remove('printing-letter');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    setTimeout(cleanup, 3000);
+  };
 
   const averageGrade = results.length > 0
     ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
@@ -47,6 +75,28 @@ const Dashboard = () => {
 
   return (
     <PortalLayout title="Pupil Overview">
+      {showWelcome && (
+        <div
+          className="welcome-letter-modal"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1200, overflowY: 'auto', padding: '24px 16px' }}
+        >
+          <div className="welcome-letter-wrapper" style={{ maxWidth: '830px', margin: '0 auto' }}>
+            <WelcomeLetter studentName={currentUser?.name} className={currentUser?.grade} />
+            <div
+              className="welcome-letter-actions"
+              style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', margin: '20px 0 8px' }}
+            >
+              <button className="btn btn-outline" onClick={printWelcome} style={{ background: '#fff' }}>
+                <Printer size={16} /> Print / Save as PDF
+              </button>
+              <button className="btn btn-primary" onClick={closeWelcome}>
+                Continue to My Portal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="dashboard-grid animate-fade-in">
         {/* Welcome Banner */}
         <section className="welcome-banner glass-purple">
@@ -56,9 +106,10 @@ const Dashboard = () => {
             </div>
             <h1>Welcome back, <span>{currentUser?.name || 'Pupil'}!</span> 👋</h1>
             <p>You have {pendingAssignments.length} assignment{pendingAssignments.length === 1 ? '' : 's'} awaiting submission.</p>
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                <button className="btn btn-primary sm" onClick={() => navigate('/portal/results')}><Download size={18} /> Download Result Sheet</button>
                <button className="btn btn-outline sm" onClick={() => navigate('/portal/timetable')}>View Schedule</button>
+               <button className="btn btn-outline sm" onClick={() => setWelcomeOpen(true)}><Mail size={18} /> Welcome Letter</button>
             </div>
           </div>
           <div className="welcome-illustration">🚀</div>

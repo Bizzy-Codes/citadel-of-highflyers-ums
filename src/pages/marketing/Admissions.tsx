@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Upload, Copy } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Upload, Copy, MessageCircle, FileText } from 'lucide-react';
 import { useAuth, type NewAdmissionApplicationInput } from '../../context/AuthContext';
+import {
+  SCHOOL_WHATSAPP, PROSPECTUS, SECTION_LABEL,
+  buildNewApplicantMessage, sectionFromDateOfBirth, whatsappLink, hasFile,
+} from '../../lib/outreach';
 import './Founders.css';
 import './Admissions.css';
 
 const APPLICATION_FEE = 2000;
-const PHYSICAL_COPY_FEE = 2500;
 
 const BANK_DETAILS = {
   bankName: 'First Bank',
@@ -14,12 +17,8 @@ const BANK_DETAILS = {
   accountName: 'Citadel of Highflyers Int\'l Academy',
 };
 
-const WHATSAPP_LINK = "https://wa.me/2347064970003?text=Hello,%20I%20just%20submitted%20my%20child's%20admission%20application%20and%20payment%20receipt.%20I'd%20like%20some%20further%20information.";
-
-const CLASSES = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
-
 const emptyInput: NewAdmissionApplicationInput = {
-  surname: '', firstName: '', otherNames: '', email: '', classApplyingFor: CLASSES[0], sex: 'Male', dateOfBirth: '',
+  surname: '', firstName: '', otherNames: '', email: '', classApplyingFor: '', sex: 'Male', dateOfBirth: '',
   homeAddress: '', nationality: '', stateOfOrigin: '', lga: '', religion: '',
   bloodGroup: '', genotype: '',
   fatherName: '', fatherOccupation: '', fatherOfficeAddress: '', fatherPhone: '',
@@ -48,9 +47,27 @@ const Admissions = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [wantsPhysicalCopy, setWantsPhysicalCopy] = useState(false);
   const [receipt, setReceipt] = useState<File | null>(null);
-  const totalDue = APPLICATION_FEE + (wantsPhysicalCopy ? PHYSICAL_COPY_FEE : 0);
+  const totalDue = APPLICATION_FEE;
+
+  // Which arm this child falls into, worked out from their date of
+  // birth -- it decides which prospectus they're offered first.
+  const section = sectionFromDateOfBirth(form.dateOfBirth);
+  const childName = `${form.firstName} ${form.surname}`.trim();
+
+  // Only offer a prospectus whose file is actually deployed.
+  const [availableProspectus, setAvailableProspectus] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (step !== 'done') return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        Object.entries(PROSPECTUS).map(async ([key, p]) => [key, await hasFile(p.file)] as const)
+      );
+      if (!cancelled) setAvailableProspectus(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [step]);
 
   const set = (patch: Partial<NewAdmissionApplicationInput>) => setForm({ ...form, ...patch });
 
@@ -71,7 +88,7 @@ const Admissions = () => {
     if (!receipt) { setError('Please upload your payment receipt.'); return; }
     setSubmitting(true);
     setError(null);
-    const { error: payError } = await submitAdmissionPayment(applicationId, wantsPhysicalCopy, totalDue, receipt);
+    const { error: payError } = await submitAdmissionPayment(applicationId, false, totalDue, receipt);
     setSubmitting(false);
     if (payError) { setError(payError); return; }
     setStep('done');
@@ -88,10 +105,59 @@ const Admissions = () => {
         <div className="admission-success">
           <CheckCircle2 size={64} color="var(--success)" />
           <h1>Application Submitted!</h1>
-          <p>Thank you for applying to Citadel of Highflyers Int'l Academy. We've received your details and payment receipt -- our admissions team will confirm your payment and reach out to you shortly.</p>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Link to="/" className="btn btn-primary lg">Back to Home</Link>
-            <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="btn btn-outline lg">Reach Us on WhatsApp</a>
+          <p>Thank you for applying to Citadel of Highflyers Int'l Academy. We've received {childName ? `${childName}'s` : 'your'} details and payment receipt &mdash; our admissions team will confirm your payment and reach out to you shortly.</p>
+
+          <p style={{ fontWeight: 700, marginTop: '8px' }}>One last step &mdash; say hello on WhatsApp.</p>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '520px' }}>
+            Tap below and WhatsApp will open with your message already written. Send it and our
+            admissions team will have everything they need to get back to you with your
+            prospectus and welcome pack.
+          </p>
+
+          <a
+            href={whatsappLink(SCHOOL_WHATSAPP, buildNewApplicantMessage({
+              childName: childName || 'our child',
+              section,
+              reference: applicationId ? applicationId.slice(0, 8).toUpperCase() : undefined,
+            }))}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary lg"
+            style={{ background: '#25D366', borderColor: '#25D366' }}
+          >
+            <MessageCircle size={20} /> Next: Message Us on WhatsApp
+          </a>
+
+          {/* The family gets the prospectus here and now, so they have it
+              even if the school line is offline when they message. */}
+          {Object.values(availableProspectus).some(Boolean) && (
+            <div style={{ marginTop: '28px', width: '100%', maxWidth: '520px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>Your prospectus</p>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {/* The arm matching the child's age comes first. */}
+                {([section, section === 'kinders' ? 'graders' : 'kinders'] as const).map((key) =>
+                  availableProspectus[key] ? (
+                    <a
+                      key={key}
+                      href={PROSPECTUS[key].file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={key === section ? 'btn btn-outline' : 'btn btn-outline sm'}
+                    >
+                      <FileText size={16} /> {PROSPECTUS[key].label}
+                    </a>
+                  ) : null
+                )}
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
+                Based on your child's date of birth we've put the <strong>{SECTION_LABEL[section]}</strong> prospectus
+                first. If that's not the right arm, open the other one &mdash; our team will confirm placement with you.
+              </p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '24px' }}>
+            <Link to="/" className="btn btn-outline">Back to Home</Link>
           </div>
         </div>
       </div>
@@ -123,11 +189,6 @@ const Admissions = () => {
               <span>Application Processing Fee</span>
               <strong>₦{APPLICATION_FEE.toLocaleString()}</strong>
             </div>
-
-            <label className="admission-physical-copy-toggle">
-              <input type="checkbox" checked={wantsPhysicalCopy} onChange={(e) => setWantsPhysicalCopy(e.target.checked)} />
-              <span>Also purchase a physical copy of the form from the school (+₦{PHYSICAL_COPY_FEE.toLocaleString()})</span>
-            </label>
 
             <div className="admission-total-row">
               <span>Total Due</span>
@@ -200,11 +261,6 @@ const Admissions = () => {
             <Field label="First Name"><input style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
             <Field label="Other Names"><input style={inputStyle} value={form.otherNames} onChange={(e) => set({ otherNames: e.target.value })} /></Field>
             <Field label="Email Address"><input type="email" style={inputStyle} required value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="you@example.com" /></Field>
-            <Field label="Class Applying For">
-              <select style={inputStyle} required value={form.classApplyingFor} onChange={(e) => set({ classApplyingFor: e.target.value })}>
-                {CLASSES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
             <Field label="Sex">
               <select style={inputStyle} value={form.sex} onChange={(e) => set({ sex: e.target.value as 'Male' | 'Female' })}>
                 <option value="Male">Male</option>
