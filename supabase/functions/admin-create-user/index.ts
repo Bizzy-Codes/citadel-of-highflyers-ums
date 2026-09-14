@@ -27,12 +27,15 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-  const bytes = new Uint8Array(10);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
-}
+// Every account starts on the same easy-to-say default. Families were
+// being handed a 10-character random string over the phone and couldn't
+// type it in or remember it, so the school now reads out one short
+// word-and-number they can't get wrong, and the parent changes it (or
+// the admin sets a new one) from the portal afterwards.
+//
+// Change it here and it changes everywhere -- this is the only place a
+// new account's password is decided.
+const DEFAULT_PASSWORD = 'citadel123';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -91,7 +94,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Invalid input' }, 400);
   }
 
-  const tempPassword = generateTempPassword();
+  const tempPassword = DEFAULT_PASSWORD;
 
   const { data, error } = await adminClient.auth.admin.createUser({
     email,
