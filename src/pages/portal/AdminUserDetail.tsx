@@ -4,9 +4,9 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt, type AttendanceRecord } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
 import { summarizeAttendance } from '../../lib/attendance';
-import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff } from 'lucide-react';
-
-const CLASSES = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
+import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer } from 'lucide-react';
+import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
+import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
@@ -35,7 +35,17 @@ const AdminUserDetail = () => {
 
   const user = [...students, ...staff].find((u) => u.id === userId);
 
-  const [form, setForm] = useState({ name: '', phone: '', location: '', grade: '', assignedClass: '', status: 'Active' as 'Active' | 'Inactive' });
+  const BLANK_FORM = {
+    name: '', phone: '', location: '', grade: '', assignedClass: '', status: 'Active' as 'Active' | 'Inactive',
+    // Pupil bio + guardian block (patch_22) -- filled from the admission
+    // form when the child was admitted, or by the family at sign-up.
+    sex: '' as '' | 'Male' | 'Female', dateOfBirth: '', homeAddress: '',
+    nationality: '', stateOfOrigin: '', lga: '', religion: '', bloodGroup: '', genotype: '', healthNotes: '',
+    fatherName: '', fatherOccupation: '', fatherPhone: '',
+    motherName: '', motherOccupation: '', motherPhone: '',
+    pickupPerson: '', pickupPhone: '',
+  };
+  const [form, setForm] = useState(BLANK_FORM);
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
@@ -60,6 +70,24 @@ const AdminUserDetail = () => {
       grade: user.grade ?? CLASSES[0],
       assignedClass: user.assignedClass ?? '',
       status: user.status,
+      sex: user.sex ?? '',
+      dateOfBirth: user.dateOfBirth ?? '',
+      homeAddress: user.homeAddress ?? '',
+      nationality: user.nationality ?? '',
+      stateOfOrigin: user.stateOfOrigin ?? '',
+      lga: user.lga ?? '',
+      religion: user.religion ?? '',
+      bloodGroup: user.bloodGroup ?? '',
+      genotype: user.genotype ?? '',
+      healthNotes: user.healthNotes ?? '',
+      fatherName: user.fatherName ?? '',
+      fatherOccupation: user.fatherOccupation ?? '',
+      fatherPhone: user.fatherPhone ?? '',
+      motherName: user.motherName ?? '',
+      motherOccupation: user.motherOccupation ?? '',
+      motherPhone: user.motherPhone ?? '',
+      pickupPerson: user.pickupPerson ?? '',
+      pickupPhone: user.pickupPhone ?? '',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -107,11 +135,46 @@ const AdminUserDetail = () => {
       phone: form.phone,
       location: form.location,
       status: form.status,
-      ...(isStudent ? { grade: form.grade } : { assignedClass: form.assignedClass || undefined }),
+      ...(isStudent ? {
+        grade: form.grade,
+        sex: form.sex || undefined,
+        dateOfBirth: form.dateOfBirth,
+        homeAddress: form.homeAddress,
+        nationality: form.nationality,
+        stateOfOrigin: form.stateOfOrigin,
+        lga: form.lga,
+        religion: form.religion,
+        bloodGroup: form.bloodGroup,
+        genotype: form.genotype,
+        healthNotes: form.healthNotes,
+        fatherName: form.fatherName,
+        fatherOccupation: form.fatherOccupation,
+        fatherPhone: form.fatherPhone,
+        motherName: form.motherName,
+        motherOccupation: form.motherOccupation,
+        motherPhone: form.motherPhone,
+        pickupPerson: form.pickupPerson,
+        pickupPhone: form.pickupPhone,
+      } : { assignedClass: form.assignedClass || undefined }),
     });
     setSavingProfile(false);
     if (error) { alert('Failed to save profile: ' + error); return; }
     alert('Profile updated.');
+  };
+
+  // Printing scopes itself with a body class so the print rules in
+  // StudentRecordSheet.css only take over while this is running -- the
+  // report card's own print rules live in the same document.
+  const handlePrintRecord = () => {
+    document.body.classList.add('printing-record');
+    const cleanup = () => {
+      document.body.classList.remove('printing-record');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    // Safari/older browsers don't always fire afterprint.
+    setTimeout(cleanup, 3000);
   };
 
   const handleSetPassword = async (e: React.FormEvent) => {
@@ -129,17 +192,13 @@ const AdminUserDetail = () => {
     setPasswordMessage(`Password updated. ${user.name} can log in with it right away -- no email was sent.`);
   };
 
-  // Generates a fresh password and fills both fields with it (revealed,
-  // not masked) so the admin can read it straight off the screen and
-  // relay it -- the point being to skip the back-and-forth of a parent
-  // resetting their own password over email.
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-    const bytes = new Uint8Array(10);
-    crypto.getRandomValues(bytes);
-    const pwd = Array.from(bytes, (b) => chars[b % chars.length]).join('');
-    setNewPassword(pwd);
-    setConfirmPassword(pwd);
+  // Fills both fields with the school's standard default (revealed, not
+  // masked) so the admin can read it straight off the screen. Parents
+  // could not reliably type or remember the random strings this used to
+  // generate, which is the whole reason for a single known default.
+  const useDefaultPassword = () => {
+    setNewPassword(DEFAULT_ACCOUNT_PASSWORD);
+    setConfirmPassword(DEFAULT_ACCOUNT_PASSWORD);
     setShowPassword(true);
     setPasswordMessage(null);
     setPasswordError(null);
@@ -231,6 +290,72 @@ const AdminUserDetail = () => {
                   <option value="Inactive">Inactive</option>
                 </select>
               </Field>
+
+              {/* Everything the family filled in on the admissions form
+                  (or at sign-up) -- editable here so the office can keep
+                  it current without going back to the application. */}
+              {isStudent && (
+                <>
+                  <h4 style={{ marginTop: '14px' }}>Pupil Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <Field label="Sex">
+                      <select style={inputStyle} value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value as '' | 'Male' | 'Female' })}>
+                        <option value="">Not recorded</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </Field>
+                    <Field label="Date of Birth">
+                      <input type="date" style={inputStyle} value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+                    </Field>
+                    <Field label="Nationality">
+                      <input style={inputStyle} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
+                    </Field>
+                    <Field label="State of Origin">
+                      <input style={inputStyle} value={form.stateOfOrigin} onChange={(e) => setForm({ ...form, stateOfOrigin: e.target.value })} />
+                    </Field>
+                    <Field label="L.G.A">
+                      <input style={inputStyle} value={form.lga} onChange={(e) => setForm({ ...form, lga: e.target.value })} />
+                    </Field>
+                    <Field label="Religion">
+                      <input style={inputStyle} value={form.religion} onChange={(e) => setForm({ ...form, religion: e.target.value })} />
+                    </Field>
+                    <Field label="Blood Group">
+                      <input style={inputStyle} value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
+                    </Field>
+                    <Field label="Genotype">
+                      <input style={inputStyle} value={form.genotype} onChange={(e) => setForm({ ...form, genotype: e.target.value })} />
+                    </Field>
+                  </div>
+                  <Field label="Home Address">
+                    <input style={inputStyle} value={form.homeAddress} onChange={(e) => setForm({ ...form, homeAddress: e.target.value })} />
+                  </Field>
+                  <Field label="Health Notes">
+                    <input style={inputStyle} placeholder="Allergies, conditions, medication..." value={form.healthNotes} onChange={(e) => setForm({ ...form, healthNotes: e.target.value })} />
+                  </Field>
+
+                  <h4 style={{ marginTop: '14px' }}>Father / Guardian</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <Field label="Name"><input style={inputStyle} value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} /></Field>
+                    <Field label="Occupation"><input style={inputStyle} value={form.fatherOccupation} onChange={(e) => setForm({ ...form, fatherOccupation: e.target.value })} /></Field>
+                  </div>
+                  <Field label="Father's Phone"><input type="tel" style={inputStyle} value={form.fatherPhone} onChange={(e) => setForm({ ...form, fatherPhone: e.target.value })} /></Field>
+
+                  <h4 style={{ marginTop: '14px' }}>Mother / Guardian</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <Field label="Name"><input style={inputStyle} value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} /></Field>
+                    <Field label="Occupation"><input style={inputStyle} value={form.motherOccupation} onChange={(e) => setForm({ ...form, motherOccupation: e.target.value })} /></Field>
+                  </div>
+                  <Field label="Mother's Phone"><input type="tel" style={inputStyle} value={form.motherPhone} onChange={(e) => setForm({ ...form, motherPhone: e.target.value })} /></Field>
+
+                  <h4 style={{ marginTop: '14px' }}>Collection</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <Field label="Authorised for Pickup"><input style={inputStyle} value={form.pickupPerson} onChange={(e) => setForm({ ...form, pickupPerson: e.target.value })} /></Field>
+                    <Field label="Pickup Phone"><input type="tel" style={inputStyle} value={form.pickupPhone} onChange={(e) => setForm({ ...form, pickupPhone: e.target.value })} /></Field>
+                  </div>
+                </>
+              )}
+
               <button type="submit" className="btn btn-primary" disabled={savingProfile} style={{ marginTop: '8px' }}>
                 <Save size={16} /> {savingProfile ? 'Saving...' : 'Save Changes'}
               </button>
@@ -245,8 +370,8 @@ const AdminUserDetail = () => {
             <form onSubmit={handleSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {passwordError && <div className="admission-form-error">{passwordError}</div>}
               {passwordMessage && <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '12px 16px', borderRadius: '10px', fontSize: '14px' }}>{passwordMessage}</div>}
-              <button type="button" onClick={generatePassword} className="btn btn-outline sm" style={{ alignSelf: 'flex-start' }}>
-                <Wand2 size={14} /> Generate Random Password
+              <button type="button" onClick={useDefaultPassword} className="btn btn-outline sm" style={{ alignSelf: 'flex-start' }}>
+                <Wand2 size={14} /> Use Default Password ({DEFAULT_ACCOUNT_PASSWORD})
               </button>
               <Field label="New Password">
                 <div style={{ position: 'relative' }}>
@@ -317,6 +442,24 @@ const AdminUserDetail = () => {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Printable A4 record -- the whole pupil file on one sheet. */}
+          {isStudent && (
+            <div className="card glass student-record-wrapper" style={{ padding: '28px', borderRadius: '24px', gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '18px' }}>
+                <div>
+                  <h3>Pupil Record</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Everything on file for {user.name}, on one A4 sheet.</p>
+                </div>
+                <button className="btn btn-primary sm" onClick={handlePrintRecord}>
+                  <Printer size={16} /> Print / Save as PDF
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <StudentRecordSheet student={user} />
+              </div>
             </div>
           )}
         </div>
