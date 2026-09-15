@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Home from './pages/marketing/Home'
 import Founders from './pages/marketing/Founders'
 import Admissions from './pages/marketing/Admissions'
+import FinancialInvolvement from './pages/marketing/FinancialInvolvement'
 import Gallery from './pages/marketing/Gallery'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
@@ -60,6 +61,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/founders" element={<Founders />} />
         <Route path="/admissions" element={<Admissions />} />
+        <Route path="/fees" element={<FinancialInvolvement />} />
+        <Route path="/fees/:section" element={<FinancialInvolvement />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
