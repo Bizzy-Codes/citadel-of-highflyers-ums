@@ -96,7 +96,12 @@ body {
   background-color: var(--bg-light);
   color: var(--text-main);
   line-height: 1.5;
+  /* `clip` rather than `hidden`: hidden forces overflow-y to compute as
+     `auto`, making <body> a scroll container and breaking fixed-position
+     headers that listen for window scroll. `hidden` first as the
+     Safari < 16 fallback. */
   overflow-x: hidden;
+  overflow-x: clip;
   width: 100%;
 }
 
