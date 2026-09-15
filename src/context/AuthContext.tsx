@@ -447,6 +447,8 @@ interface AuthContextType {
   addResult: (studentId: string, result: NewResultInput) => Promise<void>;
   importAdmissionDetails: (studentId: string) => Promise<{ error: string | null; filled?: number }>;
   linkProfileToApplication: (studentId: string, applicationId: string) => Promise<void>;
+  getUnassignedStudents: () => Promise<Pick<User, 'id' | 'displayId' | 'name' | 'email' | 'createdAt'>[]>;
+  assignStudentToClass: (studentId: string, className: string) => Promise<{ error: string | null }>;
   saveSubjectResults: (
     studentId: string,
     term: Result['term'],
@@ -1283,6 +1285,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (insError) return { error: insError.message };
     }
     if (session?.user.id === studentId) await refreshCurrentProfile(studentId);
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  // Pupils who have registered but haven't been placed in a class yet.
+  // Goes through an RPC because RLS deliberately hides them from
+  // teachers -- the "students in their class" policy matches on grade,
+  // and an unplaced pupil hasn't got one.
+  const getUnassignedStudents = async (): Promise<Pick<User, 'id' | 'displayId' | 'name' | 'email' | 'createdAt'>[]> => {
+    const { data, error } = await supabase.rpc('list_unassigned_students');
+    if (error) {
+      if (!/list_unassigned_students|does not exist|schema cache/i.test(error.message)) {
+        console.error('getUnassignedStudents failed', error);
+      }
+      return [];
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({
+      id: r.id, displayId: r.display_id, name: r.name, email: r.email ?? '', createdAt: r.created_at,
+    }));
+  };
+
+  const assignStudentToClass = async (studentId: string, className: string) => {
+    const { error } = await supabase.rpc('assign_student_to_class', {
+      p_student_id: studentId, p_class: className,
+    });
+    if (error) return { error: error.message };
     await refreshProfiles();
     return { error: null };
   };
@@ -2182,7 +2211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       students, staff, currentUser, loading,
       login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
       markWelcomeSeen,
-      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults, importAdmissionDetails, linkProfileToApplication,
+      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults, importAdmissionDetails, linkProfileToApplication, getUnassignedStudents, assignStudentToClass,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
       notifications, addNotification, exportData,

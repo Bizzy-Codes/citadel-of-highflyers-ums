@@ -22,7 +22,6 @@ const Login = () => {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<'student' | 'teacher'>('student');
-  const [regGrade, setRegGrade] = useState('Grade 1');
 
   // A returning pupil fills in the same bio/guardian block a new
   // applicant does, so the school ends up with one complete record
@@ -66,7 +65,7 @@ const Login = () => {
     setIsLoading(true);
 
     const { error } = regRole === 'student'
-      ? await registerStudent(regName, regEmail, regPassword, regGrade, details, regPhoto)
+      ? await registerStudent(regName, regEmail, regPassword, '', details, regPhoto)
       : await registerStaff(regName, regEmail, regPassword);
 
     if (error) {
@@ -81,10 +80,6 @@ const Login = () => {
     // effect above picks up the new session and redirects.
   };
 
-  const classes = [
-    "Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade",
-    "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"
-  ];
 
   return (
     <div className="login-root">
@@ -230,16 +225,18 @@ const Login = () => {
                 </div>
               </div>
 
+              {/* No class picker. A pupil choosing their own class is how
+                  a register ends up full of children who put themselves
+                  in Grade 5 -- placement is the school's call. They can
+                  sign in straight away; a teacher or the admin adds them
+                  to a class afterwards. */}
               {regRole === 'student' && (
-                <div className="input-group">
-                  <label>Current Class / Grade</label>
-                  <select
-                    value={regGrade}
-                    onChange={(e) => setRegGrade(e.target.value)}
-                    style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
-                  >
-                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                <div style={{
+                  padding: '12px 14px', borderRadius: '12px', marginBottom: '4px',
+                  background: 'var(--accent)', color: 'var(--primary)', fontSize: '12.5px', lineHeight: 1.5,
+                }}>
+                  Your class is assigned by the school. You can sign in as soon as you register &mdash;
+                  your teacher will add you to your class.
                 </div>
               )}
 

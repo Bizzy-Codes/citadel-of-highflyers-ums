@@ -10,17 +10,29 @@ import {
   Search,
   ArrowUpCircle,
   ClipboardList,
+  UserPlus,
   Save
 } from 'lucide-react';
 import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
 
 const ClassManagement = () => {
   const { className } = useParams();
-  const { students, saveSubjectResults, promoteStudent, addNotification, getReportCard, upsertReportCard, academicCalendar } = useAuth();
+  const {
+    students, saveSubjectResults, promoteStudent, addNotification, getReportCard, upsertReportCard,
+    academicCalendar, getUnassignedStudents, assignStudentToClass,
+  } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [isEditingReportCard, setIsEditingReportCard] = useState(false);
+
+  // "Add Pupil to Class" -- the list of pupils who have registered but
+  // haven't been placed anywhere yet.
+  const [isAddingToClass, setIsAddingToClass] = useState(false);
+  const [unassigned, setUnassigned] = useState<Awaited<ReturnType<typeof getUnassignedStudents>>>([]);
+  const [loadingUnassigned, setLoadingUnassigned] = useState(false);
+  const [unassignedSearch, setUnassignedSearch] = useState('');
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   // Term and session come from the Academic Calendar -- never typed in
   // per pupil. Subject scores are entered on the Report Cards page
@@ -117,6 +129,40 @@ const ClassManagement = () => {
     }
   };
 
+  // Pupils register themselves but arrive with no class. This is where
+  // the class teacher picks them off that list and pulls them in.
+  const openAddToClass = async () => {
+    setIsAddingToClass(true);
+    setUnassignedSearch('');
+    setLoadingUnassigned(true);
+    setUnassigned(await getUnassignedStudents());
+    setLoadingUnassigned(false);
+  };
+
+  const handleAssign = async (studentId: string, studentName: string) => {
+    if (!className) return;
+    setAssigningId(studentId);
+    const { error } = await assignStudentToClass(studentId, className);
+    setAssigningId(null);
+    if (error) { alert('Could not add this pupil: ' + error); return; }
+    setUnassigned((prev) => prev.filter((s) => s.id !== studentId));
+    await addNotification({
+      recipientId: studentId,
+      title: `Welcome to ${className}`,
+      message: `You have been added to ${className}. Your class page and timetable are now available.`,
+      type: 'success',
+    });
+    alert(`${studentName} has been added to ${className}.`);
+  };
+
+  const matchingUnassigned = unassigned.filter((s) => {
+    const q = unassignedSearch.trim().toLowerCase();
+    if (!q) return true;
+    return s.name.toLowerCase().includes(q)
+      || s.displayId.toLowerCase().includes(q)
+      || (s.email ?? '').toLowerCase().includes(q);
+  });
+
   const handleExtractedResults = async (extracted: { subject: string; score: number }[]) => {
     if (!selectedStudent) return;
     if (!reportCardSession) { alert('Set the Current Session on the Academic Calendar page first.'); return; }
@@ -143,15 +189,20 @@ const ClassManagement = () => {
               <h3 style={{ fontSize: '24px', fontWeight: '800' }}>{className} Pupil List</h3>
               <p style={{ color: 'var(--text-muted)' }}>You have {classStudents.length} pupils in this class section.</p>
             </div>
-            <div className="search-bar" style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                placeholder="Search pupil..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
-              />
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary sm" onClick={openAddToClass}>
+                <UserPlus size={16} /> Add Pupil to Class
+              </button>
+              <div className="search-bar" style={{ position: 'relative', width: '100%', maxWidth: '300px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Search pupil..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
+                />
+              </div>
             </div>
           </div>
 
@@ -212,6 +263,58 @@ const ClassManagement = () => {
             </table>
           </div>
         </section>
+
+        {/* Add Pupil to Class */}
+        {isAddingToClass && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '560px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                <UserPlus size={20} /> Add a Pupil to {className}
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
+                Pupils who have registered but haven't been placed in a class yet.
+              </p>
+
+              <div className="search-bar" style={{ position: 'relative', marginBottom: '14px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Search by name, pupil ID or email..."
+                  value={unassignedSearch}
+                  onChange={(e) => setUnassignedSearch(e.target.value)}
+                  style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
+                />
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {loadingUnassigned && <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</p>}
+                {!loadingUnassigned && matchingUnassigned.length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '20px 0', textAlign: 'center' }}>
+                    {unassigned.length === 0
+                      ? 'Every registered pupil already has a class.'
+                      : 'No pupil matches that search.'}
+                  </p>
+                )}
+                {matchingUnassigned.map((s) => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px', background: 'var(--bg-light)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ fontSize: '14px' }}>{s.name}</strong>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {s.displayId}{s.email ? ` · ${s.email}` : ''}
+                      </p>
+                    </div>
+                    <button className="btn btn-primary sm" disabled={assigningId === s.id} onClick={() => handleAssign(s.id, s.name)}>
+                      {assigningId === s.id ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button className="btn btn-outline" style={{ width: '100%', marginTop: '16px' }} onClick={() => setIsAddingToClass(false)}>Done</button>
+            </div>
+          </div>
+        )}
 
         {/* AI OCR Modal */}
         {isAIProcessing && selectedStudent && (

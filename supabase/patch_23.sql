@@ -189,4 +189,57 @@ where p.role = 'student'
   and p.email is not null
   and lower(p.email) = m.email_key;
 
+-- ------------------------------------------------------------
+-- 4. Class placement is the school's decision, not the pupil's.
+--
+-- A pupil signing up used to pick their own class from a dropdown,
+-- which is how the register ends up full of children who put
+-- themselves in Grade 5. They now register with no class at all and
+-- can log in immediately; a teacher or admin places them afterwards.
+--
+-- This needs two SECURITY DEFINER helpers, because RLS deliberately
+-- hides an unplaced pupil from teachers (the "teachers view students
+-- in their class" policy matches on grade, and theirs is NULL) and
+-- likewise blocks the very UPDATE that would place them.
+-- ------------------------------------------------------------
+create or replace function public.list_unassigned_students()
+returns table(id uuid, display_id text, name text, email text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.current_role() not in ('teacher', 'admin') then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+    select p.id, p.display_id, p.name, p.email, p.created_at
+    from public.profiles p
+    where p.role = 'student' and coalesce(p.grade, '') = ''
+    order by p.created_at desc;
+end;
+$$;
+grant execute on function public.list_unassigned_students() to authenticated;
+
+create or replace function public.assign_student_to_class(p_student_id uuid, p_class text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_role text := public.current_role();
+begin
+  if v_role not in ('teacher', 'admin') then
+    raise exception 'Not authorized';
+  end if;
+  -- A teacher may only pull a pupil into the class they actually teach.
+  if v_role = 'teacher' and p_class is distinct from public.current_assigned_class() then
+    raise exception 'You can only add pupils to your own class';
+  end if;
+  if coalesce(p_class, '') = '' then
+    raise exception 'A class is required';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_student_id and role = 'student') then
+    raise exception 'Pupil not found';
+  end if;
+
+  update public.profiles set grade = p_class where id = p_student_id;
+end;
+$$;
+grant execute on function public.assign_student_to_class(uuid, text) to authenticated;
+
 notify pgrst, 'reload schema';
