@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Upload, Copy, MessageCircle, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Upload, Copy, MessageCircle, FileText, Banknote, Landmark } from 'lucide-react';
 import { useAuth, type NewAdmissionApplicationInput } from '../../context/AuthContext';
 import {
   SCHOOL_WHATSAPP, PROSPECTUS, SECTION_LABEL,
@@ -48,6 +48,9 @@ const Admissions = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [receipt, setReceipt] = useState<File | null>(null);
+  // Cash at the school desk, or a bank transfer. Nothing is shown about
+  // account numbers or receipts until they've said which.
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | null>(null);
   const totalDue = APPLICATION_FEE;
 
   // Which arm this child falls into, worked out from their date of
@@ -84,11 +87,13 @@ const Admissions = () => {
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!applicationId) return;
-    if (!receipt) { setError('Please upload your payment receipt.'); return; }
+    if (!applicationId || !payMethod) return;
+    if (payMethod === 'transfer' && !receipt) { setError('Please upload your payment receipt.'); return; }
     setSubmitting(true);
     setError(null);
-    const { error: payError } = await submitAdmissionPayment(applicationId, false, totalDue, receipt);
+    const { error: payError } = await submitAdmissionPayment(
+      applicationId, payMethod, totalDue, payMethod === 'transfer' ? receipt : null
+    );
     setSubmitting(false);
     if (payError) { setError(payError); return; }
     setStep('done');
@@ -195,34 +200,85 @@ const Admissions = () => {
               <strong>₦{totalDue.toLocaleString()}</strong>
             </div>
 
-            <div className="admission-bank-details">
-              <h4>Pay by Bank Transfer</h4>
-              <div className="admission-bank-row">
-                <span>Bank Name</span>
-                <strong>{BANK_DETAILS.bankName}</strong>
-              </div>
-              <div className="admission-bank-row">
-                <span>Account Number</span>
-                <strong>{BANK_DETAILS.accountNumber}
-                  <button type="button" className="icon-btn sm" onClick={() => copyToClipboard(BANK_DETAILS.accountNumber)} title="Copy"><Copy size={14} /></button>
-                </strong>
-              </div>
-              <div className="admission-bank-row">
-                <span>Account Name</span>
-                <strong>{BANK_DETAILS.accountName}</strong>
-              </div>
+            <h4 className="admission-pay-heading">How did you pay?</h4>
+            <div className="admission-pay-options">
+              <button
+                type="button"
+                className={`admission-pay-option ${payMethod === 'cash' ? 'selected' : ''}`}
+                onClick={() => { setPayMethod('cash'); setError(null); }}
+              >
+                <Banknote size={22} />
+                <strong>I paid in cash</strong>
+                <span>Paid at the school office</span>
+              </button>
+              <button
+                type="button"
+                className={`admission-pay-option ${payMethod === 'transfer' ? 'selected' : ''}`}
+                onClick={() => { setPayMethod('transfer'); setError(null); }}
+              >
+                <Landmark size={22} />
+                <strong>I paid by transfer</strong>
+                <span>Bank transfer to the school account</span>
+              </button>
             </div>
 
-            <Field label="Upload your payment receipt (image or PDF)">
-              <label className="admission-photo-upload">
-                <Upload size={18} />
-                <span>{receipt ? receipt.name : 'Choose a file...'}</span>
-                <input type="file" accept="image/*,application/pdf" required style={{ display: 'none' }} onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
-              </label>
-            </Field>
+            {payMethod === 'cash' && (
+              <div className="admission-pay-panel">
+                <p>
+                  Thank you. Our office will check your cash payment against their records and
+                  confirm it &mdash; there is nothing else for you to upload.
+                </p>
+              </div>
+            )}
 
-            <button type="submit" className="btn btn-primary lg" style={{ width: '100%', marginTop: '10px' }} disabled={submitting}>
-              {submitting ? 'Submitting...' : 'Submit Payment Receipt'}
+            {payMethod === 'transfer' && (
+              <>
+                <div className="admission-bank-details">
+                  <h4>Pay to this account</h4>
+                  <div className="admission-bank-row">
+                    <span>Bank Name</span>
+                    <strong>{BANK_DETAILS.bankName}</strong>
+                  </div>
+                  <div className="admission-bank-row">
+                    <span>Account Number</span>
+                    <strong>{BANK_DETAILS.accountNumber}
+                      <button type="button" className="icon-btn sm" onClick={() => copyToClipboard(BANK_DETAILS.accountNumber)} title="Copy"><Copy size={14} /></button>
+                    </strong>
+                  </div>
+                  <div className="admission-bank-row">
+                    <span>Account Name</span>
+                    <strong>{BANK_DETAILS.accountName}</strong>
+                  </div>
+                </div>
+
+                <div className="admission-pay-panel warning">
+                  <p>
+                    <strong>Please upload your receipt now.</strong> Your application stays on hold
+                    until we can see it, and this is the step families most often forget to come
+                    back for.
+                  </p>
+                </div>
+
+                <Field label="Upload your payment receipt (image or PDF)">
+                  <label className="admission-photo-upload">
+                    <Upload size={18} />
+                    <span>{receipt ? receipt.name : 'Choose a file...'}</span>
+                    <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
+                  </label>
+                </Field>
+              </>
+            )}
+
+            <button
+              type="submit"
+              className="btn btn-primary lg"
+              style={{ width: '100%', marginTop: '10px' }}
+              disabled={submitting || !payMethod || (payMethod === 'transfer' && !receipt)}
+            >
+              {submitting ? 'Submitting...'
+                : !payMethod ? 'Choose how you paid'
+                : payMethod === 'cash' ? 'Continue'
+                : 'Submit Payment Receipt'}
             </button>
           </form>
         </main>
