@@ -4,7 +4,7 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt, type AttendanceRecord } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
 import { summarizeAttendance } from '../../lib/attendance';
-import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer } from 'lucide-react';
+import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer, AlertTriangle, DownloadCloud } from 'lucide-react';
 import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
 import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
 
@@ -31,6 +31,7 @@ const AdminUserDetail = () => {
   const {
     students, staff, updateUser, adminSetPassword, deleteUser, approveTeacher,
     getAllPaymentReceipts, getPaymentReceiptUrl, getStudentAttendance, academicCalendar,
+    importAdmissionDetails,
   } = useAuth();
 
   const user = [...students, ...staff].find((u) => u.id === userId);
@@ -47,6 +48,8 @@ const AdminUserDetail = () => {
   };
   const [form, setForm] = useState(BLANK_FORM);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -124,6 +127,10 @@ const AdminUserDetail = () => {
   }
 
   const isStudent = user.role === 'student';
+  // "Nothing on file" -- the signal that an admission application's
+  // details never made it onto this profile.
+  const detailsLookEmpty = isStudent
+    && !user.bloodGroup && !user.fatherName && !user.motherName && !user.nationality && !user.dateOfBirth;
   const getInitials = (name: string) => name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
   const attendanceSummary = summarizeAttendance(attendanceRecords, academicCalendar?.totalWeeks);
 
@@ -159,7 +166,19 @@ const AdminUserDetail = () => {
     });
     setSavingProfile(false);
     if (error) { alert('Failed to save profile: ' + error); return; }
-    alert('Profile updated.');
+    setSaveMessage('Saved. You can come back and fill in the rest at any time.');
+    setTimeout(() => setSaveMessage(null), 4000);
+  };
+
+  // Recovers whatever the family filled in on their admission form but
+  // which never reached this profile.
+  const handleImportDetails = async () => {
+    setImporting(true);
+    const { error, filled } = await importAdmissionDetails(user.id);
+    setImporting(false);
+    if (error) { alert(error); return; }
+    if (!filled) { alert('Nothing to import — this pupil\'s record already has everything from their application.'); return; }
+    alert(`Imported ${filled} detail${filled === 1 ? '' : 's'} from ${user.name}'s admission application.`);
   };
 
   // Printing scopes itself with a body class so the print rules in
@@ -260,9 +279,40 @@ const AdminUserDetail = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
           <div className="card glass" style={{ padding: '28px', borderRadius: '24px' }}>
             <h3 style={{ marginBottom: '20px' }}>Profile Details</h3>
+
+            {/* Everyone admitted before the admit step started copying
+                the application across has a profile full of blanks,
+                while the data sits intact on the application itself. */}
+            {isStudent && detailsLookEmpty && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap',
+                padding: '14px 16px', borderRadius: '12px', marginBottom: '18px',
+                background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)',
+              }}>
+                <AlertTriangle size={18} color="var(--warning)" style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: '200px', fontSize: '13px' }}>
+                  <strong>This pupil's details are missing.</strong> If their family filled in an
+                  admission form, everything they entered is still on it and can be pulled over.
+                </div>
+                <button type="button" className="btn btn-primary sm" disabled={importing} onClick={handleImportDetails}>
+                  <DownloadCloud size={15} /> {importing ? 'Importing...' : 'Import from Application'}
+                </button>
+              </div>
+            )}
+
+            {saveMessage && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+                {saveMessage}
+              </div>
+            )}
+
             <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Nothing here is `required`. The office fills a profile
+                  in over days as information trickles in, so the form
+                  must always save whatever has been typed so far and
+                  leave the rest blank. */}
               <Field label="Full Name">
-                <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </Field>
               <Field label="Phone">
                 <input type="tel" style={inputStyle} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />

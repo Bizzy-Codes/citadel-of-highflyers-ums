@@ -19,7 +19,7 @@ const PAYMENT_STATUS_STYLE: Record<AdmissionApplication['paymentStatus'], { bg: 
 };
 
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser, linkProfileToApplication } = useAuth();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'awaiting-receipt' | 'all'>('pending');
@@ -122,10 +122,19 @@ const AdminAdmissions = () => {
         phone: app.fatherPhone || app.motherPhone || app.pickupPhone || '',
       });
       // The account exists either way -- a failure here is a gap in the
-      // record, not a failed admission, so say so rather than rolling back.
+      // record, not a failed admission. Say so loudly rather than
+      // rolling back or failing silently: a silent failure here is
+      // exactly how pupils ended up admitted with empty profiles.
       if (detailsError) {
         console.error('admit: copying application details onto the profile failed', detailsError);
+        alert(
+          `${fullName}'s account was created, but their details could not be copied across ` +
+          `(${detailsError}).\n\nOpen their profile and use "Import from Application" to pull them over.`
+        );
       }
+      // Link the profile back to the application it came from, so the
+      // details can always be re-imported later.
+      await linkProfileToApplication(userId, app.id);
     }
 
     const { error } = await reviewAdmissionApplication(app.id, 'admitted', note);
