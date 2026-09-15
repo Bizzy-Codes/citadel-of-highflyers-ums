@@ -13,7 +13,6 @@ import {
   Sun,
   Video,
   CheckCircle,
-  Play,
   Eye,
   Compass,
   Star,
@@ -28,6 +27,21 @@ import PhotoSlot from '../../components/common/PhotoSlot';
 import { GALLERY_PHOTOS } from '../../data/galleryPhotos';
 import './Home.css';
 import './Gallery.css';
+
+// The channel itself. sub_confirmation=1 opens it with the subscribe
+// prompt already up, which is the whole point of sending people there
+// rather than to one video.
+const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@citadelofhighflyersintlaca7994?sub_confirmation=1';
+
+// Recent uploads, played as a silent looping showreel on the homepage.
+// YouTube can't embed "a channel" directly, so this is a playlist built
+// from the video IDs -- add or swap IDs here to change the reel.
+// Muted is mandatory: browsers block autoplay with sound.
+const CHANNEL_VIDEO_IDS = ['2aODtjJmPGA', '7nHeVsAcVrE', 'WN9AFWET2BQ'];
+const CHANNEL_PREVIEW_EMBED =
+  `https://www.youtube.com/embed/${CHANNEL_VIDEO_IDS[0]}` +
+  `?playlist=${CHANNEL_VIDEO_IDS.join(',')}` +
+  '&autoplay=1&mute=1&loop=1&controls=1&modestbranding=1&rel=0&playsinline=1';
 
 const Home = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -63,33 +77,43 @@ const Home = () => {
             </button>
           </div>
 
-          {/* Key destinations, inline on the same line as the logo and
-              login button rather than stacked on a second row below --
-              the hamburger still opens the full list (Founders included)
-              plus the theme toggle for phones, where there isn't room to
-              keep that toggle in the bar itself. */}
-          <div className="mobile-quick-nav">
-            <Link to="/"><HomeIcon size={14} /> <span>Home</span></Link>
-            <Link to="/admissions"><GraduationCap size={14} /> <span>Admissions</span></Link>
-            <Link to="/gallery"><GalleryIcon size={14} /> <span>Gallery</span></Link>
-            <a href="#contact-section"><Phone size={14} /> <span>Contact</span></a>
-          </div>
-
           <div className="nav-actions">
-             <button onClick={toggleTheme} className="theme-toggle">
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-             </button>
              <Link to="/login" className="btn login-btn-ghost">
                <LogIn size={18} />
                <span className="login-btn-text-full">Portal Login</span>
                <span className="login-btn-text-short">Login</span>
              </Link>
-             <button className="mobile-menu-toggle" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+             <button className="mobile-menu-toggle" aria-label="Menu" onClick={() => setIsMenuOpen(!isMenuOpen)}>
                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
              </button>
           </div>
         </div>
+
+        {/* Phone-only second row. Cramming these onto the logo line
+            alongside the login button left them overlapping it; giving
+            them their own full-width row lets all four breathe and
+            gives each a proper touch target. */}
+        <div className="mobile-quick-nav">
+          <Link to="/"><HomeIcon size={15} /> <span>Home</span></Link>
+          <Link to="/admissions"><GraduationCap size={15} /> <span>Admissions</span></Link>
+          <Link to="/gallery"><GalleryIcon size={15} /> <span>Gallery</span></Link>
+          <a href="#contact-section"><Phone size={15} /> <span>Contact</span></a>
+        </div>
       </nav>
+
+      {/* Light/dark lives just under the bar as its own glowing pill --
+          in the bar it was the first thing squeezed out on a phone, and
+          on desktop it read as clutter. Out here it's always reachable
+          and actually invites a tap. */}
+      <button
+        onClick={toggleTheme}
+        className="theme-toggle-float"
+        aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+        title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+      >
+        {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+        <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+      </button>
 
       {/* Everything except .nav lives in here. .nav needs to stay a
           fixed-to-viewport element -- but position:fixed inside an
@@ -191,9 +215,29 @@ const Home = () => {
 
           <div className="features-grid-spiced">
             <div className="feature-item-large glass">
-               <div className="feature-image">
-                  <PhotoSlot src="/gallery/feature-learning.jpg" alt="Pupils at Citadel of Highflyers" label="Photo: Classroom Learning" />
-                  <div className="play-overlay"><Play fill="white" size={40} color="white" /></div>
+               {/* Was a still photo with a play badge painted on top, so
+                   it looked like a video and did nothing when tapped.
+                   Now it really is the channel: our uploads play here
+                   muted on a loop, and the button opens the channel with
+                   the subscribe prompt rather than a single video.
+                   loading="lazy" keeps the embed off the wire until it's
+                   nearly in view, which matters on a phone plan. */}
+               <div className="feature-image feature-video">
+                  <iframe
+                    src={CHANNEL_PREVIEW_EMBED}
+                    title="Citadel of Highflyers Int'l Academy on YouTube"
+                    loading="lazy"
+                    allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                  <a
+                    href={YOUTUBE_CHANNEL_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="feature-video-cta"
+                  >
+                    <Video size={16} /> Visit our channel &amp; subscribe
+                  </a>
                </div>
                <div className="feature-text">
                   <h3>Holistic Learning Environment</h3>
