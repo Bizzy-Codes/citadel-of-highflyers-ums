@@ -142,6 +142,61 @@
   display: none;
 }
 
+/* Floating light/dark pill.
+   Lives just below the fixed nav rather than inside it: in the bar it
+   was the first thing squeezed out on a phone, and read as clutter on
+   desktop. The slow glow makes it findable without shouting. */
+.theme-toggle-float {
+  position: fixed;
+  top: calc(var(--nav-height, 72px) + 30px);
+  right: 22px;
+  z-index: 998;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1.5px solid var(--primary);
+  border-radius: 50px;
+  background: var(--bg-surface);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(107, 33, 168, 0.18);
+  animation: theme-toggle-glow 3.2s ease-in-out infinite;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.theme-toggle-float:hover {
+  transform: translateY(-2px) scale(1.04);
+  background: var(--primary);
+  color: #fff;
+  animation: none;
+  box-shadow: 0 8px 22px rgba(107, 33, 168, 0.4);
+}
+
+@keyframes theme-toggle-glow {
+  0%, 100% { box-shadow: 0 4px 14px rgba(107, 33, 168, 0.18); }
+  50%      { box-shadow: 0 4px 24px rgba(107, 33, 168, 0.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-float { animation: none; }
+}
+
+@media (max-width: 768px) {
+  /* Out of the header entirely on a phone -- bottom-right, where it
+     can't compete with the nav for space. */
+  .theme-toggle-float {
+    top: auto;
+    bottom: 18px;
+    right: 14px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}
+
 /* Lives in the hamburger dropdown, where it replaces the round toggle
    that gets hidden from the bar itself on phones for want of room. */
 .nav-links-theme-toggle {
@@ -360,6 +415,55 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* The live channel showreel. The iframe fills the same box the still
+   photo used to, with the channel link pinned over its bottom edge. */
+.feature-video {
+  background: #000;
+}
+
+.feature-video iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.feature-video-cta {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 50px;
+  background: #FF0000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, background 0.2s ease;
+  /* The controls strip lives along the bottom of the player; sitting
+     above it keeps both tappable. */
+  z-index: 2;
+}
+
+.feature-video-cta:hover {
+  transform: translateX(-50%) translateY(-2px);
+  background: #CC0000;
+}
+
+@media (max-width: 560px) {
+  .feature-video-cta {
+    font-size: 11.5px;
+    padding: 8px 13px;
+    bottom: 10px;
+  }
 }
 
 .play-overlay {
@@ -603,11 +707,16 @@
     top: 10px;
     width: 95%;
     border-radius: 18px;
+    /* The quick-links row is a genuine second row on a phone, so the
+       bar has to grow to hold it -- a fixed height left it hanging out
+       past the card's rounded edge and over the page behind. */
+    height: auto;
   }
 
   .nav-top-row {
     padding: 0 10px;
     gap: 6px;
+    height: var(--nav-height);
   }
 
   .logo-img {
@@ -657,42 +766,45 @@
     animation: fadeIn 0.3s ease-out;
   }
 
-  /* Home/Admissions/Gallery inline in the bar itself, centred between
-     the logo and the login button. No wrapping -- if it can't fit on
-     the line it shrinks (see the 480px block) rather than dropping to
-     a second row, which is what made the header look broken in two. */
+  /* Its own full-width row under the logo line. Squeezing these in
+     beside the login button is what left "Contact" sitting underneath
+     it -- four equal columns here give every link room and a real
+     touch target. */
   .mobile-quick-nav {
-    display: flex;
-    flex: 1;
-    flex-wrap: nowrap;
-    justify-content: center;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 0 10px 10px;
   }
 
-  /* Tinted with the brand accent rather than plain white on white-ish
-     glass, so these read as branded buttons sitting on the bar. */
   .mobile-quick-nav a {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 5px 9px;
-    border-radius: 50px;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 4px;
+    border-radius: 12px;
     background: var(--accent);
     color: var(--primary);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.1;
     text-decoration: none;
     white-space: nowrap;
+    min-height: 44px;
+  }
+
+  .mobile-quick-nav a:active {
+    background: var(--secondary);
   }
 
   .hero {
     /* .nav is position:fixed (out of document flow), so nothing here
        automatically reserves space for it -- this has to clear the
-       fixed bar's height plus its top offset by itself. */
-    padding-top: 90px;
+       fixed bar plus its top offset by itself. Two rows now: the
+       56px logo line and the ~53px quick-links row. */
+    padding-top: 140px;
     padding-bottom: 60px;
   }
 
@@ -789,29 +901,14 @@
     gap: 6px;
   }
 
-  /* A phone can't fit logo + three links + theme toggle + login +
-     hamburger on one line, and the links and login button matter more
-     here -- the toggle moves into the hamburger dropdown instead. */
-  .theme-toggle {
-    display: none;
+  .mobile-quick-nav {
+    gap: 5px;
+    padding: 0 8px 9px;
   }
 
-  .nav-links.active .nav-links-theme-toggle {
-    display: flex;
-  }
-
-  /* At phone widths the three labels plus their icons are wider than
-     the space between the logo and the login button, and the chips
-     spill over both. The words are what actually needs to be readable
-     here, so the icons drop out and the labels stay. */
   .mobile-quick-nav a {
-    padding: 5px 8px;
-    font-size: 10.5px;
-    gap: 0;
-  }
-
-  .mobile-quick-nav a svg {
-    display: none;
+    font-size: 9.5px;
+    padding: 6px 2px;
   }
 
   .logo-img {

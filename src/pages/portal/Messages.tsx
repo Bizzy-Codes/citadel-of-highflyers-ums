@@ -91,6 +91,7 @@ const Messages = () => {
   const [notifTitle, setNotifTitle] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
   const [notifType, setNotifType] = useState<'info' | 'warning' | 'success'>('info');
+  const [notifAudience, setNotifAudience] = useState<'all' | 'students' | 'teachers'>('all');
 
   const handleSendWhatsApp = () => {
     if (!waMessage) return;
@@ -102,12 +103,15 @@ const Messages = () => {
 
   const handlePostNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (notifTitle && notifMsg) {
-      await addNotification({ title: notifTitle, message: notifMsg, type: notifType });
-      setNotifTitle('');
-      setNotifMsg('');
-      alert("Notification posted to all users!");
-    }
+    if (!notifTitle || !notifMsg) return;
+    await addNotification({ title: notifTitle, message: notifMsg, type: notifType, audience: notifAudience });
+    setNotifTitle('');
+    setNotifMsg('');
+    alert(
+      notifAudience === 'all' ? 'Announcement posted to everyone.'
+      : notifAudience === 'students' ? 'Announcement posted to all pupils.'
+      : 'Announcement posted to all staff.'
+    );
   };
 
   return (
@@ -171,17 +175,28 @@ const Messages = () => {
                       style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
                      />
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                        <select
-                          value={notifType}
-                          onChange={(e) => setNotifType(e.target.value as any)}
-                          style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                        >
-                           <option value="info">Information (Blue)</option>
-                           <option value="warning">Important (Orange)</option>
-                           <option value="success">Success (Green)</option>
-                        </select>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          <select
+                            value={notifAudience}
+                            onChange={(e) => setNotifAudience(e.target.value as 'all' | 'students' | 'teachers')}
+                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                          >
+                             <option value="all">Everyone</option>
+                             <option value="students">Pupils only</option>
+                             <option value="teachers">Staff only</option>
+                          </select>
+                          <select
+                            value={notifType}
+                            onChange={(e) => setNotifType(e.target.value as 'info' | 'warning' | 'success')}
+                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                          >
+                             <option value="info">Information (Blue)</option>
+                             <option value="warning">Important (Orange)</option>
+                             <option value="success">Success (Green)</option>
+                          </select>
+                        </div>
                         <button type="submit" className="btn btn-primary">
-                           <Send size={18} /> Post to All Portals
+                           <Send size={18} /> Post Announcement
                         </button>
                      </div>
                   </form>

@@ -89,21 +89,75 @@
   font-size: 18px;
 }
 
-.admission-physical-copy-toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px dashed var(--glass-border);
-  cursor: pointer;
-  font-size: 14px;
+/* "How did you pay?" -- cash at the desk, or bank transfer. Nothing
+   about account numbers or receipts appears until one is picked. */
+.admission-pay-heading {
+  margin: 4px 0 -4px;
+  font-size: 15px;
+  font-weight: 800;
 }
 
-.admission-physical-copy-toggle input {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
+.admission-pay-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.admission-pay-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 2px solid var(--glass-border);
+  background: var(--bg-light);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.admission-pay-option:hover {
+  border-color: var(--secondary);
+  transform: translateY(-2px);
+}
+
+.admission-pay-option.selected {
+  border-color: var(--primary);
+  background: var(--accent);
+}
+
+.admission-pay-option svg {
+  color: var(--primary);
+}
+
+.admission-pay-option strong {
+  font-size: 15px;
+}
+
+.admission-pay-option span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.admission-pay-panel {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--accent);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.admission-pay-panel.warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+@media (max-width: 560px) {
+  .admission-pay-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admission-bank-details {
