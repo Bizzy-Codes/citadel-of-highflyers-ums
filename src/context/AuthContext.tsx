@@ -334,6 +334,7 @@ export interface NewAdmissionApplicationInput {
 export interface AdmissionApplication extends NewAdmissionApplicationInput {
   id: string;
   photoPath?: string;
+  documents?: { path: string; name: string }[];
   status: 'pending' | 'reviewed' | 'admitted' | 'declined';
   adminNote?: string;
   createdAt: string;
@@ -482,7 +483,7 @@ interface AuthContextType {
   subscribeToDirectMessages: (otherUserId: string, onMessage: (message: DirectMessage) => void) => () => void;
   uploadChatAttachment: (recipientId: string, file: File) => Promise<{ error: string | null; path?: string; name?: string }>;
   getChatAttachmentUrl: (path: string) => Promise<string | null>;
-  submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null) => Promise<{ error: string | null; applicationId?: string }>;
+  submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null, documents?: File[]) => Promise<{ error: string | null; applicationId?: string }>;
   submitAdmissionPayment: (applicationId: string, method: 'cash' | 'transfer', paymentAmount: number, receipt: File | null) => Promise<{ error: string | null }>;
   confirmAdmissionPayment: (applicationId: string) => Promise<{ error: string | null }>;
   getAdmissionApplications: () => Promise<AdmissionApplication[]>;
@@ -755,6 +756,7 @@ const mapAdmissionApplicationRow = (row: any): AdmissionApplication => ({
   pickupPhone: row.pickup_phone,
   siblingNames: row.sibling_names ?? undefined,
   photoPath: row.photo_path ?? undefined,
+  documents: Array.isArray(row.documents) ? row.documents : [],
   status: row.status,
   adminNote: row.admin_note ?? undefined,
   createdAt: row.created_at,
@@ -1960,7 +1962,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) console.error('finalizeMyExpiredAttempts failed', error);
   };
 
-  const submitAdmissionApplication = async (input: NewAdmissionApplicationInput, photo: File | null) => {
+  const submitAdmissionApplication = async (
+    input: NewAdmissionApplicationInput, photo: File | null, documents: File[] = []
+  ) => {
     const id = crypto.randomUUID();
     let photoPath: string | null = null;
     if (photo) {
@@ -1968,8 +1972,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error: uploadError } = await supabase.storage.from('admission-photos').upload(photoPath, photo);
       if (uploadError) return { error: `Failed to upload photo: ${uploadError.message}` };
     }
+
+    // Birth certificate, immunisation record, anything else the family
+    // attaches. Uploaded under the application's own id BEFORE the row
+    // is inserted, so the paths travel in with the insert the anon
+    // applicant is already allowed to make -- no second write, and
+    // nothing orphaned in the table if they abandon the form.
+    const documentRefs: { path: string; name: string }[] = [];
+    for (const [index, file] of documents.entries()) {
+      const path = `${id}/document-${index + 1}-${file.name}`;
+      const { error: docError } = await supabase.storage.from('admission-photos').upload(path, file);
+      if (docError) return { error: `Failed to upload "${file.name}": ${docError.message}` };
+      documentRefs.push({ path, name: file.name });
+    }
+
     const { error } = await supabase.from('admission_applications').insert({
       id,
+      documents: documentRefs,
       surname: input.surname,
       first_name: input.firstName,
       other_names: input.otherNames || null,

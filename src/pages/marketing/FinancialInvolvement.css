@@ -1,0 +1,308 @@
+/* The Financial Involvement sheet -- deep purple and gold, matching the
+   school's printed version. Sized for A4 and prints cleanly. */
+.fi-root {
+  --fi-purple: #3B1265;
+  --fi-purple-mid: #5B2A8C;
+  --fi-gold: #C9922B;
+  --fi-gold-soft: #F7E7C4;
+  --fi-ink: #241238;
+  min-height: 100vh;
+  background: linear-gradient(160deg, #F4EDFA 0%, #FBF7FF 100%);
+  padding: 20px 16px 60px;
+}
+
+.fi-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 820px;
+  margin: 0 auto 18px;
+}
+
+.fi-sheet {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #fff;
+  color: var(--fi-ink);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(59, 18, 101, 0.16);
+  border-top: 10px solid var(--fi-purple);
+  border-bottom: 10px solid var(--fi-purple);
+  font-size: 14px;
+}
+
+.fi-header {
+  text-align: center;
+  padding: 26px 24px 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(201, 146, 43, 0.18), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(59, 18, 101, 0.12), transparent 42%);
+}
+
+.fi-logo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.fi-motto {
+  font-style: italic;
+  font-size: 12px;
+  color: var(--fi-gold);
+  font-weight: 700;
+  margin: 6px 0 12px;
+}
+
+.fi-header h1 {
+  font-size: clamp(26px, 5.4vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: var(--fi-purple);
+  line-height: 1.1;
+}
+
+.fi-subtitle {
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--fi-ink);
+  margin: 6px 0;
+}
+
+.fi-header h2 {
+  font-size: clamp(19px, 4vw, 27px);
+  font-weight: 900;
+  color: var(--fi-purple);
+  line-height: 1.15;
+}
+
+.fi-stars {
+  color: var(--fi-gold);
+  letter-spacing: 8px;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.fi-banner {
+  background: var(--fi-purple);
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.4px;
+  padding: 10px 16px;
+  margin: 0 24px;
+  border-radius: 8px;
+}
+
+.fi-block {
+  margin: 18px 24px 0;
+}
+
+.fi-block-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--fi-purple-mid);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 8px 14px;
+  border-radius: 8px 8px 0 0;
+}
+
+.fi-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fi-table th,
+.fi-table td {
+  border: 1px solid #DCC9EC;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.fi-table thead th {
+  background: #F3ECFA;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--fi-purple);
+}
+
+.fi-sn { width: 48px; text-align: center; }
+.fi-amt { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.fi-subtotal td {
+  background: var(--fi-gold-soft);
+  font-weight: 800;
+  color: var(--fi-purple);
+}
+
+.fi-subtotal span {
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fi-two-col {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.fi-two-col > .fi-block { margin-right: 0; }
+.fi-two-col > .fi-block + * { margin-right: 24px; }
+
+.fi-note {
+  margin: 18px 24px 0 0;
+  border: 2px solid var(--fi-gold);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #FFFDF8;
+}
+
+.fi-note h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--fi-gold);
+  margin-bottom: 8px;
+}
+
+.fi-note ul,
+.fi-checklist {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fi-checklist { list-style: none; padding-left: 0; }
+.fi-checklist li::before { content: '✓ '; color: var(--fi-gold); font-weight: 900; }
+
+.fi-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 20px 24px 0;
+  padding: 8px 8px 8px 18px;
+  border: 2px solid var(--fi-gold);
+  border-radius: 14px;
+  background: #FFFDF8;
+}
+
+.fi-total > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--fi-purple);
+}
+
+.fi-total strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.fi-total span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #6B5A7E;
+}
+
+.fi-total-amount {
+  background: var(--fi-purple);
+  color: #fff;
+  font-size: clamp(22px, 4.6vw, 32px);
+  font-weight: 900;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fi-bank-row { align-items: stretch; }
+
+.fi-bank p {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #DCC9EC;
+  border-top: none;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.fi-bank p span { color: #6B5A7E; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
+.fi-bank p strong { text-align: right; }
+
+.fi-receipt {
+  margin: 18px 24px 0 0;
+  border: 2px dashed var(--fi-gold);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--fi-ink);
+  background: #FFFDF8;
+}
+
+.fi-receipt svg { color: #25D366; }
+.fi-receipt-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6B5A7E; }
+.fi-receipt strong { font-size: 21px; font-weight: 900; color: var(--fi-purple); }
+.fi-receipt em { font-size: 11.5px; color: var(--fi-gold); font-weight: 600; }
+
+.fi-footer {
+  margin-top: 22px;
+  background: var(--fi-purple);
+  color: var(--fi-gold-soft);
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-style: italic;
+  padding: 11px 16px;
+}
+
+@media (max-width: 680px) {
+  .fi-two-col { grid-template-columns: 1fr; }
+  .fi-note,
+  .fi-receipt { margin: 14px 24px 0; }
+  .fi-block { margin-left: 16px; margin-right: 16px; }
+  .fi-banner, .fi-total { margin-left: 16px; margin-right: 16px; }
+  .fi-note, .fi-receipt { margin-left: 16px; margin-right: 16px; }
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  .fi-actions { display: none !important; }
+  .fi-root { background: #fff; padding: 0; min-height: 0; }
+  .fi-sheet {
+    box-shadow: none;
+    border-radius: 0;
+    max-width: 100%;
+    font-size: 12px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .fi-block, .fi-total, .fi-two-col, .fi-header { break-inside: avoid; }
+}

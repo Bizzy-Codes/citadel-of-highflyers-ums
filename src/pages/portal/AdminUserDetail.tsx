@@ -4,8 +4,10 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt, type AttendanceRecord } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
 import { summarizeAttendance } from '../../lib/attendance';
-import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer, AlertTriangle, DownloadCloud } from 'lucide-react';
+import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer, AlertTriangle, DownloadCloud, MessageCircle } from 'lucide-react';
 import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
+import ContactParentDialog from '../../components/portal/ContactParentDialog';
+import { buildLoginDetailsMessage } from '../../lib/outreach';
 import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
@@ -50,6 +52,7 @@ const AdminUserDetail = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [sendingLogin, setSendingLogin] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -242,6 +245,25 @@ const AdminUserDetail = () => {
 
   return (
     <PortalLayout title="Pupil / Staff Profile">
+      <ContactParentDialog
+        open={sendingLogin}
+        title="Send login details"
+        description={`Choose who to send ${user.name}'s portal login to. The message uses their name as the login, not the email on the account.`}
+        contacts={[
+          { role: 'Father', name: user.fatherName, phone: user.fatherPhone },
+          { role: 'Mother', name: user.motherName, phone: user.motherPhone },
+          { role: 'Pickup contact', name: user.pickupPerson, phone: user.pickupPhone },
+          { role: 'Number on the account', phone: user.phone },
+        ]}
+        message={buildLoginDetailsMessage({
+          studentName: user.name,
+          displayId: user.displayId,
+          password: DEFAULT_ACCOUNT_PASSWORD,
+          className: user.grade,
+        })}
+        onClose={() => setSendingLogin(false)}
+      />
+
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <Link to="/portal/admin/users" className="back-btn" style={{ alignSelf: 'flex-start' }}><ArrowLeft size={18} /> Back to User Management</Link>
 
@@ -268,6 +290,11 @@ const AdminUserDetail = () => {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {isStudent && (
+                <button onClick={() => setSendingLogin(true)} className="btn btn-primary sm">
+                  <MessageCircle size={16} /> Send Login Details
+                </button>
+              )}
               {user.role === 'teacher_pending' && (
                 <button onClick={handleApprove} className="btn btn-primary sm"><UserCheck size={16} /> Approve Teacher</button>
               )}

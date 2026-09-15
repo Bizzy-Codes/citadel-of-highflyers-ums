@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -47,13 +47,47 @@ const Home = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
+  // The bar slides away when you scroll down and comes straight back
+  // when you scroll up, so it isn't permanently covering the top of the
+  // page -- especially on a phone, where it's now two rows tall.
+  const [navHidden, setNavHidden] = useState(false);
+  useEffect(() => {
+    // Read from whichever thing is actually scrolling. Normally that's
+    // the window, but an ancestor with overflow-x can quietly become
+    // the scroll container instead, and then window.scrollY never moves.
+    const currentY = () =>
+      window.scrollY
+      || document.documentElement.scrollTop
+      || document.body.scrollTop
+      || (document.querySelector('.home-scroll-content') as HTMLElement | null)?.scrollTop
+      || 0;
+
+    let lastY = currentY();
+    const onScroll = () => {
+      const y = currentY();
+      // Ignore sub-pixel jitter and rubber-band scrolling past the top,
+      // and never hide while still near the top of the page.
+      if (Math.abs(y - lastY) < 8) return;
+      setNavHidden(y > lastY && y > 140);
+      lastY = y;
+    };
+
+    // Capture phase on document: `scroll` doesn't bubble, but it does
+    // capture, so this catches a nested scroller as well as the window.
+    document.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => document.removeEventListener('scroll', onScroll, { capture: true });
+  }, []);
+
+  // Never hide the bar out from under an open menu.
+  const hideNav = navHidden && !isMenuOpen;
+
   const whatsappLink = "https://wa.me/2347064970003?text=Hello,%20I'm%20interested%20in%20enrolling%20my%20child%20at%20Citadel%20of%20Highflyers%20Int'l%20Academy.%20Could%20you%20provide%20more%20information%20on%20the%20admission%20process?";
 
   return (
     <div className="home-container">
 
       {/* Modern Responsive Navigation */}
-      <nav className="nav glass">
+      <nav className={`nav glass ${hideNav ? "nav-hidden" : ""}`}>
         <div className="nav-top-row">
           <div className="logo-section">
             <Link to="/" className="logo-section">
