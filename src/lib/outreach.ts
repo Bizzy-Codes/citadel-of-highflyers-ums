@@ -51,15 +51,24 @@ export function buildNewApplicantMessage(opts: {
   const lines = [
     `Hello Citadel of Highflyers Int'l Academy,`,
     ``,
-    `I have just completed the online admission application and uploaded my payment receipt.`,
+    `I have just completed the online admission application.`,
     ``,
     `NEW STUDENT`,
     `SECTION: ${SECTION_LABEL[opts.section].toUpperCase()}`,
     `Child: ${opts.childName}`,
   ];
   if (opts.reference) lines.push(`Reference: ${opts.reference}`);
-  lines.push(``, `Please send me the prospectus and welcome information. Thank you.`);
+  lines.push(``, `Please send me the welcome information. Thank you.`);
   return lines.join('\n');
+}
+
+// A permanent link to the right arm's Financial Involvement sheet.
+// WhatsApp can't be made to attach a file on its own, but it carries a
+// link perfectly -- so the school pastes this and the family opens,
+// reads and prints the real sheet on their phone.
+export function feeSheetUrl(section: SchoolSection, origin?: string): string {
+  const base = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${base}/fees/${section}`;
 }
 
 // A reminder the school sends to a family that applied but never came
@@ -75,6 +84,38 @@ export function buildReceiptReminderMessage(childName: string): string {
     ``,
     `Thank you.`,
   ].join('\n');
+}
+
+// The message that hands a family their portal login.
+//
+// The pupil's NAME is the login, not the parent's email: the email on
+// the account is usually a parent's, which made "log in with
+// mum@example.com" read as the parent's own account rather than the
+// child's. Name, pupil ID and email all work -- name is the one a
+// family will actually remember.
+export function buildLoginDetailsMessage(opts: {
+  studentName: string;
+  displayId: string;
+  password: string;
+  className?: string;
+  portalUrl?: string;
+}): string {
+  const url = opts.portalUrl ?? (typeof window !== 'undefined' ? `${window.location.origin}/login` : '');
+  return [
+    `Hello, this is Citadel of Highflyers Int'l Academy.`,
+    ``,
+    `Here are the portal login details for ${opts.studentName}${opts.className ? ` (${opts.className})` : ''}:`,
+    ``,
+    `Login name: ${opts.studentName}`,
+    `Pupil ID: ${opts.displayId}`,
+    `Password: ${opts.password}`,
+    ``,
+    url ? `Sign in here: ${url}` : '',
+    ``,
+    `You can change the password once you are signed in, under Profile.`,
+    ``,
+    `Thank you for partnering with us in raising future generals.`,
+  ].filter((line) => line !== undefined).join('\n');
 }
 
 export function whatsappLink(phoneOrLine: string, message: string): string {

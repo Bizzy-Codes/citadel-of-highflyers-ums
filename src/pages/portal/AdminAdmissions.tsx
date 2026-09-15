@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AdmissionApplication } from '../../context/AuthContext';
-import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell } from 'lucide-react';
-import { CLASSES } from '../../lib/accounts';
-import { buildReceiptReminderMessage, whatsappLink, toWhatsAppNumber } from '../../lib/outreach';
+import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell, FileText } from 'lucide-react';
+import { CLASSES, DEFAULT_ACCOUNT_PASSWORD } from '../../lib/accounts';
+import { buildReceiptReminderMessage, buildLoginDetailsMessage, toWhatsAppNumber } from '../../lib/outreach';
+import ContactParentDialog, { type ParentContact } from '../../components/portal/ContactParentDialog';
 
 const STATUS_STYLE: Record<AdmissionApplication['status'], { bg: string; color: string; label: string }> = {
   pending: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', label: 'Pending' },
@@ -19,7 +20,7 @@ const PAYMENT_STATUS_STYLE: Record<AdmissionApplication['paymentStatus'], { bg: 
 };
 
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser, linkProfileToApplication } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser, linkProfileToApplication, students } = useAuth();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'awaiting-receipt' | 'all'>('pending');
@@ -33,6 +34,12 @@ const AdminAdmissions = () => {
   const [admitting, setAdmitting] = useState<AdmissionApplication | null>(null);
   const [admitClass, setAdmitClass] = useState<string>(CLASSES[0]);
   const [admitEmail, setAdmitEmail] = useState('');
+
+  // Outbound WhatsApp, each asking which parent to send to.
+  const [chasing, setChasing] = useState<AdmissionApplication | null>(null);
+  const [admittedInfo, setAdmittedInfo] = useState<
+    { name: string; contacts: ParentContact[]; message: string } | null
+  >(null);
 
   const load = async () => {
     const data = await getAdmissionApplications();
@@ -56,9 +63,16 @@ const AdminAdmissions = () => {
     : filter === 'awaiting-receipt' ? awaitingReceipt
     : applications;
 
-  // Best phone we hold for a family, in wa.me format.
-  const contactNumber = (a: AdmissionApplication) =>
-    toWhatsAppNumber(a.fatherPhone || a.motherPhone || a.pickupPhone || '');
+  // Everyone we hold a number for on an application. Outbound messages
+  // ask which of them to use rather than silently picking the first --
+  // one of the two parents' numbers is often out of service.
+  const contactsFor = (a: AdmissionApplication): ParentContact[] => [
+    { role: 'Father', name: a.fatherName, phone: a.fatherPhone },
+    { role: 'Mother', name: a.motherName, phone: a.motherPhone },
+    { role: 'Pickup contact', name: a.pickupPerson, phone: a.pickupPhone },
+  ];
+  const hasAnyNumber = (a: AdmissionApplication) =>
+    contactsFor(a).some((c) => toWhatsAppNumber(c.phone ?? '').length >= 10);
 
   const openDetail = (app: AdmissionApplication) => {
     setSelected(app);
@@ -141,14 +155,26 @@ const AdminAdmissions = () => {
     setBusy(false);
     if (error) { alert('Account was created, but failed to mark the application admitted: ' + error); return; }
 
-    alert(
-      `${fullName} has been admitted into ${admitClass}.\n\n` +
-      `Login email: ${email}\nPassword: ${password}\n\n` +
-      `Share this with the family -- they can log in right away with their name, pupil ID, or email. No email was sent.`
-    );
     setAdmitting(null);
     setSelected(null);
     await load();
+
+    // Straight into "who do I send this to?" rather than an alert the
+    // admin has to copy out of. The login shown is the pupil's NAME --
+    // the email on the account is a parent's, and quoting that made it
+    // read as the parent's own login rather than the child's.
+    const loginPassword = password ?? DEFAULT_ACCOUNT_PASSWORD;
+    const created = students.find((s) => s.email?.toLowerCase() === email.toLowerCase());
+    setAdmittedInfo({
+      name: fullName,
+      contacts: contactsFor(app),
+      message: buildLoginDetailsMessage({
+        studentName: fullName,
+        displayId: created?.displayId ?? 'see the portal',
+        password: loginPassword,
+        className: admitClass,
+      }),
+    });
   };
 
   const handleReview = async (status: 'declined' | 'reviewed') => {
@@ -173,6 +199,24 @@ const AdminAdmissions = () => {
 
   return (
     <PortalLayout title="Admission Applications">
+      <ContactParentDialog
+        open={!!chasing}
+        title="Chase payment receipt"
+        description={chasing ? `Who should the reminder about ${chasing.firstName} ${chasing.surname}'s receipt go to?` : undefined}
+        contacts={chasing ? contactsFor(chasing) : []}
+        message={chasing ? buildReceiptReminderMessage(`${chasing.firstName} ${chasing.surname}`) : ''}
+        onClose={() => setChasing(null)}
+      />
+
+      <ContactParentDialog
+        open={!!admittedInfo}
+        title="Send login details"
+        description={admittedInfo ? `Who should ${admittedInfo.name}'s portal login go to?` : undefined}
+        contacts={admittedInfo?.contacts ?? []}
+        message={admittedInfo?.message ?? ''}
+        onClose={() => setAdmittedInfo(null)}
+      />
+
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -207,17 +251,14 @@ const AdminAdmissions = () => {
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  {a.paymentStatus === 'unpaid' && contactNumber(a) && (
-                    <a
+                  {a.paymentStatus === 'unpaid' && hasAnyNumber(a) && (
+                    <button
                       className="btn btn-outline sm"
-                      href={whatsappLink(contactNumber(a), buildReceiptReminderMessage(`${a.firstName} ${a.surname}`))}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      title="Open WhatsApp with a reminder to upload their receipt"
+                      onClick={(e) => { e.stopPropagation(); setChasing(a); }}
+                      title="Send a reminder to upload their receipt"
                     >
                       <Bell size={14} /> Chase Receipt
-                    </a>
+                    </button>
                   )}
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: p.bg, color: p.color }}>{p.label}</span>
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
@@ -240,6 +281,11 @@ const AdminAdmissions = () => {
                 {selected.photoPath && (
                   <button className="btn btn-outline sm" onClick={() => handleViewPhoto(selected.photoPath!)}><Download size={14} /> View Photo</button>
                 )}
+                {(selected.documents ?? []).map((doc) => (
+                  <button key={doc.path} className="btn btn-outline sm" onClick={() => handleViewPhoto(doc.path)} title={doc.name}>
+                    <FileText size={14} /> {doc.name.length > 22 ? doc.name.slice(0, 20) + '...' : doc.name}
+                  </button>
+                ))}
               </div>
             </div>
 
