@@ -96,11 +96,9 @@ const ClassManagement = () => {
     }
 
     await upsertReportCard(selectedStudent.id, reportCardTerm, reportCardSession, reportCard);
-    await addNotification({
-      title: "Report Card Updated",
-      message: `Report card details for ${selectedStudent.name} (${reportCardTerm}, ${reportCardSession}) saved.`,
-      type: 'success'
-    });
+    // Deliberately NOT a notification. "The thing I just saved has
+    // saved" is page feedback -- broadcasting it put a line in every
+    // pupil's notification box.
     setIsEditingReportCard(false);
   };
 
@@ -108,9 +106,11 @@ const ClassManagement = () => {
     const nextGrade = prompt(`Promote ${student.name} to which class?`, 'Grade 2');
     if (nextGrade) {
       await promoteStudent(student.id, nextGrade, "2023/2024");
+      // A promotion IS news for the pupil it happened to -- and only them.
       await addNotification({
-        title: "Pupil Promoted",
-        message: `${student.name} has been promoted to ${nextGrade}. All previous records archived.`,
+        recipientId: student.id,
+        title: "You've been promoted",
+        message: `Congratulations! You have been moved up to ${nextGrade}.`,
         type: 'success'
       });
       alert(`${student.name} promoted to ${nextGrade}`);
@@ -127,12 +127,6 @@ const ClassManagement = () => {
     const rows = extracted.map((item) => ({ subject: item.subject, ca1: 0, ca2: 0, exam: item.score }));
     const { error } = await saveSubjectResults(selectedStudent.id, reportCardTerm, reportCardSession, rows);
     if (error) { alert('Failed to save scanned results: ' + error); return; }
-
-    await addNotification({
-      title: "AI Extraction Success",
-      message: `Automatically extracted ${extracted.length} results for ${selectedStudent.name}.`,
-      type: 'success'
-    });
 
     setIsAIProcessing(false);
     alert(`Successfully extracted and added ${extracted.length} results!`);

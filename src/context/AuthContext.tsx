@@ -123,6 +123,7 @@ export interface User {
   pickupPerson?: string;
   pickupPhone?: string;
   welcomeSeenAt?: string;
+  admissionApplicationId?: string;
 }
 
 // The bio/guardian half of a pupil's profile -- the block the admission
@@ -181,6 +182,9 @@ export interface Notification {
   message: string;
   date: string;
   type: 'info' | 'warning' | 'success';
+  // Who it was meant for. 'direct' rows carry a recipient_id; the rest
+  // are deliberate announcements aimed at a role (or everyone).
+  audience?: 'all' | 'students' | 'teachers' | 'admins' | 'direct';
 }
 
 export interface DirectMessage {
@@ -337,6 +341,9 @@ export interface AdmissionApplication extends NewAdmissionApplicationInput {
   paymentAmount?: number;
   paymentReceiptPath?: string;
   paymentStatus: 'unpaid' | 'submitted' | 'confirmed';
+  // How the family said they paid (patch_23). Cash payments have no
+  // receipt to upload -- the office confirms them by hand.
+  paymentMethod?: 'cash' | 'transfer';
 }
 
 export interface PaymentReceipt {
@@ -438,6 +445,8 @@ interface AuthContextType {
   approveTeacher: (id: string) => Promise<void>;
   promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
   addResult: (studentId: string, result: NewResultInput) => Promise<void>;
+  importAdmissionDetails: (studentId: string) => Promise<{ error: string | null; filled?: number }>;
+  linkProfileToApplication: (studentId: string, applicationId: string) => Promise<void>;
   saveSubjectResults: (
     studentId: string,
     term: Result['term'],
@@ -452,7 +461,9 @@ interface AuthContextType {
   timetables: Record<string, TimetableEntry[]>;
   updateTimetable: (className: string, entries: TimetableEntry[]) => Promise<void>;
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id' | 'date'>) => Promise<void>;
+  addNotification: (
+    notification: Omit<Notification, 'id' | 'date'> & { recipientId?: string; audience?: Notification['audience'] }
+  ) => Promise<void>;
   exportData: () => void;
   assignments: Assignment[];
   mySubmissions: Record<string, AssignmentSubmission>;
@@ -470,7 +481,7 @@ interface AuthContextType {
   uploadChatAttachment: (recipientId: string, file: File) => Promise<{ error: string | null; path?: string; name?: string }>;
   getChatAttachmentUrl: (path: string) => Promise<string | null>;
   submitAdmissionApplication: (input: NewAdmissionApplicationInput, photo: File | null) => Promise<{ error: string | null; applicationId?: string }>;
-  submitAdmissionPayment: (applicationId: string, wantsPhysicalCopy: boolean, paymentAmount: number, receipt: File) => Promise<{ error: string | null }>;
+  submitAdmissionPayment: (applicationId: string, method: 'cash' | 'transfer', paymentAmount: number, receipt: File | null) => Promise<{ error: string | null }>;
   confirmAdmissionPayment: (applicationId: string) => Promise<{ error: string | null }>;
   getAdmissionApplications: () => Promise<AdmissionApplication[]>;
   reviewAdmissionApplication: (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => Promise<{ error: string | null }>;
@@ -555,6 +566,7 @@ const mapProfileRow = (row: any): User => ({
   pickupPerson: row.pickup_person ?? undefined,
   pickupPhone: row.pickup_phone ?? undefined,
   welcomeSeenAt: row.welcome_seen_at ?? undefined,
+  admissionApplicationId: row.admission_application_id ?? undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: (row.results ?? []).map((r: any) => ({
     id: r.id, subject: r.subject, score: r.score, grade: r.grade, term: r.term, session: r.session, createdAt: r.created_at,
@@ -748,6 +760,7 @@ const mapAdmissionApplicationRow = (row: any): AdmissionApplication => ({
   paymentAmount: row.payment_amount != null ? Number(row.payment_amount) : undefined,
   paymentReceiptPath: row.payment_receipt_path ?? undefined,
   paymentStatus: row.payment_status ?? 'unpaid',
+  paymentMethod: row.payment_method ?? undefined,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -855,6 +868,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) { console.error('Failed to load notifications', error); return; }
     setNotifications((data ?? []).map((row) => ({
       id: row.id, title: row.title, message: row.message, date: row.created_at, type: row.type,
+      audience: row.audience ?? 'all',
     })));
   }, []);
 
@@ -1273,6 +1287,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null };
   };
 
+  // Records which admission application a pupil came from, so their
+  // details can always be re-imported even if the copy-on-admit failed.
+  const linkProfileToApplication = async (studentId: string, applicationId: string) => {
+    const { error } = await supabase.from('profiles')
+      .update({ admission_application_id: applicationId }).eq('id', studentId);
+    if (error) console.error('linkProfileToApplication failed', error);
+  };
+
+  // Pull a pupil's bio/guardian details off their admission application
+  // onto their profile.
+  //
+  // Anyone admitted before the admit step started copying these across
+  // has a profile full of blanks while the data sits intact in
+  // admission_applications. This recovers it on demand, matching first
+  // on an explicit link and then on email. It only ever fills a field
+  // that is currently empty, so it can't clobber something the office
+  // has since typed in by hand, and it's safe to run twice.
+  const importAdmissionDetails = async (studentId: string): Promise<{ error: string | null; filled?: number }> => {
+    const student = students.find((s) => s.id === studentId);
+    if (!student) return { error: 'Pupil not found.' };
+
+    let query = supabase.from('admission_applications').select('*');
+    query = student.admissionApplicationId
+      ? query.eq('id', student.admissionApplicationId)
+      : query.ilike('email', student.email ?? '');
+
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
+    if (error) return { error: error.message };
+    const app = (data ?? [])[0];
+    if (!app) return { error: 'No admission application matches this pupil (looked for one with the same email address).' };
+
+    const health = [app.health_challenge, app.health_challenge_details].filter((v) => v && String(v).trim()).join(' — ');
+    const candidates: Partial<User> = {
+      sex: app.sex ?? undefined,
+      dateOfBirth: app.date_of_birth ?? undefined,
+      homeAddress: app.home_address ?? undefined,
+      nationality: app.nationality ?? undefined,
+      stateOfOrigin: app.state_of_origin ?? undefined,
+      lga: app.lga ?? undefined,
+      religion: app.religion ?? undefined,
+      bloodGroup: app.blood_group ?? undefined,
+      genotype: app.genotype ?? undefined,
+      healthNotes: health || undefined,
+      fatherName: app.father_name ?? undefined,
+      fatherOccupation: app.father_occupation ?? undefined,
+      fatherPhone: app.father_phone ?? undefined,
+      motherName: app.mother_name ?? undefined,
+      motherOccupation: app.mother_occupation ?? undefined,
+      motherPhone: app.mother_phone ?? undefined,
+      pickupPerson: app.pickup_person ?? undefined,
+      pickupPhone: app.pickup_phone ?? undefined,
+      phone: student.phone || app.father_phone || app.mother_phone || app.pickup_phone || undefined,
+    };
+
+    const patch: Partial<User> = {};
+    let filled = 0;
+    for (const [key, value] of Object.entries(candidates) as [keyof User, string | undefined][]) {
+      const existing = student[key] as string | undefined;
+      if (!existing?.trim() && value?.trim()) {
+        (patch as Record<string, string>)[key] = value.trim();
+        filled += 1;
+      }
+    }
+
+    const { error: linkError } = await supabase.from('profiles')
+      .update({ admission_application_id: app.id }).eq('id', studentId);
+    if (linkError) console.error('importAdmissionDetails: linking the application failed', linkError);
+
+    if (filled === 0) { await refreshProfiles(); return { error: null, filled: 0 }; }
+
+    const { error: saveError } = await updateUser(studentId, patch);
+    if (saveError) return { error: saveError };
+    return { error: null, filled };
+  };
+
   const REPORT_CARD_COLUMNS = 'term_ends, next_term_begins, remark, headmaster_comment, class_teacher_comment, headmaster_signature, class_teacher_signature, comm_oral_rating, creativity_rating, drawing_painting_rating, music_rating, sports_rating, honesty_rating, punctuality_rating, attentiveness_rating, politeness_rating, obedience_rating, independence_rating, social_rating';
 
   const getReportCard = async (studentId: string, term: Result['term'], session: string): Promise<ReportCardData | null> => {
@@ -1449,9 +1538,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.signedUrl;
   };
 
-  const addNotification = async (notif: Omit<Notification, 'id' | 'date'>) => {
+  // Notifications are addressed, never broadcast by accident.
+  //
+  // This used to insert a row with no recipient into a table every
+  // signed-in user could read, so a teacher saving a report card put
+  // "Report Card Updated" into every pupil's notification box. Callers
+  // now say who a notification is for: `recipientId` for one person, or
+  // `audience` for a deliberate announcement. Anything that is really
+  // just a "your change saved" confirmation should not be a
+  // notification at all -- show it in the page.
+  const addNotification = async (
+    notif: Omit<Notification, 'id' | 'date'> & { recipientId?: string; audience?: Notification['audience'] }
+  ) => {
     const { error } = await supabase.from('notifications').insert({
-      title: notif.title, message: notif.message, type: notif.type,
+      title: notif.title,
+      message: notif.message,
+      type: notif.type,
+      recipient_id: notif.recipientId ?? null,
+      audience: notif.recipientId ? 'direct' : (notif.audience ?? 'all'),
+      created_by: currentUser?.id ?? null,
     });
     if (error) { console.error('addNotification failed', error); return; }
     await refreshNotifications();
@@ -1870,12 +1975,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null, applicationId: id };
   };
 
-  const submitAdmissionPayment = async (applicationId: string, wantsPhysicalCopy: boolean, paymentAmount: number, receipt: File) => {
-    const receiptPath = `${applicationId}/payment-receipt-${receipt.name}`;
-    const { error: uploadError } = await supabase.storage.from('admission-photos').upload(receiptPath, receipt);
-    if (uploadError) return { error: `Failed to upload receipt: ${uploadError.message}` };
+  // Cash payments have no receipt to upload -- the family says they
+  // paid at the desk and the office confirms it by hand. Transfers
+  // still carry a receipt image.
+  const submitAdmissionPayment = async (
+    applicationId: string, method: 'cash' | 'transfer', paymentAmount: number, receipt: File | null
+  ) => {
+    let receiptPath: string | null = null;
+    if (method === 'transfer') {
+      if (!receipt) return { error: 'Please upload your payment receipt.' };
+      receiptPath = `${applicationId}/payment-receipt-${receipt.name}`;
+      const { error: uploadError } = await supabase.storage.from('admission-photos').upload(receiptPath, receipt);
+      if (uploadError) return { error: `Failed to upload receipt: ${uploadError.message}` };
+    }
     const { error } = await supabase.rpc('submit_admission_payment', {
-      p_application_id: applicationId, p_wants_physical_copy: wantsPhysicalCopy,
+      p_application_id: applicationId, p_payment_method: method,
       p_payment_amount: paymentAmount, p_payment_receipt_path: receiptPath,
     });
     return { error: error?.message ?? null };
@@ -2068,7 +2182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       students, staff, currentUser, loading,
       login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
       markWelcomeSeen,
-      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults,
+      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults, importAdmissionDetails, linkProfileToApplication,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
       notifications, addNotification, exportData,
