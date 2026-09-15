@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Upload, Copy, MessageCircle, FileText, Banknote, Landmark } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Upload, Copy, MessageCircle, FileText, Banknote, Landmark, X } from 'lucide-react';
 import { useAuth, type NewAdmissionApplicationInput } from '../../context/AuthContext';
 import {
   SCHOOL_WHATSAPP, PROSPECTUS, SECTION_LABEL,
@@ -44,6 +44,7 @@ const Admissions = () => {
   const [applicationId, setApplicationId] = useState<string | null>(null);
   const [form, setForm] = useState<NewAdmissionApplicationInput>(emptyInput);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +79,7 @@ const Admissions = () => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const { error: submitError, applicationId: newId } = await submitAdmissionApplication(form, photo);
+    const { error: submitError, applicationId: newId } = await submitAdmissionApplication(form, photo, documents);
     setSubmitting(false);
     if (submitError || !newId) { setError(submitError ?? 'Something went wrong. Please try again.'); return; }
     setApplicationId(newId);
@@ -133,33 +134,35 @@ const Admissions = () => {
             <MessageCircle size={20} /> Next: Message Us on WhatsApp
           </a>
 
-          {/* The family gets the prospectus here and now, so they have it
+          {/* The family gets the fee sheet here and now, so they have it
               even if the school line is offline when they message. */}
-          {Object.values(availableProspectus).some(Boolean) && (
-            <div style={{ marginTop: '28px', width: '100%', maxWidth: '520px' }}>
-              <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>Your prospectus</p>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {/* The arm matching the child's age comes first. */}
-                {([section, section === 'kinders' ? 'graders' : 'kinders'] as const).map((key) =>
-                  availableProspectus[key] ? (
-                    <a
-                      key={key}
-                      href={PROSPECTUS[key].file}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={key === section ? 'btn btn-outline' : 'btn btn-outline sm'}
-                    >
-                      <FileText size={16} /> {PROSPECTUS[key].label}
-                    </a>
-                  ) : null
-                )}
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
-                Based on your child's date of birth we've put the <strong>{SECTION_LABEL[section]}</strong> prospectus
-                first. If that's not the right arm, open the other one &mdash; our team will confirm placement with you.
-              </p>
+          <div style={{ marginTop: '28px', width: '100%', maxWidth: '540px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px' }}>Your financial involvement</p>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {/* The arm matching the child's age comes first. */}
+              {([section, section === 'kinders' ? 'graders' : 'kinders'] as const).map((key) => (
+                <Link
+                  key={key}
+                  to={`/fees/${key}`}
+                  className={key === section ? 'btn btn-outline' : 'btn btn-outline sm'}
+                >
+                  <FileText size={16} /> {SECTION_LABEL[key]} Fees
+                </Link>
+              ))}
+              {/* A scanned prospectus, if one has been added to the site. */}
+              {([section, section === 'kinders' ? 'graders' : 'kinders'] as const).map((key) =>
+                availableProspectus[key] ? (
+                  <a key={`p-${key}`} href={PROSPECTUS[key].file} target="_blank" rel="noopener noreferrer" className="btn btn-outline sm">
+                    <FileText size={16} /> {PROSPECTUS[key].label}
+                  </a>
+                ) : null
+              )}
             </div>
-          )}
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
+              Based on your child's date of birth we've put the <strong>{SECTION_LABEL[section]}</strong> sheet
+              first. If that's not the right arm, open the other one &mdash; our team will confirm placement with you.
+            </p>
+          </div>
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '24px' }}>
             <Link to="/" className="btn btn-outline">Back to Home</Link>
@@ -361,13 +364,54 @@ const Admissions = () => {
             <input style={inputStyle} placeholder="e.g. John Doe, Jane Doe" value={form.siblingNames} onChange={(e) => set({ siblingNames: e.target.value })} />
           </Field>
 
-          <h3 className="admission-section-title">Child's Photo</h3>
+          <h3 className="admission-section-title">Photo &amp; Documents</h3>
           <Field label="Upload a recent photo of the child (optional)">
             <label className="admission-photo-upload">
               <Upload size={18} />
               <span>{photo ? photo.name : 'Choose a photo...'}</span>
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
             </label>
+          </Field>
+
+          <Field label="Any supporting documents (optional)">
+            <label className="admission-photo-upload">
+              <Upload size={18} />
+              <span>{documents.length > 0 ? `${documents.length} file${documents.length === 1 ? '' : 's'} selected` : 'Choose files...'}</span>
+              <input
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={(e) => setDocuments((prev) => [...prev, ...Array.from(e.target.files ?? [])])}
+              />
+            </label>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+              Birth certificate, immunisation record, previous school report &mdash; anything you'd
+              normally bring in. Photos or PDFs, as many as you like.
+            </p>
+            {documents.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+                {documents.map((file, i) => (
+                  <div key={`${file.name}-${i}`} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
+                    padding: '8px 12px', borderRadius: '10px', background: 'var(--bg-light)', fontSize: '13px',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <FileText size={14} style={{ flexShrink: 0, color: 'var(--primary)' }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-btn sm"
+                      title="Remove"
+                      onClick={() => setDocuments((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
 
           <button type="submit" className="btn btn-primary lg" style={{ width: '100%', marginTop: '10px' }} disabled={submitting}>
