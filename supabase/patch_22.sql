@@ -105,3 +105,4 @@ create trigger profiles_guard_self_update
   for each row execute function public.guard_profile_self_update();
 
 notify pgrst, 'reload schema';
+
