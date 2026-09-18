@@ -29,19 +29,17 @@ function json(body: unknown, status = 200) {
 
 // Every account starts on the same easy-to-say default. Families were
 // being handed a 10-character random string over the phone and couldn't
-// type it in or remember it, so the school now reads out one short
-// number they can't get wrong, and the parent changes it (or the admin
-// sets a new one) from the portal afterwards.
-//
-// Not "1234": Supabase Auth rejects anything under 6 characters, so a
-// 4-digit password can't be created at all. 123456 is the shortest
-// all-digit password it will accept.
+// type it in or remember it, so the school now reads out one short,
+// memorable password they can't get wrong, and the parent changes it
+// (or the admin sets a new one) from the portal afterwards.
 //
 // Change it here and it changes everywhere -- this is the only place a
 // new account's password is decided. NOTE: editing this file is not
 // enough on its own; the function has to be redeployed for it to take
-// effect (`supabase functions deploy admin-create-user`).
-const DEFAULT_PASSWORD = '123456';
+// effect (`supabase functions deploy admin-create-user`). Keep this in
+// sync with src/lib/accounts.ts, which carries its own copy for the
+// browser bundle.
+const DEFAULT_PASSWORD = 'citadel1234';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -88,6 +86,29 @@ Deno.serve(async (req) => {
     }
 
     const { error } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword });
+    if (error) {
+      return json({ error: error.message }, 400);
+    }
+
+    return json({ ok: true });
+  }
+
+  // Full account deletion. Deleting only the profiles row (the frontend's
+  // only option, since it has no service_role key) left the auth.users
+  // row behind forever -- and Supabase enforces unique emails there, so
+  // every "deleted" test account permanently squatted on its email,
+  // making it look used when someone tried to create a new account with
+  // it. profiles.id references auth.users(id) on delete cascade, so
+  // deleting the auth user here also removes the profile (and anything
+  // that references it -- results, attendance, messages, etc.) in one
+  // step; nothing else needs to run first.
+  if (action === 'delete_user') {
+    const { userId } = body;
+    if (!userId) {
+      return json({ error: 'A user id is required' }, 400);
+    }
+
+    const { error } = await adminClient.auth.admin.deleteUser(userId);
     if (error) {
       return json({ error: error.message }, 400);
     }

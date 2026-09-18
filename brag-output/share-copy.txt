@@ -1,0 +1,2 @@
+Introducing the Citadel of Highflyers portal: a family applies on their phone, the school admits with one tap, and the login details land on WhatsApp.
+Built with React, Vite and Supabase for a school in Jos where 8 in 10 parents are on a phone.

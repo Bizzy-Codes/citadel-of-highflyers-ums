@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
+import type { CalendarTable } from '../lib/calendarExtract';
 
 // supabase-js's functions.invoke() only ever surfaces a generic
 // "Edge Function returned a non-2xx status code" on error -- the
@@ -369,6 +370,10 @@ export interface AcademicCalendar {
   termStartDate: string | null;
   documentPath: string | null;
   documentName: string | null;
+  // The calendar document read out as a grid, so pupils and staff see
+  // it rendered in the portal instead of downloading the file. Empty
+  // until an admin converts the upload and publishes the result.
+  documentTables: CalendarTable[];
   updatedAt: string;
   // The structured "which term/session are we in right now" that
   // results and report cards read so teachers never re-type it per
@@ -442,7 +447,7 @@ interface AuthContextType {
   updateUser: (id: string, data: Partial<User>) => Promise<{ error: string | null }>;
   uploadAvatar: (file: File) => Promise<{ error: string | null }>;
   removeAvatar: () => Promise<{ error: string | null }>;
-  deleteUser: (id: string) => Promise<void>;
+  deleteUser: (id: string) => Promise<{ error: string | null }>;
   approveTeacher: (id: string) => Promise<void>;
   promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
   addResult: (studentId: string, result: NewResultInput) => Promise<void>;
@@ -488,6 +493,7 @@ interface AuthContextType {
   confirmAdmissionPayment: (applicationId: string) => Promise<{ error: string | null }>;
   getAdmissionApplications: () => Promise<AdmissionApplication[]>;
   reviewAdmissionApplication: (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => Promise<{ error: string | null }>;
+  deleteAdmissionApplication: (id: string) => Promise<{ error: string | null }>;
   getAdmissionPhotoUrl: (path: string) => Promise<string | null>;
   submitPaymentReceipt: (amount: number, note: string, file: File) => Promise<{ error: string | null }>;
   getMyPaymentReceipts: () => Promise<PaymentReceipt[]>;
@@ -525,6 +531,7 @@ interface AuthContextType {
   academicCalendar: AcademicCalendar | null;
   updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null; currentTerm?: string; currentSession?: string }) => Promise<{ error: string | null }>;
   uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
+  publishAcademicCalendarTables: (tables: CalendarTable[]) => Promise<{ error: string | null }>;
   getAcademicCalendarDocumentUrl: () => string | null;
   getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
@@ -699,6 +706,7 @@ const mapAcademicCalendarRow = (row: any): AcademicCalendar => {
     termStartDate: row.term_start_date,
     documentPath: row.document_path,
     documentName: row.document_name,
+    documentTables: Array.isArray(row.document_tables) ? row.document_tables : [],
     updatedAt: row.updated_at,
     currentTerm: validTerm ? row.current_term : parsed.term,
     currentSession: row.current_session || parsed.session,
@@ -1192,15 +1200,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null };
   };
 
+  // Runs through the edge function (service_role only) because deleting
+  // just the profiles row left the auth.users login behind forever --
+  // Supabase enforces unique emails there, so every "deleted" test
+  // account permanently squatted on its email and a new account with
+  // that same address would fail as "already registered" even though
+  // nothing showed up in the portal anymore. Deleting the auth user
+  // cascades to the profile (and everything hung off it) in one step.
   const deleteUser = async (id: string) => {
-    // NOTE: this removes the profile row (and therefore all app-level
-    // access), but does not delete the underlying auth.users login --
-    // that requires the service_role key, which the frontend must
-    // never hold. If you need full account deletion, extend the
-    // admin-create-user edge function with a delete counterpart.
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) { console.error('deleteUser failed', error); return; }
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+      body: { action: 'delete_user', userId: id },
+    });
+    if (error) { const message = await describeFunctionError(error); console.error('deleteUser failed', message); return { error: message }; }
+    if (data?.error) { console.error('deleteUser failed', data.error); return { error: data.error as string }; }
     await refreshProfiles();
+    return { error: null };
   };
 
   const approveTeacher = async (id: string) => {
@@ -2062,6 +2076,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error?.message ?? null };
   };
 
+  // Declined applications otherwise sit in the database forever with no
+  // way to clear them out. This is a real delete, not a status change --
+  // the row and its uploaded files (photo, documents, receipt) are all
+  // removed. Restricted to declined applications by the RLS policy
+  // (patch_26), so this can't be used to erase a pending or admitted
+  // application by mistake.
+  const deleteAdmissionApplication = async (id: string) => {
+    const { data: app } = await supabase.from('admission_applications')
+      .select('photo_path, documents, payment_receipt_path').eq('id', id).single();
+
+    if (app) {
+      const paths = [
+        app.photo_path,
+        app.payment_receipt_path,
+        ...(Array.isArray(app.documents) ? app.documents.map((d: { path: string }) => d.path) : []),
+      ].filter((p): p is string => !!p);
+      // Best-effort: an orphaned file in storage is a much smaller
+      // problem than refusing to delete the application over it.
+      if (paths.length > 0) {
+        const { error: storageError } = await supabase.storage.from('admission-photos').remove(paths);
+        if (storageError) console.error('deleteAdmissionApplication: file cleanup failed', storageError);
+      }
+    }
+
+    const { error } = await supabase.from('admission_applications').delete().eq('id', id);
+    return { error: error?.message ?? null };
+  };
+
   const getAdmissionPhotoUrl = async (path: string): Promise<string | null> => {
     const { data, error } = await supabase.storage.from('admission-photos').createSignedUrl(path, 3600);
     if (error || !data) { console.error('getAdmissionPhotoUrl failed', error); return null; }
@@ -2147,6 +2189,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       document_path: path, document_name: file.name, updated_by: currentUser.id, updated_at: new Date().toISOString(),
     }).eq('id', 1);
     if (error) return { error: error.message };
+    await refreshAcademicCalendar();
+    return { error: null };
+  };
+
+  const publishAcademicCalendarTables = async (tables: CalendarTable[]) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('academic_calendar').update({
+      document_tables: tables, updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    if (error) {
+      return { error: /document_tables|column|schema cache/i.test(error.message)
+        ? 'The database is missing the document_tables column -- run patch_25.sql in the Supabase SQL editor.'
+        : error.message };
+    }
     await refreshAcademicCalendar();
     return { error: null };
   };
@@ -2238,7 +2294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
       uploadChatAttachment, getChatAttachmentUrl,
-      submitAdmissionApplication, submitAdmissionPayment, confirmAdmissionPayment, getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl,
+      submitAdmissionApplication, submitAdmissionPayment, confirmAdmissionPayment, getAdmissionApplications, reviewAdmissionApplication, deleteAdmissionApplication, getAdmissionPhotoUrl,
       submitPaymentReceipt, getMyPaymentReceipts, getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
@@ -2248,7 +2304,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
-      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl,
+      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, publishAcademicCalendarTables, getAcademicCalendarDocumentUrl,
       getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance, getStudentAttendance,
       getClassAttendanceNotes, upsertAttendanceNote,
     }}>

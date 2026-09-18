@@ -5,15 +5,12 @@
 // on one short, easy-to-say default that the parent (or the admin) can
 // change from the portal afterwards.
 //
-// Not "1234": Supabase Auth rejects anything under 6 characters, so a
-// 4-digit password can't be created at all.
-//
 // NOTE: the Edge Function that actually creates accounts
 // (supabase/functions/admin-create-user/index.ts) runs on Deno and
 // cannot import from src/, so it carries its own copy of this value.
 // If you change it here, change it there too -- they must match, and
 // the function must be REDEPLOYED for a change to take effect.
-export const DEFAULT_ACCOUNT_PASSWORD = '123456';
+export const DEFAULT_ACCOUNT_PASSWORD = 'citadel1234';
 
 // Classes, in school order. Kept here so the admissions form, the admit
 // dialog, the sign-up form and the admin screens can't drift apart.

@@ -54,6 +54,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'Admissions', icon: <UserPlus size={20} />, path: '/portal/admin/admissions', show: isAdmin },
     { label: 'Academic Calendar', icon: <CalendarRange size={20} />, path: '/portal/admin/calendar', show: isAdmin },
     { label: 'Attendance Overview', icon: <CalendarCheck size={20} />, path: '/portal/admin/attendance', show: isAdmin },
+    { label: 'School Calendar', icon: <CalendarRange size={20} />, path: '/portal/calendar', show: !isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },
     { label: 'Timetable', icon: <Calendar size={20} />, path: '/portal/timetable', show: true },
     { label: 'Profile', icon: <User size={20} />, path: '/portal/profile', show: true },

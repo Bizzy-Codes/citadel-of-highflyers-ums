@@ -34,6 +34,7 @@ import AdminAdmissions from './pages/portal/AdminAdmissions'
 import TeacherRegister from './pages/portal/TeacherRegister'
 import StudentAttendance from './pages/portal/StudentAttendance'
 import AdminCalendar from './pages/portal/AdminCalendar'
+import SchoolCalendar from './pages/portal/SchoolCalendar'
 import AdminAttendance from './pages/portal/AdminAttendance'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
@@ -93,6 +94,9 @@ function App() {
         } />
 
         {/* Shared authenticated routes */}
+        <Route path="/portal/calendar" element={
+          <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}><SchoolCalendar /></ProtectedRoute>
+        } />
         <Route path="/portal/results" element={
           <ProtectedRoute allowedRoles={['student']}><Results /></ProtectedRoute>
         } />

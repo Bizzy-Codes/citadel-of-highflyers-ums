@@ -60,7 +60,7 @@ const Founders = () => {
                         <div className="award-item"><Award size={18} /> Leadership Excellence 2023</div>
                         <div className="award-item"><Award size={18} /> Community Impact Award</div>
                      </div>
-                  </div>
+                  </div>  
                </div>
             </section>
 

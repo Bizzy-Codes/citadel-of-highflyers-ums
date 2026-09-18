@@ -52,9 +52,9 @@ const UserManagement = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      await deleteUser(id);
-      alert("User deleted.");
+    if (window.confirm("Are you sure you want to delete this user? Their login and email are freed up completely -- this can't be undone.")) {
+      const { error } = await deleteUser(id);
+      alert(error ? `Failed to delete user: ${error}` : "User deleted. Their email is free to use again.");
     }
   };
 
