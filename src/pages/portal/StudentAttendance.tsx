@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceRecord, type AttendanceStatus } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
@@ -37,8 +38,10 @@ const StudentAttendance = () => {
     getMyAttendance().then((r) => { setRecords(r); setLoading(false); });
   }, [getMyAttendance]);
 
-  const documentUrl = getAcademicCalendarDocumentUrl();
-  const isPdf = academicCalendar?.documentName?.toLowerCase().endsWith('.pdf');
+  // Both the readable table and the original file live on the School
+  // Calendar page now, so this is a link there rather than straight to
+  // a download.
+  const hasCalendarDocument = !!getAcademicCalendarDocumentUrl() || (academicCalendar?.documentTables.length ?? 0) > 0;
   const summary = summarizeAttendance(records, academicCalendar?.totalWeeks);
   const hasCalendar = !!academicCalendar?.termStartDate;
 
@@ -69,10 +72,10 @@ const StudentAttendance = () => {
               {academicCalendar?.totalWeeks ?? '—'} academic weeks{academicCalendar?.termStartDate ? ` · starting ${formatShort(academicCalendar.termStartDate)}` : ''}
             </p>
           </div>
-          {documentUrl && (
-            <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline sm">
-              <FileText size={16} /> View School Calendar {isPdf ? '(PDF)' : ''}
-            </a>
+          {hasCalendarDocument && (
+            <Link to="/portal/calendar" className="btn btn-outline sm">
+              <FileText size={16} /> View School Calendar
+            </Link>
           )}
         </div>
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
+import type { CalendarTable } from '../lib/calendarExtract';
 
 // supabase-js's functions.invoke() only ever surfaces a generic
 // "Edge Function returned a non-2xx status code" on error -- the
@@ -369,6 +370,10 @@ export interface AcademicCalendar {
   termStartDate: string | null;
   documentPath: string | null;
   documentName: string | null;
+  // The calendar document read out as a grid, so pupils and staff see
+  // it rendered in the portal instead of downloading the file. Empty
+  // until an admin converts the upload and publishes the result.
+  documentTables: CalendarTable[];
   updatedAt: string;
   // The structured "which term/session are we in right now" that
   // results and report cards read so teachers never re-type it per
@@ -525,6 +530,7 @@ interface AuthContextType {
   academicCalendar: AcademicCalendar | null;
   updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null; currentTerm?: string; currentSession?: string }) => Promise<{ error: string | null }>;
   uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
+  publishAcademicCalendarTables: (tables: CalendarTable[]) => Promise<{ error: string | null }>;
   getAcademicCalendarDocumentUrl: () => string | null;
   getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
@@ -699,6 +705,7 @@ const mapAcademicCalendarRow = (row: any): AcademicCalendar => {
     termStartDate: row.term_start_date,
     documentPath: row.document_path,
     documentName: row.document_name,
+    documentTables: Array.isArray(row.document_tables) ? row.document_tables : [],
     updatedAt: row.updated_at,
     currentTerm: validTerm ? row.current_term : parsed.term,
     currentSession: row.current_session || parsed.session,
@@ -2151,6 +2158,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null };
   };
 
+  const publishAcademicCalendarTables = async (tables: CalendarTable[]) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const { error } = await supabase.from('academic_calendar').update({
+      document_tables: tables, updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    if (error) {
+      return { error: /document_tables|column|schema cache/i.test(error.message)
+        ? 'The database is missing the document_tables column -- run patch_25.sql in the Supabase SQL editor.'
+        : error.message };
+    }
+    await refreshAcademicCalendar();
+    return { error: null };
+  };
+
   // The school-documents bucket is public, so the URL is a plain,
   // permanent path -- no signed-URL round trip needed like the
   // private payment-receipts/admission-photos buckets use.
@@ -2248,7 +2269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
-      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, getAcademicCalendarDocumentUrl,
+      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, publishAcademicCalendarTables, getAcademicCalendarDocumentUrl,
       getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance, getStudentAttendance,
       getClassAttendanceNotes, upsertAttendanceNote,
     }}>
