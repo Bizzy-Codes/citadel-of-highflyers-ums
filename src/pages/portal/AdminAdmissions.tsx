@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AdmissionApplication } from '../../context/AuthContext';
-import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell, FileText } from 'lucide-react';
+import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell, FileText, Trash2, ExternalLink } from 'lucide-react';
 import { CLASSES, DEFAULT_ACCOUNT_PASSWORD } from '../../lib/accounts';
 import { buildReceiptReminderMessage, buildLoginDetailsMessage, toWhatsAppNumber } from '../../lib/outreach';
 import ContactParentDialog, { type ParentContact } from '../../components/portal/ContactParentDialog';
@@ -20,7 +21,8 @@ const PAYMENT_STATUS_STYLE: Record<AdmissionApplication['paymentStatus'], { bg: 
 };
 
 const AdminAdmissions = () => {
-  const { getAdmissionApplications, reviewAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser, linkProfileToApplication, students } = useAuth();
+  const { getAdmissionApplications, reviewAdmissionApplication, deleteAdmissionApplication, getAdmissionPhotoUrl, confirmAdmissionPayment, createUser, updateUser, linkProfileToApplication, students } = useAuth();
+  const navigate = useNavigate();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'awaiting-receipt' | 'all'>('pending');
@@ -197,6 +199,26 @@ const AdminAdmissions = () => {
     await load();
   };
 
+  // Declined applications pile up otherwise -- there is no reason to
+  // keep them around once the office has decided not to admit, so this
+  // is a genuine delete (row + any uploaded files), not a status change.
+  const handleDeleteApplication = async (app: AdmissionApplication) => {
+    if (!window.confirm(`Delete ${app.firstName} ${app.surname}'s declined application? This permanently removes it and any uploaded photo or documents.`)) return;
+    setBusy(true);
+    const { error } = await deleteAdmissionApplication(app.id);
+    setBusy(false);
+    if (error) { alert('Failed to delete application: ' + error); return; }
+    setSelected(null);
+    await load();
+  };
+
+  // The pupil this application became, once admitted -- so the detail
+  // view can point at the real record instead of offering actions
+  // (Admit / Mark Reviewed / Decline) that no longer make sense once an
+  // account already exists for them.
+  const admittedStudent = (app: AdmissionApplication) =>
+    students.find((s) => s.admissionApplicationId === app.id || s.email?.toLowerCase() === app.email?.toLowerCase());
+
   return (
     <PortalLayout title="Admission Applications">
       <ContactParentDialog
@@ -262,6 +284,16 @@ const AdminAdmissions = () => {
                   )}
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: p.bg, color: p.color }}>{p.label}</span>
                   <span style={{ padding: '4px 12px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
+                  {a.status === 'declined' && (
+                    <button
+                      className="icon-btn"
+                      title="Delete this declined application"
+                      style={{ color: 'var(--error)' }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteApplication(a); }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -333,11 +365,37 @@ const AdminAdmissions = () => {
                 style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }} />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={() => openAdmitDialog(selected)}><CheckCircle2 size={16} /> Admit</button>
-              <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('reviewed')}><FileCheck size={16} /> Mark Reviewed</button>
-              <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('declined')}><XCircle size={16} /> Decline</button>
-            </div>
+            {selected.status === 'admitted' ? (
+              // Already admitted -- an account exists for this child, so
+              // Mark Reviewed / Decline / Admit no longer apply. Clicking
+              // any of them either did nothing useful or (Mark Reviewed /
+              // Decline) quietly flipped the application's status back,
+              // making an already-admitted pupil look unprocessed and
+              // leading an admin to try admitting them again -- which
+              // then fails because the account already exists.
+              <div className="grading-answer-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginTop: '16px' }}>
+                <p style={{ color: 'var(--success)', fontWeight: 600, fontSize: '14px' }}>
+                  <CheckCircle2 size={16} style={{ verticalAlign: '-3px', marginRight: '6px' }} />
+                  Admitted{admittedStudent(selected) ? ` -- ${admittedStudent(selected)!.grade ?? 'pupil'} account already exists.` : '.'}
+                </p>
+                {admittedStudent(selected) && (
+                  <button className="btn btn-outline sm" onClick={() => navigate(`/portal/admin/users/${admittedStudent(selected)!.id}`)}>
+                    <ExternalLink size={14} /> View Pupil Profile
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={() => openAdmitDialog(selected)}><CheckCircle2 size={16} /> Admit</button>
+                {selected.status !== 'declined' && (
+                  <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('reviewed')}><FileCheck size={16} /> Mark Reviewed</button>
+                )}
+                <button className="btn btn-outline" style={{ flex: 1 }} disabled={busy} onClick={() => handleReview('declined')}><XCircle size={16} /> Decline</button>
+                {selected.status === 'declined' && (
+                  <button className="btn btn-outline" style={{ flex: 1, color: 'var(--error)' }} disabled={busy} onClick={() => handleDeleteApplication(selected)}><Trash2 size={16} /> Delete</button>
+                )}
+              </div>
+            )}
             <button className="btn btn-outline" style={{ width: '100%', marginTop: '10px' }} onClick={() => setSelected(null)}>Close</button>
           </div>
         </div>

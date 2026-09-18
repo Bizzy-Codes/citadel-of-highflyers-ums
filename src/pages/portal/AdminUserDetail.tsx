@@ -232,8 +232,9 @@ const AdminUserDetail = () => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete ${user.name}? This removes their portal access permanently.`)) return;
-    await deleteUser(user.id);
+    if (!window.confirm(`Delete ${user.name}? This removes their portal access and frees up their email permanently -- this can't be undone.`)) return;
+    const { error } = await deleteUser(user.id);
+    if (error) { alert(`Failed to delete user: ${error}`); return; }
     navigate('/portal/admin/users');
   };
 
