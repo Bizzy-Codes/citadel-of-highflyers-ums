@@ -30,7 +30,11 @@ with expected(feature, kind, obj, patch) as (values
   -- functions the app calls directly
   ('Take a test (questions)',  'function', 'get_attempt_questions',     'patch_7.sql'),
   ('Take a test (save answer)','function', 'save_test_answer',          'patch_7.sql'),
-  ('Take a test (submit)',     'function', 'submit_test_attempt',       'patch_7.sql')
+  ('Take a test (submit)',     'function', 'submit_test_attempt',       'patch_7.sql'),
+  ('Names stored in CAPITALS', 'function', 'uppercase_person_names',    'patch_27.sql'),
+  ('Take a test (strikes)',    'function', 'record_test_violation',     'patch_28.sql'),
+  ('Graduated archive',        'column',   'profiles.graduated_at',     'patch_29.sql'),
+  ('Promote / graduate pupil', 'function', 'promote_student',           'patch_30.sql')
 )
 select
   e.feature,

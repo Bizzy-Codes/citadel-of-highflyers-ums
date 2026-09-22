@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, type AttemptQuestion, type TestAttempt } from '../../context/AuthContext';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useAntiCheat } from '../../hooks/useAntiCheat';
 import TestCameraBroadcaster from '../../components/portal/TestCameraBroadcaster';
-import { AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, Clock, ArrowLeft, ArrowRight, Flag, Check } from 'lucide-react';
 import './Tests.css';
 
 const formatTime = (ms: number) => {
@@ -15,6 +15,8 @@ const formatTime = (ms: number) => {
 };
 
 type AnswerDraft = { selectedOption?: string; essayText?: string };
+
+const isAnswered = (d?: AnswerDraft) => !!(d?.selectedOption || (d?.essayText && d.essayText.trim().length > 0));
 
 const TestTaking = () => {
   const { attemptId } = useParams();
@@ -31,8 +33,11 @@ const TestTaking = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [finalResult, setFinalResult] = useState<{ score: number; maxScore: number } | null>(null);
 
-  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [current, setCurrent] = useState(0);
+  const [reviewing, setReviewing] = useState(false);
+
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const status = attempt?.status ?? null;
   const isActive = status === 'in_progress' && !submitting;
@@ -50,6 +55,9 @@ const TestTaking = () => {
       const drafts: Record<string, AnswerDraft> = {};
       qs.forEach((q) => { drafts[q.questionId] = { selectedOption: q.selectedOption, essayText: q.essayText }; });
       setAnswers(drafts);
+      // Resume where they left off: first unanswered question.
+      const firstOpen = qs.findIndex((q) => !isAnswered(drafts[q.questionId]));
+      setCurrent(firstOpen === -1 ? 0 : firstOpen);
     } else {
       setFinalResult({ score: a.score ?? 0, maxScore: a.maxScore });
     }
@@ -59,18 +67,30 @@ const TestTaking = () => {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // Flush any pending autosave before submitting so the last answer
+  // chosen isn't still sitting in a 500ms debounce when grading runs.
+  const flushSaves = useCallback(async () => {
+    if (!attemptId) return;
+    const pending = Object.entries(saveTimers.current);
+    saveTimers.current = {};
+    await Promise.all(pending.map(([questionId, timer]) => {
+      clearTimeout(timer);
+      return saveTestAnswer(attemptId, questionId, answers[questionId] ?? {});
+    }));
+  }, [attemptId, answers, saveTestAnswer]);
+
   const handleSubmit = useCallback(async () => {
     if (!attemptId || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
+      await flushSaves();
       const { error, score, maxScore, status: newStatus } = await submitTestAttempt(attemptId);
       if (error) {
         // The attempt may already have been closed server-side (expiry,
         // strike limit, a double-tap). Refetch the authoritative state:
         // if it's finished, show the result screen; only if it's really
-        // still open do we surface the error so the pupil can retry
-        // instead of being stuck on a dead "Submitting..." button.
+        // still open do we surface the error so the pupil can retry.
         await loadAll();
         const fresh = await getAttemptById(attemptId);
         if (fresh && fresh.status !== 'in_progress') {
@@ -88,7 +108,7 @@ const TestTaking = () => {
       setSubmitting(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptId, submitting]);
+  }, [attemptId, submitting, flushSaves]);
 
   const { remainingMs } = useCountdown(isActive ? (attempt?.expiresAt ?? null) : null, handleSubmit);
 
@@ -111,9 +131,20 @@ const TestTaking = () => {
     if (!attemptId) return;
     clearTimeout(saveTimers.current[questionId]);
     saveTimers.current[questionId] = setTimeout(() => {
+      delete saveTimers.current[questionId];
       saveTestAnswer(attemptId, questionId, draft);
     }, 500);
   };
+
+  const goTo = (i: number) => {
+    setReviewing(false);
+    setSubmitError(null);
+    setCurrent(Math.max(0, Math.min(questions.length - 1, i)));
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const answeredCount = useMemo(() => questions.filter((q) => isAnswered(answers[q.questionId])).length, [questions, answers]);
+  const unanswered = useMemo(() => questions.map((q, i) => ({ q, i })).filter(({ q }) => !isAnswered(answers[q.questionId])), [questions, answers]);
 
   if (loading) {
     return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading test...</div>;
@@ -135,21 +166,30 @@ const TestTaking = () => {
   }
 
   if (status === 'submitted' || status === 'expired' || finalResult) {
+    const score = finalResult?.score ?? attempt.score ?? 0;
+    const max = finalResult?.maxScore ?? attempt.maxScore;
+    const pct = max > 0 ? Math.round((score / max) * 100) : 0;
     return (
       <div className="test-takeover test-takeover-done">
         <CheckCircle2 size={56} />
-        <h2>{status === 'expired' ? 'Time Expired' : 'Test Submitted'}</h2>
-        <p>Your score: <strong>{finalResult?.score ?? attempt.score ?? 0} / {finalResult?.maxScore ?? attempt.maxScore}</strong></p>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Essay questions may still be pending manual review from your teacher.</p>
+        <h2>{status === 'expired' ? 'Time is up!' : 'Well done — test submitted!'}</h2>
+        <div className="test-score-big">
+          <span className="test-score-num">{score}</span>
+          <span className="test-score-den">/ {max}</span>
+        </div>
+        <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-main)' }}>{pct}%</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+          Multiple-choice questions are marked straight away. If there were any writing questions, your teacher will mark those and your score may go up.
+        </p>
         <button className="btn btn-primary" onClick={() => navigate('/portal/tests')}>Back to My Tests</button>
       </div>
     );
   }
 
-  const answeredCount = questions.filter((q) => {
-    const d = answers[q.questionId];
-    return d?.selectedOption || (d?.essayText && d.essayText.trim().length > 0);
-  }).length;
+  const q = questions[current];
+  const total = questions.length;
+  const isLast = current === total - 1;
+  const progressPct = total > 0 ? Math.round((answeredCount / total) * 100) : 0;
 
   return (
     <div className="test-taking-root">
@@ -180,34 +220,46 @@ const TestTaking = () => {
 
       <div className="test-taking-header">
         <div>
-          <h2 style={{ marginBottom: '2px' }}>Test in Progress</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{answeredCount} / {questions.length} answered</p>
+          <h2 style={{ marginBottom: '2px' }}>{reviewing ? 'Check your answers' : total > 0 ? `Question ${current + 1} of ${total}` : 'Test in Progress'}</h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{answeredCount} of {total} answered</p>
         </div>
-        <div className="test-countdown">
+        <div className="test-countdown" title="Time left">
           <Clock size={18} /> {formatTime(remainingMs)}
         </div>
-        <button className="btn btn-primary" disabled={submitting} onClick={handleSubmit}>
-          {submitting ? 'Submitting...' : 'Submit Test'}
-        </button>
+        {!reviewing && total > 0 && (
+          <button className="btn btn-outline" disabled={submitting} onClick={() => setReviewing(true)}>
+            <Flag size={16} /> Finish test
+          </button>
+        )}
       </div>
 
-      <div className="test-taking-nav">
-        {questions.map((q, i) => {
-          const answered = !!(answers[q.questionId]?.selectedOption || answers[q.questionId]?.essayText?.trim());
-          return (
-            <button
-              key={q.questionId}
-              className={`test-nav-pill ${answered ? 'test-nav-pill-answered' : ''}`}
-              onClick={() => questionRefs.current[q.questionId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            >
-              {i + 1}
-            </button>
-          );
-        })}
-      </div>
+      {total > 0 && (
+        <div className="test-progress-track" aria-label={`${progressPct}% answered`}>
+          <div className="test-progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+      )}
 
-      <div className="test-taking-questions">
-        {questions.length === 0 && (
+      {total > 0 && (
+        <div className="test-taking-nav">
+          {questions.map((qq, i) => {
+            const answered = isAnswered(answers[qq.questionId]);
+            return (
+              <button
+                key={qq.questionId}
+                type="button"
+                className={`test-nav-pill ${answered ? 'test-nav-pill-answered' : ''} ${!reviewing && i === current ? 'test-nav-pill-current' : ''}`}
+                onClick={() => goTo(i)}
+                title={answered ? `Question ${i + 1} — answered` : `Question ${i + 1} — not answered yet`}
+              >
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="test-taking-questions" ref={cardRef}>
+        {total === 0 && (
           <div className="card glass" style={{ padding: '40px', textAlign: 'center' }}>
             <h3 style={{ marginBottom: '10px' }}>No questions to show</h3>
             {questionsError ? (
@@ -224,13 +276,45 @@ const TestTaking = () => {
             )}
           </div>
         )}
-        {questions.map((q, i) => (
-          <div key={q.questionId} ref={(el) => { questionRefs.current[q.questionId] = el; }} className="card glass test-question-block">
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
-              <strong>Question {i + 1}</strong>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{q.points} pts</span>
+
+        {total > 0 && reviewing && (
+          <div className="card glass test-question-block test-review">
+            {unanswered.length === 0 ? (
+              <>
+                <div className="test-review-icon test-review-icon-ok"><Check size={32} /></div>
+                <h3>You've answered all {total} questions.</h3>
+                <p style={{ color: 'var(--text-muted)' }}>Happy with your answers? You can still go back and check any of them before you submit.</p>
+              </>
+            ) : (
+              <>
+                <div className="test-review-icon test-review-icon-warn"><AlertTriangle size={32} /></div>
+                <h3>You haven't answered {unanswered.length === 1 ? 'question' : 'questions'} {unanswered.map(({ i }) => i + 1).join(', ')}.</h3>
+                <p style={{ color: 'var(--text-muted)' }}>Tap a number below to go back to it, or submit anyway if you're ready.</p>
+                <div className="test-review-missing">
+                  {unanswered.map(({ i }) => (
+                    <button key={i} type="button" className="btn btn-outline" onClick={() => goTo(i)}>Question {i + 1}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="test-review-actions">
+              <button type="button" className="btn btn-outline lg" onClick={() => setReviewing(false)} disabled={submitting}>
+                <ArrowLeft size={18} /> Go back
+              </button>
+              <button type="button" className="btn btn-primary lg" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Submitting...' : <><Check size={18} /> Submit my test</>}
+              </button>
             </div>
-            <p style={{ marginBottom: '16px' }}>{q.prompt}</p>
+          </div>
+        )}
+
+        {total > 0 && !reviewing && q && (
+          <div key={q.questionId} className="card glass test-question-block">
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
+              <strong style={{ color: 'var(--primary)' }}>Question {current + 1}</strong>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{q.points} {q.points === 1 ? 'mark' : 'marks'}</span>
+            </div>
+            <p className="test-question-prompt">{q.prompt}</p>
             {q.type === 'objective' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {q.options?.map((opt) => (
@@ -241,21 +325,37 @@ const TestTaking = () => {
                       checked={answers[q.questionId]?.selectedOption === opt.key}
                       onChange={() => handleAnswerChange(q.questionId, { selectedOption: opt.key })}
                     />
-                    <span><strong>{opt.key}.</strong> {opt.text}</span>
+                    <span className="test-option-key">{opt.key}</span>
+                    <span className="test-option-text">{opt.text}</span>
                   </label>
                 ))}
               </div>
             ) : (
               <textarea
-                rows={5}
-                placeholder="Type your answer..."
+                rows={6}
+                placeholder="Type your answer here..."
                 value={answers[q.questionId]?.essayText ?? ''}
                 onChange={(e) => handleAnswerChange(q.questionId, { essayText: e.target.value })}
-                style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'vertical' }}
+                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'vertical', fontSize: '16px' }}
               />
             )}
+
+            <div className="test-step-actions">
+              <button type="button" className="btn btn-outline lg" onClick={() => goTo(current - 1)} disabled={current === 0}>
+                <ArrowLeft size={18} /> Previous
+              </button>
+              {isLast ? (
+                <button type="button" className="btn btn-primary lg" onClick={() => setReviewing(true)}>
+                  <Flag size={18} /> Finish
+                </button>
+              ) : (
+                <button type="button" className="btn btn-primary lg" onClick={() => goTo(current + 1)}>
+                  Next question <ArrowRight size={18} />
+                </button>
+              )}
+            </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

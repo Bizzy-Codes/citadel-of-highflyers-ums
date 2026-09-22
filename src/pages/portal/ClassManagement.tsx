@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type Result, type ReportCardData, type User } from '../../context/AuthContext';
 import { RATING_OPTIONS } from '../../lib/grading';
+import { GRADUATED, nextClassAfter } from '../../lib/accounts';
 import { getSuggestedComments, addCommentToHistory } from '../../lib/commentHistory';
 import {
   CheckCircle,
@@ -24,6 +25,7 @@ const ClassManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
   const [isEditingReportCard, setIsEditingReportCard] = useState(false);
 
   // "Add Pupil to Class" -- the list of pupils who have registered but
@@ -83,7 +85,7 @@ const ClassManagement = () => {
         }
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      } catch (error) {
+      } catch {
         setAutoSaveStatus('idle');
       }
     }, 1500); // Auto-save after 1.5 seconds of inactivity
@@ -114,18 +116,43 @@ const ClassManagement = () => {
     setIsEditingReportCard(false);
   };
 
+  // The next class is already known from the pupil's current one, so
+  // the teacher confirms it rather than typing a class name -- which
+  // used to default to a hard-coded "Grade 2" for everyone.
   const handlePromote = async (student: User) => {
-    const nextGrade = prompt(`Promote ${student.name} to which class?`, 'Grade 2');
-    if (nextGrade) {
-      await promoteStudent(student.id, nextGrade, "2023/2024");
+    const nextGrade = nextClassAfter(student.grade);
+    if (!nextGrade) {
+      alert(`${student.name} isn't in a class yet, so there's no next class to move them to. Add them to a class first.`);
+      return;
+    }
+
+    const graduating = nextGrade === GRADUATED;
+    const question = graduating
+      ? `${student.name} is in ${student.grade}, the final class.\n\nGraduate them from the school?\n\nTheir records and results are kept, and they move to the Graduated list. They can still sign in to view their own results.`
+      : `Move ${student.name} up from ${student.grade} to ${nextGrade}?`;
+    if (!window.confirm(question)) return;
+
+    setPromotingId(student.id);
+    try {
+      const { error } = await promoteStudent(student.id);
+      if (error) {
+        alert(`${student.name} could not be moved up.\n\n${error}`);
+        return;
+      }
       // A promotion IS news for the pupil it happened to -- and only them.
       await addNotification({
         recipientId: student.id,
-        title: "You've been promoted",
-        message: `Congratulations! You have been moved up to ${nextGrade}.`,
-        type: 'success'
+        title: graduating ? 'Congratulations, you have graduated!' : "You've been promoted",
+        message: graduating
+          ? `You have completed ${student.grade} and graduated from Citadel of Highflyers. Well done!`
+          : `Congratulations! You have been moved up to ${nextGrade}.`,
+        type: 'success',
       });
-      alert(`${student.name} promoted to ${nextGrade}`);
+      alert(graduating
+        ? `${student.name} has graduated and moved to the Graduated list.`
+        : `${student.name} moved up to ${nextGrade}.`);
+    } finally {
+      setPromotingId(null);
     }
   };
 
@@ -247,11 +274,18 @@ const ClassManagement = () => {
                         >
                           <Sparkles size={16} /> AI Scan
                         </button>
-                        <button 
+                        <button
                           onClick={() => handlePromote(student)}
-                          className="icon-btn" 
-                          title="Promote to Next Class" 
-                          style={{ color: 'var(--primary)' }}
+                          className="icon-btn"
+                          disabled={promotingId === student.id}
+                          title={(() => {
+                            const next = nextClassAfter(student.grade);
+                            if (!next) return 'No class set -- add this pupil to a class first';
+                            return next === GRADUATED
+                              ? `Graduate ${student.name} from ${student.grade}`
+                              : `Move up to ${next}`;
+                          })()}
+                          style={{ color: nextClassAfter(student.grade) === GRADUATED ? 'var(--success)' : 'var(--primary)' }}
                         >
                           <ArrowUpCircle size={22} />
                         </button>

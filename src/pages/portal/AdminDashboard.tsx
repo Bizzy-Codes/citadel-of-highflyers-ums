@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type User } from '../../context/AuthContext';
+import { upperName } from '../../lib/names';
 import {
   Users,
   Settings,
@@ -14,28 +15,55 @@ import {
   Clock,
   Calendar,
   X,
-  Save
+  Save,
+  ChevronLeft,
+  ChevronRight,
+  GraduationCap
 } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { students, staff, createUser, updateUser, requestPasswordReset, exportData } = useAuth();
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
+  const [page, setPage] = useState(1);
+  const recordsRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
 
   const pendingTeacherCount = staff.filter(s => s.role === 'teacher_pending').length;
 
+  // Graduates keep their account but are no longer pupils the school is
+  // teaching, so they don't belong in the roll or its counts.
+  const currentPupils = students.filter(s => !s.graduatedAt);
+  const graduateCount = students.length - currentPupils.length;
+
+  // Each card carries where it goes, not a function -- a ref-reading
+  // callback stored in a render-time array counts as touching the ref
+  // during render. The ref is read in the click handler instead.
   const adminStats = [
-    { label: "Total Pupils", value: students.length.toString(), icon: <Users size={20} />, trend: "Across all grades" },
-    { label: "Active This Term", value: students.filter(s => s.status === 'Active').length.toString(), icon: <CheckCircle size={20} />, trend: "Registered & Paid" },
-    { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers", onClick: () => navigate('/portal/admin/users') },
-    { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin", onClick: () => navigate('/portal/admin/users') },
+    { label: "Total Pupils", value: currentPupils.length.toString(), icon: <Users size={20} />, trend: "Across all grades", target: 'records' as const },
+    { label: "Active This Term", value: currentPupils.filter(s => s.status === 'Active').length.toString(), icon: <CheckCircle size={20} />, trend: "Registered & Paid", target: 'users' as const },
+    { label: "Pending Staff Approval", value: pendingTeacherCount.toString(), icon: <Clock size={20} />, trend: "Self-registered teachers", target: 'users' as const },
+    { label: "Staff Accounts", value: staff.length.toString(), icon: <Database size={20} />, trend: "Teachers & Admin", target: 'users' as const },
   ];
 
-  const filteredStudents = students.filter(s =>
+  const filteredStudents = currentPupils.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const pageCount = Math.max(1, Math.ceil(filteredStudents.length / PAGE_SIZE));
+  // A search that shortens the list can leave you on a page that no
+  // longer exists, which reads as "my pupils have vanished".
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const visibleStudents = filteredStudents.slice(pageStart, pageStart + PAGE_SIZE);
+
+  const goToPage = (n: number) => {
+    setPage(Math.max(1, Math.min(pageCount, n)));
+    recordsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const handleAddStudent = async () => {
     const name = prompt("Enter Pupil Full Name:");
@@ -89,8 +117,11 @@ const AdminDashboard = () => {
              <div
                key={i}
                className="stat-card glass hover-scale"
-               onClick={stat.onClick}
-               style={{ padding: '24px', borderRadius: '24px', border: '1px solid var(--glass-border)', cursor: stat.onClick ? 'pointer' : 'default' }}
+               onClick={() => {
+                 if (stat.target === 'records') recordsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                 else navigate('/portal/admin/users');
+               }}
+               style={{ padding: '24px', borderRadius: '24px', border: '1px solid var(--glass-border)', cursor: 'pointer' }}
              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--accent)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.8 }}>
@@ -105,7 +136,7 @@ const AdminDashboard = () => {
         </section>
 
         {/* Student Management Section */}
-        <section className="card glass" style={{ padding: '30px', borderRadius: '24px', border: '1px solid var(--glass-border)' }}>
+        <section ref={recordsRef} className="card glass" style={{ padding: '30px', borderRadius: '24px', border: '1px solid var(--glass-border)' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '20px' }}>
              <div>
                 <h3 style={{ fontSize: '20px', fontWeight: '700' }}>Pupil Records Database</h3>
@@ -118,7 +149,7 @@ const AdminDashboard = () => {
                      type="text" 
                      placeholder="Search by name or ID..." 
                      value={searchQuery}
-                     onChange={(e) => setSearchQuery(e.target.value)}
+                     onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                      style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)', fontSize: '14px' }}
                    />
                 </div>
@@ -144,7 +175,7 @@ const AdminDashboard = () => {
                    </tr>
                 </thead>
                 <tbody>
-                   {filteredStudents.map((student, i) => (
+                   {visibleStudents.map((student, i) => (
                      <tr key={i} className="hover-scale" style={{ background: 'var(--bg-surface)', transition: 'all 0.2s ease' }}>
                         <td style={{ padding: '16px 20px', borderRadius: '12px 0 0 12px', fontWeight: '600' }}>{student.name}</td>
                         <td style={{ padding: '16px 20px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{student.displayId}</td>
@@ -173,6 +204,46 @@ const AdminDashboard = () => {
                 </tbody>
              </table>
           </div>
+
+          {filteredStudents.length === 0 && (
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0' }}>
+              {searchQuery ? `No pupil matches "${searchQuery}".` : 'No pupils yet.'}
+            </p>
+          )}
+
+          {filteredStudents.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
+                Showing <strong style={{ color: 'var(--text-main)' }}>{pageStart + 1}–{pageStart + visibleStudents.length}</strong> of {filteredStudents.length} pupils
+              </p>
+              {pageCount > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button className="btn btn-outline sm" disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>
+                    <ChevronLeft size={16} /> Previous
+                  </button>
+                  <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '90px', textAlign: 'center' }}>
+                    Page {currentPage} of {pageCount}
+                  </span>
+                  <button className="btn btn-outline sm" disabled={currentPage === pageCount} onClick={() => goToPage(currentPage + 1)}>
+                    Next <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {graduateCount > 0 && (
+            <p style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>
+              <GraduationCap size={14} style={{ verticalAlign: '-2px' }} />{' '}
+              {graduateCount} graduated pupil{graduateCount === 1 ? '' : 's'} {graduateCount === 1 ? 'is' : 'are'} kept in the{' '}
+              <button
+                onClick={() => navigate('/portal/admin/graduates')}
+                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: '13px' }}
+              >
+                Graduated list
+              </button>.
+            </p>
+          )}
         </section>
 
         {/* Edit Modal */}
@@ -187,7 +258,7 @@ const AdminDashboard = () => {
                       <input 
                         type="text" 
                         value={editingStudent.name} 
-                        onChange={(e) => setEditingStudent({...editingStudent, name: e.target.value})}
+                        onChange={(e) => setEditingStudent({...editingStudent, name: upperName(e.target.value)})}
                         style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
                       />
                    </div>

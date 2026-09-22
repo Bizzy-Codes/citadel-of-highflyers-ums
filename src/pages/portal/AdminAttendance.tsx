@@ -118,17 +118,58 @@ const AdminAttendance = () => {
           </div>
           {week && !loading && (
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '18px' }}>
-              {dayTotals.map(({ date, counts }) => (
-                <div key={date} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  <strong style={{ color: 'var(--text-main)' }}>{formatShort(date)}</strong>
-                  {' -- '}
-                  <span style={{ color: 'var(--success)' }}>{counts.present}P</span>{' '}
-                  <span style={{ color: 'var(--error)' }}>{counts.absent}A</span>{' '}
-                  <span style={{ color: 'var(--primary)' }}>{counts.holiday}H</span>
-                </div>
-              ))}
+              {/* Spelled out in full. This used to read "0P 0A 0H",
+                  which is easy to misread as letters ("OP OA OH")
+                  rather than a count followed by an initial. */}
+              {dayTotals.map(({ date, counts }) => {
+                const taken = counts.present + counts.absent + counts.holiday > 0;
+                return (
+                  <div key={date} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <strong style={{ color: 'var(--text-main)' }}>{formatShort(date)}</strong>
+                    {' -- '}
+                    {taken ? (
+                      <>
+                        <span style={{ color: 'var(--success)' }}>{counts.present} present</span>
+                        {' · '}
+                        <span style={{ color: 'var(--error)' }}>{counts.absent} absent</span>
+                        {counts.holiday > 0 && (
+                          <>
+                            {' · '}
+                            <span style={{ color: 'var(--primary)' }}>{counts.holiday} on holiday</span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <span>register not taken</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
+        </div>
+
+        {/* What the letters in the grid below mean. */}
+        <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+          <strong style={{ color: 'var(--text-main)' }}>Key:</strong>
+          {(['present', 'absent', 'holiday'] as const).map((status) => (
+            <span key={status} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                display: 'inline-flex', width: '24px', height: '24px', borderRadius: '6px', alignItems: 'center', justifyContent: 'center',
+                fontSize: '11px', fontWeight: 800, background: STATUS_META[status].color, color: '#fff',
+              }}>
+                {STATUS_META[status].short}
+              </span>
+              {STATUS_META[status].label}
+            </span>
+          ))}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{
+              display: 'inline-flex', width: '24px', height: '24px', borderRadius: '6px', alignItems: 'center', justifyContent: 'center',
+              border: '1.5px solid var(--glass-border)',
+            }} />
+            Not marked
+          </span>
         </div>
 
         <div className="card glass" style={{ padding: '0', borderRadius: '24px', overflow: 'hidden' }}>

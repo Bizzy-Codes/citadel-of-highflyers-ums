@@ -8,6 +8,7 @@ import {
 } from '../../lib/outreach';
 import './Founders.css';
 import './Admissions.css';
+import { upperName } from '../../lib/names';
 
 const APPLICATION_FEE = 2000;
 
@@ -316,9 +317,9 @@ const Admissions = () => {
 
           <h3 className="admission-section-title">Child's Information</h3>
           <div className="admission-grid">
-            <Field label="Surname"><input style={inputStyle} required value={form.surname} onChange={(e) => set({ surname: e.target.value })} /></Field>
-            <Field label="First Name"><input style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
-            <Field label="Other Names"><input style={inputStyle} value={form.otherNames} onChange={(e) => set({ otherNames: e.target.value })} /></Field>
+            <Field label="Surname"><input style={inputStyle} required value={form.surname} onChange={(e) => set({ surname: upperName(e.target.value) })} /></Field>
+            <Field label="First Name"><input style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: upperName(e.target.value) })} /></Field>
+            <Field label="Other Names"><input style={inputStyle} value={form.otherNames} onChange={(e) => set({ otherNames: upperName(e.target.value) })} /></Field>
             <Field label="Email Address"><input type="email" style={inputStyle} required value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="you@example.com" /></Field>
             <Field label="Sex">
               <select style={inputStyle} value={form.sex} onChange={(e) => set({ sex: e.target.value as 'Male' | 'Female' })}>
@@ -338,7 +339,7 @@ const Admissions = () => {
 
           <h3 className="admission-section-title">Father's Information</h3>
           <div className="admission-grid">
-            <Field label="Father's Name"><input style={inputStyle} value={form.fatherName} onChange={(e) => set({ fatherName: e.target.value })} /></Field>
+            <Field label="Father's Name"><input style={inputStyle} value={form.fatherName} onChange={(e) => set({ fatherName: upperName(e.target.value) })} /></Field>
             <Field label="Father's Occupation"><input style={inputStyle} value={form.fatherOccupation} onChange={(e) => set({ fatherOccupation: e.target.value })} /></Field>
             <Field label="Office Address"><input style={inputStyle} value={form.fatherOfficeAddress} onChange={(e) => set({ fatherOfficeAddress: e.target.value })} /></Field>
             <Field label="Phone No"><input type="tel" style={inputStyle} value={form.fatherPhone} onChange={(e) => set({ fatherPhone: e.target.value })} /></Field>
@@ -346,7 +347,7 @@ const Admissions = () => {
 
           <h3 className="admission-section-title">Mother's Information</h3>
           <div className="admission-grid">
-            <Field label="Mother's Name"><input style={inputStyle} value={form.motherName} onChange={(e) => set({ motherName: e.target.value })} /></Field>
+            <Field label="Mother's Name"><input style={inputStyle} value={form.motherName} onChange={(e) => set({ motherName: upperName(e.target.value) })} /></Field>
             <Field label="Mother's Occupation"><input style={inputStyle} value={form.motherOccupation} onChange={(e) => set({ motherOccupation: e.target.value })} /></Field>
             <Field label="Office Address"><input style={inputStyle} value={form.motherOfficeAddress} onChange={(e) => set({ motherOfficeAddress: e.target.value })} /></Field>
             <Field label="Phone Number"><input type="tel" style={inputStyle} value={form.motherPhone} onChange={(e) => set({ motherPhone: e.target.value })} /></Field>
@@ -357,11 +358,11 @@ const Admissions = () => {
             <Field label="Any Health Challenge?"><input style={inputStyle} value={form.healthChallenge} onChange={(e) => set({ healthChallenge: e.target.value })} /></Field>
             <Field label="If any, specify"><input style={inputStyle} value={form.healthChallengeDetails} onChange={(e) => set({ healthChallengeDetails: e.target.value })} /></Field>
             <Field label="School Last Attended (transfer pupils only)"><input style={inputStyle} value={form.schoolLastAttended} onChange={(e) => set({ schoolLastAttended: e.target.value })} /></Field>
-            <Field label="Who is responsible for picking the child"><input style={inputStyle} required value={form.pickupPerson} onChange={(e) => set({ pickupPerson: e.target.value })} /></Field>
+            <Field label="Who is responsible for picking the child"><input style={inputStyle} required value={form.pickupPerson} onChange={(e) => set({ pickupPerson: upperName(e.target.value) })} /></Field>
             <Field label="Their Phone Number(s)"><input type="tel" style={inputStyle} required value={form.pickupPhone} onChange={(e) => set({ pickupPhone: e.target.value })} /></Field>
           </div>
           <Field label="Does the child have siblings at Citadel? If yes, state names">
-            <input style={inputStyle} placeholder="e.g. John Doe, Jane Doe" value={form.siblingNames} onChange={(e) => set({ siblingNames: e.target.value })} />
+            <input style={inputStyle} placeholder="e.g. JOHN DOE, JANE DOE" value={form.siblingNames} onChange={(e) => set({ siblingNames: upperName(e.target.value) })} />
           </Field>
 
           <h3 className="admission-section-title">Photo &amp; Documents</h3>

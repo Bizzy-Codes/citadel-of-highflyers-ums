@@ -4,6 +4,7 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToTarget } from '../../lib/imageCompression';
 import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2, LogOut } from 'lucide-react';
+import { upperName } from '../../lib/names';
 
 const MAX_RAW_BYTES = 15 * 1024 * 1024; // reject truly huge files outright
 const TARGET_UPLOAD_BYTES = 2 * 1024 * 1024; // compress anything above this instead of rejecting it
@@ -185,7 +186,7 @@ const Profile = () => {
               <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Full Name</label>
-                  <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                  <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: upperName(e.target.value)})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                 </div>
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Email Address (login)</label>

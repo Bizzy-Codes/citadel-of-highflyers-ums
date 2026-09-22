@@ -19,6 +19,22 @@ export const CLASSES = [
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
 ] as const;
 
+// Where a pupil goes when they finish the final class. Not a member of
+// CLASSES on purpose -- every screen that lists real classes should
+// leave graduates out without needing to know about them.
+export const GRADUATED = 'Graduated';
+
+// The class after this one, in school order. Returns GRADUATED after
+// the last class, and null when the class isn't recognised (an
+// unassigned pupil, or a name that has since been renamed), so the
+// caller can say so instead of guessing.
+export function nextClassAfter(className: string | null | undefined): string | null {
+  const current = (className ?? '').trim().toLowerCase();
+  const i = CLASSES.findIndex((c) => c.toLowerCase() === current);
+  if (i === -1) return null;
+  return i === CLASSES.length - 1 ? GRADUATED : CLASSES[i + 1];
+}
+
 export type SchoolSection = 'kinders' | 'graders';
 
 // Which arm of the school a class belongs to. The two arms get

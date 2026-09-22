@@ -6,8 +6,22 @@ import {
   type TestAttempt, type TestAnswerForGrading, type ExamViolation,
   type AttemptProgress, type TestSnapshot,
 } from '../../context/AuthContext';
-import { ArrowLeft, RefreshCw, AlertTriangle, FileText, Camera, VideoOff, Sparkles } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertTriangle, FileText, Camera, VideoOff, Sparkles, Radio } from 'lucide-react';
+import { useTestVideoWall, type WallState } from '../../hooks/useTestVideoWall';
 import './Tests.css';
+
+// <video> needs srcObject set imperatively; a ref callback keeps it in
+// sync when the stream for a tile changes or is dropped.
+const LiveVideo = ({ stream, label }: { stream: MediaStream; label: string }) => (
+  <video
+    autoPlay muted playsInline
+    aria-label={label}
+    ref={(el) => { if (el && el.srcObject !== stream) el.srcObject = stream; }}
+    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+  />
+);
+
+const WALL_LABEL: Record<WallState, string> = { connecting: 'connecting…', live: 'LIVE', lost: 'reconnecting…' };
 
 const STATUS_LABEL: Record<TestAttempt['status'], string> = {
   in_progress: 'In Progress',
@@ -94,6 +108,9 @@ const TestMonitor = () => {
   }, [testId]);
 
   const liveAttempts = useMemo(() => attempts.filter((a) => a.status === 'in_progress'), [attempts]);
+  const liveIds = useMemo(() => liveAttempts.map((a) => a.id), [liveAttempts]);
+  const { streams, states: wallStates } = useTestVideoWall(testId, liveIds);
+  const liveCount = liveAttempts.filter((a) => streams[a.id] && wallStates[a.id] === 'live').length;
 
   const handleSweep = async () => {
     if (!testId) return;
@@ -152,30 +169,46 @@ const TestMonitor = () => {
           </p>
         </div>
 
-        {/* Live camera wall -- ephemeral snapshots relayed every ~12s,
-            nothing stored. Only shows pupils currently taking the test. */}
+        {/* Live video wall -- a direct WebRTC stream from each pupil's
+            webcam, with the periodic still frame as a fallback while a
+            stream connects or if it can't get through. Nothing is stored. */}
         <div className="card glass" style={{ padding: '20px' }}>
-          <h3 style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={18} /> Live Camera Feed</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={18} /> Live Camera Feed</h3>
+            {liveAttempts.length > 0 && (
+              <span style={{ fontSize: '12px', fontWeight: 700, color: liveCount === liveAttempts.length ? 'var(--success)' : 'var(--warning)' }}>
+                {liveCount}/{liveAttempts.length} streaming live
+              </span>
+            )}
+          </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' }}>
-            Refreshing thumbnails from each pupil's webcam. Frames are relayed live and never saved.
+            Live video from each pupil's webcam. Streams go straight to this screen and are never saved.
           </p>
           {liveAttempts.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No pupils are taking this test right now.</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px' }}>
+            <div className="live-wall">
               {liveAttempts.map((a) => {
+                const stream = streams[a.id];
+                const state = wallStates[a.id];
+                const isLive = !!stream && state === 'live';
                 const snap = snaps[a.id];
-                const stale = snap ? Date.now() - snap.at > 45000 : false;
+                const stale = snap ? Date.now() - snap.at > 20000 : false;
                 return (
-                  <div key={a.id} style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}>
-                    <div style={{ position: 'relative', aspectRatio: '4 / 3', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {snap ? (
+                  <div key={a.id} className={`live-tile ${isLive ? 'live-tile-live' : ''}`}>
+                    <div className="live-tile-video">
+                      {isLive ? (
+                        <LiveVideo stream={stream} label={`${a.studentName ?? a.studentId} live webcam`} />
+                      ) : snap ? (
                         <img src={snap.image} alt={`${a.studentName ?? a.studentId} webcam`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: stale ? 0.5 : 1 }} />
                       ) : (
                         <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
                           <VideoOff size={20} /> waiting for camera
                         </div>
                       )}
+                      <span className={`live-badge ${isLive ? 'live-badge-on' : ''}`}>
+                        <Radio size={10} /> {state ? WALL_LABEL[state] : (snap ? 'still frames' : 'waiting')}
+                      </span>
                       {a.violationCount > 0 && (
                         <span style={{ position: 'absolute', top: '6px', right: '6px', background: 'var(--warning)', color: '#fff', borderRadius: '999px', fontSize: '10px', fontWeight: 800, padding: '2px 7px' }}>
                           {a.violationCount}/3
@@ -184,8 +217,8 @@ const TestMonitor = () => {
                     </div>
                     <div style={{ padding: '8px 10px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.studentName ?? a.studentId}</div>
-                      <div style={{ fontSize: '11px', color: stale ? 'var(--warning)' : 'var(--text-muted)' }}>
-                        {snap ? `updated ${agoLabel(snap.at)}` : 'no frame yet'}
+                      <div style={{ fontSize: '11px', color: isLive ? 'var(--success)' : stale ? 'var(--warning)' : 'var(--text-muted)' }}>
+                        {isLive ? 'live video' : snap ? `still frame ${agoLabel(snap.at)}` : 'no picture yet'}
                       </div>
                     </div>
                   </div>

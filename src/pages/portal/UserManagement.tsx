@@ -14,15 +14,21 @@ import {
   X,
   Key,
   ExternalLink,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { exportStudentsToSpreadsheet } from '../../lib/exportCsv';
+import { upperName } from '../../lib/names';
+
+const PAGE_SIZE = 10;
 
 const UserManagement = () => {
   const navigate = useNavigate();
   const { students, staff, updateUser, deleteUser, approveTeacher, createUser, subjectsByClass, updateSubjects, requestPasswordReset } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
+  const [page, setPage] = useState(1);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingSubjects, setEditingSubjects] = useState<{className: string, subjects: string} | null>(null);
   const [addingUser, setAddingUser] = useState<{ name: string; email: string; grade: string } | null>(null);
@@ -36,10 +42,20 @@ const UserManagement = () => {
     s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Graduates live in their own archive (/portal/admin/graduates), so
+  // they're not part of the working pupil roll.
   const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
+    !s.graduatedAt && (
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.displayId.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
+
+  const visibleUsers = activeTab === 'teachers' ? filteredStaff : filteredStudents;
+  const pageCount = Math.max(1, Math.ceil(visibleUsers.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pagedUsers = visibleUsers.slice(pageStart, pageStart + PAGE_SIZE);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,14 +134,14 @@ const UserManagement = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
            <div className="glass" style={{ display: 'flex', padding: '4px', borderRadius: '12px' }}>
               <button 
-                onClick={() => setActiveTab('teachers')}
+                onClick={() => { setActiveTab('teachers'); setPage(1); }}
                 className={`btn sm ${activeTab === 'teachers' ? 'btn-primary' : ''}`}
                 style={{ borderRadius: '8px' }}
               >
                 <Users size={16} /> Teachers
               </button>
               <button 
-                onClick={() => setActiveTab('students')}
+                onClick={() => { setActiveTab('students'); setPage(1); }}
                 className={`btn sm ${activeTab === 'students' ? 'btn-primary' : ''}`}
                 style={{ borderRadius: '8px' }}
               >
@@ -162,7 +178,7 @@ const UserManagement = () => {
                    type="text"
                    placeholder={`Search ${activeTab}...`}
                    value={searchQuery}
-                   onChange={(e) => setSearchQuery(e.target.value)}
+                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                    style={{ width: '100%', padding: '10px 16px 10px 40px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)' }}
                  />
               </div>
@@ -186,7 +202,7 @@ const UserManagement = () => {
                       </tr>
                    </thead>
                    <tbody>
-                      {(activeTab === 'teachers' ? filteredStaff : filteredStudents).map((user, i) => (
+                      {pagedUsers.map((user, i) => (
                         <tr key={i} className="hover-scale" onClick={() => navigate(`/portal/admin/users/${user.id}`)} style={{ background: 'var(--bg-surface)', cursor: 'pointer' }}>
                            <td style={{ padding: '16px 20px', borderRadius: '12px 0 0 12px', fontWeight: '600' }}>{user.name}</td>
                            <td style={{ padding: '16px 20px', color: 'var(--text-muted)' }}>{user.displayId}</td>
@@ -215,6 +231,33 @@ const UserManagement = () => {
                       ))}
                    </tbody>
                 </table>
+
+                {visibleUsers.length === 0 && (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0' }}>
+                    {searchQuery ? `No ${activeTab === 'teachers' ? 'teacher' : 'pupil'} matches "${searchQuery}".` : `No ${activeTab} yet.`}
+                  </p>
+                )}
+
+                {visibleUsers.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--glass-border)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
+                      Showing <strong style={{ color: 'var(--text-main)' }}>{pageStart + 1}–{pageStart + pagedUsers.length}</strong> of {visibleUsers.length}
+                    </p>
+                    {pageCount > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button className="btn btn-outline sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+                          <ChevronLeft size={16} /> Previous
+                        </button>
+                        <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '90px', textAlign: 'center' }}>
+                          Page {currentPage} of {pageCount}
+                        </span>
+                        <button className="btn btn-outline sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>
+                          Next <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
              </div>
            )}
 
@@ -261,7 +304,7 @@ const UserManagement = () => {
                       <input
                         type="text"
                         value={addingUser.name}
-                        onChange={(e) => setAddingUser({ ...addingUser, name: e.target.value })}
+                        onChange={(e) => setAddingUser({ ...addingUser, name: upperName(e.target.value) })}
                         required
                         style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
                       />
@@ -311,7 +354,7 @@ const UserManagement = () => {
                       <input 
                         type="text" 
                         value={editingUser.name} 
-                        onChange={(e) => setEditingUser({...editingUser, name: e.target.value})}
+                        onChange={(e) => setEditingUser({...editingUser, name: upperName(e.target.value)})}
                         style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}
                       />
                    </div>

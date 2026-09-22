@@ -24,6 +24,28 @@ async function describeFunctionError(error: unknown): Promise<string> {
   return error instanceof Error ? error.message : 'Something went wrong';
 }
 
+// True for failures worth retrying: the function crashed or was
+// unreachable, so nothing was created. A 4xx (bad input, duplicate
+// email, not an admin) is a real answer and must not be retried.
+async function isTransientFunctionError(error: unknown): Promise<boolean> {
+  if (error && typeof error === 'object' && 'context' in error) {
+    const status = (error as { context?: Response }).context?.status;
+    if (typeof status === 'number') return status >= 500 || status === 408 || status === 429;
+  }
+  // No response at all (DNS, offline, CORS-level failure) -- worth one retry.
+  return true;
+}
+
+// The auth API's wording for an email clash doesn't tell the admin what
+// to do about it, and the likeliest cause here is an account that
+// already exists under that address.
+function friendlyCreateUserError(message: string, email: string): string {
+  if (/already been registered|already exists|duplicate/i.test(message)) {
+    return `${email} already has an account. Search for them in User Management -- if they were removed before, that email may still be attached to the old account.`;
+  }
+  return message;
+}
+
 export interface Result {
   id?: string;
   subject: string;
@@ -100,6 +122,11 @@ export interface User {
   avatarUrl?: string;
   results?: Result[];
   history?: PastRecord[];
+  // Set once a pupil is promoted out of the final class (patch_29).
+  // Non-null means they are in the Graduated archive.
+  graduatedAt?: string;
+  finalClass?: string;
+  graduatingSession?: string;
   // Pupil bio + guardian details (patch_22). Filled either by the admit
   // step copying them off the admission application, or by a returning
   // pupil filling them in when they create their own account. Visible
@@ -449,7 +476,7 @@ interface AuthContextType {
   removeAvatar: () => Promise<{ error: string | null }>;
   deleteUser: (id: string) => Promise<{ error: string | null }>;
   approveTeacher: (id: string) => Promise<void>;
-  promoteStudent: (id: string, nextGrade: string, currentSession: string) => Promise<void>;
+  promoteStudent: (id: string) => Promise<{ error: string | null; previousClass?: string; newClass?: string; graduated?: boolean }>;
   addResult: (studentId: string, result: NewResultInput) => Promise<void>;
   importAdmissionDetails: (studentId: string) => Promise<{ error: string | null; filled?: number }>;
   linkProfileToApplication: (studentId: string, applicationId: string) => Promise<void>;
@@ -557,6 +584,9 @@ const mapProfileRow = (row: any): User => ({
   location: row.location ?? undefined,
   assignedClass: row.assigned_class ?? undefined,
   avatarUrl: row.avatar_url ?? undefined,
+  graduatedAt: row.graduated_at ?? undefined,
+  finalClass: row.final_class ?? undefined,
+  graduatingSession: row.graduating_session ?? undefined,
   sex: row.sex ?? undefined,
   dateOfBirth: row.date_of_birth ?? undefined,
   homeAddress: row.home_address ?? undefined,
@@ -1072,11 +1102,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // stored or shown again after this call (the admin can always issue a
   // new one later via adminSetPassword).
   const createUser = async (name: string, email: string, role: 'student' | 'teacher', grade?: string) => {
-    const { data, error } = await supabase.functions.invoke('admin-create-user', {
-      body: { action: 'create', name, email, role, grade },
-    });
+    // The Edge Function occasionally 502s on a cold start: the account
+    // isn't created, and the admin sees a generic failure that goes
+    // away if they refresh and try again. Retry that once ourselves --
+    // but only for a transient server/network failure, never for a
+    // real answer like "this email is already registered", which would
+    // just fail again identically.
+    let data, error;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      ({ data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: { action: 'create', name, email, role, grade },
+      }));
+      if (!error || !(await isTransientFunctionError(error))) break;
+      await new Promise((r) => setTimeout(r, 800));
+    }
     if (error) return { error: await describeFunctionError(error) };
-    if (data?.error) return { error: data.error as string };
+    if (data?.error) return { error: friendlyCreateUserError(data.error as string, email) };
     await refreshProfiles();
     return { error: null, password: data?.password as string | undefined, userId: data?.id as string | undefined };
   };
@@ -1221,26 +1262,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateUser(id, { role: 'teacher' });
   };
 
-  const promoteStudent = async (id: string, nextGrade: string, currentSession: string) => {
-    const student = students.find(s => s.id === id);
-    if (!student) return;
-
-    const currentResults = student.results ?? [];
-    if (currentResults.length > 0) {
-      await supabase.from('academic_history').insert({
-        student_id: id,
-        grade: student.grade ?? 'Unknown',
-        session: currentSession,
-        results: currentResults,
-      });
-      const resultIds = currentResults.map(r => r.id).filter(Boolean) as string[];
-      if (resultIds.length > 0) {
-        await supabase.from('results').delete().in('id', resultIds);
-      }
-    }
-
-    await supabase.from('profiles').update({ grade: nextGrade }).eq('id', id);
+  // Goes through promote_student() -- see supabase/patch_30.sql. The
+  // browser used to write profiles.grade directly, which RLS refused
+  // (a teacher may only write rows that stay in their own class), so
+  // every promotion silently did nothing. The server also decides the
+  // next class, archives the term's results and handles graduation, so
+  // all of it is one transaction that can actually report a failure.
+  const promoteStudent = async (id: string) => {
+    const { data, error } = await supabase.rpc('promote_student', { p_student_id: id });
+    if (error) return { error: error.message };
+    const row = Array.isArray(data) ? data[0] : data;
     await refreshProfiles();
+    return {
+      error: null,
+      previousClass: row?.previous_class as string | undefined,
+      newClass: row?.new_class as string | undefined,
+      graduated: Boolean(row?.graduated),
+    };
   };
 
   const addResult = async (studentId: string, result: NewResultInput) => {

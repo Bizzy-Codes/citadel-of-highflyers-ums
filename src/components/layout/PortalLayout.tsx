@@ -50,6 +50,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: isTeacher ? 'Report Cards' : 'Academic Results', icon: <GraduationCap size={20} />, path: isTeacher ? '/portal/teacher/results' : '/portal/results', show: !isAdmin },
     { label: 'Financial / Fees', icon: <CreditCard size={20} />, path: '/portal/fees', show: !isTeacher && !isAdmin },
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },
+    { label: 'Graduated Pupils', icon: <GraduationCap size={20} />, path: '/portal/admin/graduates', show: isAdmin },
     { label: 'Payment Receipts', icon: <Receipt size={20} />, path: '/portal/admin/payments', show: isAdmin },
     { label: 'Admissions', icon: <UserPlus size={20} />, path: '/portal/admin/admissions', show: isAdmin },
     { label: 'Academic Calendar', icon: <CalendarRange size={20} />, path: '/portal/admin/calendar', show: isAdmin },

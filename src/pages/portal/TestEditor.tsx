@@ -262,23 +262,48 @@ const TestEditor = () => {
               </div>
 
               {form.type === 'objective' && (
-                <div className="input-group">
-                  <label>Options (select the correct one)</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {form.options.map((opt) => (
-                      <div key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input type="radio" name="correctOption" checked={form.correctOption === opt.key}
-                          onChange={() => setForm({ ...form, correctOption: opt.key })} />
-                        <span style={{ width: '20px', fontWeight: 700 }}>{opt.key}.</span>
-                        <input type="text" required value={opt.text}
-                          onChange={(e) => setForm({ ...form, options: form.options.map((o) => o.key === opt.key ? { ...o, text: e.target.value } : o) })}
-                          style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
-                        <button type="button" className="icon-btn sm" disabled={form.options.length <= 2} onClick={() => removeOption(opt.key)}><Trash2 size={14} /></button>
-                      </div>
-                    ))}
+                <>
+                  <div className="input-group">
+                    <label>Options</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {form.options.map((opt) => (
+                        <div key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ width: '24px', fontWeight: 700, color: form.correctOption === opt.key ? 'var(--success)' : 'var(--text-main)' }}>{opt.key}.</span>
+                          <input type="text" required value={opt.text} placeholder={`Option ${opt.key}`}
+                            onChange={(e) => setForm({ ...form, options: form.options.map((o) => o.key === opt.key ? { ...o, text: e.target.value } : o) })}
+                            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                          <button type="button" className="icon-btn sm" disabled={form.options.length <= 2} onClick={() => removeOption(opt.key)}><Trash2 size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" className="btn btn-outline sm" style={{ marginTop: '8px' }} onClick={addOption}><Plus size={14} /> Add Option</button>
                   </div>
-                  <button type="button" className="btn btn-outline sm" style={{ marginTop: '8px' }} onClick={addOption}><Plus size={14} /> Add Option</button>
-                </div>
+
+                  {/* The answer key. Pupils are marked against this the
+                      moment they submit, so it's a required, unmissable
+                      choice rather than a small radio beside each option. */}
+                  <div className="input-group answer-key-box">
+                    <label>Correct answer <span style={{ color: 'var(--error)' }}>*</span></label>
+                    <div className="answer-key-choices">
+                      {form.options.map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          className={`answer-key-choice ${form.correctOption === opt.key ? 'answer-key-choice-on' : ''}`}
+                          onClick={() => setForm({ ...form, correctOption: opt.key })}
+                          title={opt.text ? `${opt.key}. ${opt.text}` : `Option ${opt.key}`}
+                        >
+                          {opt.key}
+                        </button>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: '12px', color: form.correctOption ? 'var(--success)' : 'var(--text-muted)', marginTop: '8px' }}>
+                      {form.correctOption
+                        ? <>Marking scheme: <strong>{form.correctOption}</strong> is correct and earns {Number(form.points) || 0} {Number(form.points) === 1 ? 'mark' : 'marks'}. Any other choice earns 0.</>
+                        : 'Tap the letter of the correct option. Pupils are marked against this automatically.'}
+                    </p>
+                  </div>
+                </>
               )}
 
               {form.type === 'essay' && (

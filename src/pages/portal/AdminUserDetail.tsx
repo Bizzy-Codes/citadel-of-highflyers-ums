@@ -9,6 +9,7 @@ import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
 import ContactParentDialog from '../../components/portal/ContactParentDialog';
 import { buildLoginDetailsMessage } from '../../lib/outreach';
 import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
+import { upperName } from '../../lib/names';
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
@@ -340,7 +341,7 @@ const AdminUserDetail = () => {
                   must always save whatever has been typed so far and
                   leave the rest blank. */}
               <Field label="Full Name">
-                <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: upperName(e.target.value) })} />
               </Field>
               <Field label="Phone">
                 <input type="tel" style={inputStyle} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -414,14 +415,14 @@ const AdminUserDetail = () => {
 
                   <h4 style={{ marginTop: '14px' }}>Father / Guardian</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <Field label="Name"><input style={inputStyle} value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} /></Field>
+                    <Field label="Name"><input style={inputStyle} value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: upperName(e.target.value) })} /></Field>
                     <Field label="Occupation"><input style={inputStyle} value={form.fatherOccupation} onChange={(e) => setForm({ ...form, fatherOccupation: e.target.value })} /></Field>
                   </div>
                   <Field label="Father's Phone"><input type="tel" style={inputStyle} value={form.fatherPhone} onChange={(e) => setForm({ ...form, fatherPhone: e.target.value })} /></Field>
 
                   <h4 style={{ marginTop: '14px' }}>Mother / Guardian</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <Field label="Name"><input style={inputStyle} value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} /></Field>
+                    <Field label="Name"><input style={inputStyle} value={form.motherName} onChange={(e) => setForm({ ...form, motherName: upperName(e.target.value) })} /></Field>
                     <Field label="Occupation"><input style={inputStyle} value={form.motherOccupation} onChange={(e) => setForm({ ...form, motherOccupation: e.target.value })} /></Field>
                   </div>
                   <Field label="Mother's Phone"><input type="tel" style={inputStyle} value={form.motherPhone} onChange={(e) => setForm({ ...form, motherPhone: e.target.value })} /></Field>

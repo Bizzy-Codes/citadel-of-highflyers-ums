@@ -18,6 +18,7 @@ import TeacherDashboard from './pages/portal/TeacherDashboard'
 import AdminDashboard from './pages/portal/AdminDashboard'
 import UserManagement from './pages/portal/UserManagement'
 import AdminUserDetail from './pages/portal/AdminUserDetail'
+import AdminGraduates from './pages/portal/AdminGraduates'
 import ClassManagement from './pages/portal/ClassManagement'
 import Timetable from './pages/portal/Timetable'
 import Financial from './pages/portal/Financial'
@@ -151,6 +152,9 @@ function App() {
         } />
         <Route path="/portal/admin/users/:userId" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminUserDetail /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/graduates" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminGraduates /></ProtectedRoute>
         } />
         <Route path="/portal/admin/payments" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>

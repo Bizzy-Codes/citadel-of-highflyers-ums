@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, Upload } from 'lucide-react';
 import { useAuth, type StudentDetails } from '../../context/AuthContext';
 import './Login.css';
+import { upperLoginId, upperName } from '../../lib/names';
 
 const regFieldStyle: React.CSSProperties = {
   width: '100%', padding: '12px', borderRadius: '12px',
@@ -116,7 +117,7 @@ const Login = () => {
                       type="text"
                       placeholder="Your name, CH 001, or you@example.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(upperLoginId(e.target.value))}
                       required
                     />
                   </div>
@@ -203,9 +204,9 @@ const Login = () => {
                   <User size={18} className="input-icon" />
                   <input
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="JOHN DOE"
                     value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
+                    onChange={(e) => setRegName(upperName(e.target.value))}
                     required
                   />
                 </div>
@@ -296,7 +297,7 @@ const Login = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="input-group">
                       <label>Name</label>
-                      <input value={details.fatherName ?? ''} onChange={(e) => setDetail({ fatherName: e.target.value })} style={regFieldStyle} />
+                      <input value={details.fatherName ?? ''} onChange={(e) => setDetail({ fatherName: upperName(e.target.value) })} style={regFieldStyle} />
                     </div>
                     <div className="input-group">
                       <label>Occupation</label>
@@ -312,7 +313,7 @@ const Login = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="input-group">
                       <label>Name</label>
-                      <input value={details.motherName ?? ''} onChange={(e) => setDetail({ motherName: e.target.value })} style={regFieldStyle} />
+                      <input value={details.motherName ?? ''} onChange={(e) => setDetail({ motherName: upperName(e.target.value) })} style={regFieldStyle} />
                     </div>
                     <div className="input-group">
                       <label>Occupation</label>
