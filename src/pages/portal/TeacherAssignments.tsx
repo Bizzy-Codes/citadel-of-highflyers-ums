@@ -3,6 +3,7 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type NewAssignmentInput, type AssignmentSubmission } from '../../context/AuthContext';
 import { FileText, Plus, Trash2, Users, Download, Paperclip } from 'lucide-react';
 import './Tests.css';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const emptyInput: NewAssignmentInput = { subject: '', title: '', description: '', dueDate: '' };
 
@@ -115,8 +116,7 @@ const TeacherAssignments = () => {
               </div>
               <div className="input-group">
                 <label>Due Date (optional)</label>
-                <input type="date" value={input.dueDate} onChange={(e) => setInput({ ...input, dueDate: e.target.value })}
-                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                <DateWheelInput value={input.dueDate} onChange={(v) => setInput({ ...input, dueDate: v })} title="Due date" />
               </div>
               <div className="input-group">
                 <label>Attach a brief (optional)</label>

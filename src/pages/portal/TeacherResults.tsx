@@ -4,6 +4,7 @@ import ReportCard from '../../components/portal/ReportCard';
 import { useAuth, type Result, type ReportCardData, type SubjectStats, type User } from '../../context/AuthContext';
 import { RATING_OPTIONS, gradeFromScore } from '../../lib/grading';
 import { Download, Pencil, Users, X, Save, ClipboardList, Calculator } from 'lucide-react';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const PSYCHOMOTOR_FIELDS = [
   ['commOralRating', 'Communication (Oral)'],
@@ -291,11 +292,11 @@ const TeacherResults = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="input-group">
                   <label>This Term Ends</label>
-                  <input type="date" value={editDraft.termEnds ?? ''} onChange={(e) => setEditDraft({ ...editDraft, termEnds: e.target.value })} style={inputStyle} />
+                  <DateWheelInput value={editDraft.termEnds} onChange={(v) => setEditDraft({ ...editDraft, termEnds: v })} title="This term ends" />
                 </div>
                 <div className="input-group">
                   <label>Next Term Begins</label>
-                  <input type="date" value={editDraft.nextTermBegins ?? ''} onChange={(e) => setEditDraft({ ...editDraft, nextTermBegins: e.target.value })} style={inputStyle} />
+                  <DateWheelInput value={editDraft.nextTermBegins} onChange={(v) => setEditDraft({ ...editDraft, nextTermBegins: v })} title="Next term begins" />
                 </div>
               </div>
 

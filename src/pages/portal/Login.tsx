@@ -4,6 +4,7 @@ import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, Upload } f
 import { useAuth, type StudentDetails } from '../../context/AuthContext';
 import './Login.css';
 import { upperLoginId, upperName } from '../../lib/names';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const regFieldStyle: React.CSSProperties = {
   width: '100%', padding: '12px', borderRadius: '12px',
@@ -260,7 +261,7 @@ const Login = () => {
                     </div>
                     <div className="input-group">
                       <label>Date of Birth</label>
-                      <input type="date" value={details.dateOfBirth ?? ''} onChange={(e) => setDetail({ dateOfBirth: e.target.value })} style={regFieldStyle} />
+                      <DateWheelInput kind="birth" value={details.dateOfBirth} onChange={(v) => setDetail({ dateOfBirth: v })} />
                     </div>
                     <div className="input-group">
                       <label>Nationality</label>

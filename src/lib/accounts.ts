@@ -48,3 +48,19 @@ export const SECTION_LABEL: Record<SchoolSection, string> = {
   kinders: 'Kindergarten',
   graders: 'Graders',
 };
+
+// Siblings share one parent email (patch_31), but the login system
+// still needs a unique address per account. A pupil whose family email
+// is already taken signs up under a plus-address of it --
+// mum@gmail.com -> mum+ch4k2x9a@gmail.com -- which most providers
+// (Gmail included) still deliver to mum. The profile keeps the real
+// address. Keep in sync with the Edge Function's copy.
+export function siblingLoginEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  const tag = 'ch' + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+  return `${email.slice(0, at)}+${tag}${email.slice(at)}`;
+}
+
+export function isEmailTakenError(message: string): boolean {
+  return /already been registered|already registered|already exists|duplicate/i.test(message);
+}

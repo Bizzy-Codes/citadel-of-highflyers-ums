@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
 import type { CalendarTable } from '../lib/calendarExtract';
+import { siblingLoginEmail, isEmailTakenError } from '../lib/accounts';
 
 // supabase-js's functions.invoke() only ever surfaces a generic
 // "Edge Function returned a non-2xx status code" on error -- the
@@ -1026,10 +1027,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name: string, email: string, password: string, grade: string,
     details?: StudentDetails, photo?: File | null,
   ) => {
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { name, role: 'student', grade } },
+    // A brother or sister may already be registered under this email.
+    // Pupils log in by name, so the second child quietly gets a
+    // plus-address as their login and the profile keeps the family
+    // email (see siblingLoginEmail and patch_31).
+    const signUp = (loginEmail: string) => supabase.auth.signUp({
+      email: loginEmail, password,
+      options: { data: { name, role: 'student', grade, contact_email: email } },
     });
+    let { data, error } = await signUp(email);
+    for (let attempt = 0; attempt < 3 && error && isEmailTakenError(error.message); attempt++) {
+      ({ data, error } = await signUp(siblingLoginEmail(email)));
+    }
     if (error) return { error: error.message };
 
     const newId = data.user?.id;

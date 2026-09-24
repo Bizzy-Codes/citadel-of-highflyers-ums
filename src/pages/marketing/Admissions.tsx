@@ -9,6 +9,7 @@ import {
 import './Founders.css';
 import './Admissions.css';
 import { upperName } from '../../lib/names';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const APPLICATION_FEE = 2000;
 
@@ -327,7 +328,7 @@ const Admissions = () => {
                 <option value="Female">Female</option>
               </select>
             </Field>
-            <Field label="Date of Birth"><input type="date" style={inputStyle} required value={form.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} /></Field>
+            <Field label="Date of Birth"><DateWheelInput kind="birth" required value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} /></Field>
             <Field label="Nationality"><input style={inputStyle} required value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} /></Field>
             <Field label="State of Origin"><input style={inputStyle} required value={form.stateOfOrigin} onChange={(e) => set({ stateOfOrigin: e.target.value })} /></Field>
             <Field label="L.G.A"><input style={inputStyle} required value={form.lga} onChange={(e) => set({ lga: e.target.value })} /></Field>

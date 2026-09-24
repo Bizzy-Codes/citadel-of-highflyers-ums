@@ -41,6 +41,18 @@ function json(body: unknown, status = 200) {
 // browser bundle.
 const DEFAULT_PASSWORD = 'citadel1234';
 
+function isEmailTaken(message: string) {
+  return /already been registered|already registered|already exists|duplicate/i.test(message);
+}
+
+// mum@gmail.com -> mum+ch4k2x9a@gmail.com. Keep in sync with
+// siblingLoginEmail in src/lib/accounts.ts.
+function siblingLoginEmail(email: string) {
+  const at = email.lastIndexOf('@');
+  const tag = 'ch' + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+  return `${email.slice(0, at)}+${tag}${email.slice(at)}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -123,12 +135,26 @@ Deno.serve(async (req) => {
 
   const tempPassword = DEFAULT_PASSWORD;
 
-  const { data, error } = await adminClient.auth.admin.createUser({
-    email,
+  const create = (loginEmail: string) => adminClient.auth.admin.createUser({
+    email: loginEmail,
     password: tempPassword,
     email_confirm: true,
-    user_metadata: { name, role, grade },
+    user_metadata: { name, role, grade, contact_email: email },
   });
+
+  let { data, error } = await create(email);
+
+  // Siblings share a parent's email (patch_31). Auth still needs a
+  // unique login address, so a pupil whose family email is taken gets a
+  // plus-address of it; the profile keeps the real one. Pupils log in
+  // by name or ID, so they never see the alias. Teachers still need
+  // their own address -- they log in and reset passwords with it.
+  if (error && role === 'student' && isEmailTaken(error.message)) {
+    for (let attempt = 0; attempt < 3 && error; attempt++) {
+      ({ data, error } = await create(siblingLoginEmail(email)));
+      if (error && !isEmailTaken(error.message)) break;
+    }
+  }
 
   if (error) {
     return json({ error: error.message }, 400);

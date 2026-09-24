@@ -15,6 +15,7 @@ import {
   Save
 } from 'lucide-react';
 import OCRResultExtractor from '../../components/portal/OCRResultExtractor';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const ClassManagement = () => {
   const { className } = useParams();
@@ -382,20 +383,18 @@ const ClassManagement = () => {
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="input-group">
                         <label>This Term Ends</label>
-                        <input
-                          type="date"
-                          value={reportCard.termEnds ?? ''}
-                          onChange={e => setReportCard({...reportCard, termEnds: e.target.value})}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        <DateWheelInput
+                          value={reportCard.termEnds}
+                          onChange={v => setReportCard({...reportCard, termEnds: v})}
+                          title="This term ends"
                         />
                       </div>
                       <div className="input-group">
                         <label>Next Term Begins</label>
-                        <input
-                          type="date"
-                          value={reportCard.nextTermBegins ?? ''}
-                          onChange={e => setReportCard({...reportCard, nextTermBegins: e.target.value})}
-                          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                        <DateWheelInput
+                          value={reportCard.nextTermBegins}
+                          onChange={v => setReportCard({...reportCard, nextTermBegins: v})}
+                          title="Next term begins"
                         />
                       </div>
                    </div>

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import CalendarTableView from '../../components/portal/CalendarTableView';
 import { extractCalendarTables, canExtract, type CalendarTable } from '../../lib/calendarExtract';
 import { Save, Upload, FileText, Loader2, Table2, X, Plus, AlertTriangle, Pencil } from 'lucide-react';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '12px', borderRadius: '10px',
@@ -183,11 +184,10 @@ const AdminCalendar = () => {
             </p>
             <div className="input-group">
               <label>Term Start Date</label>
-              <input
-                type="date"
+              <DateWheelInput
                 value={termStartDate}
-                onChange={(e) => setTermStartDate(e.target.value)}
-                style={inputStyle}
+                onChange={setTermStartDate}
+                title="Term start date"
               />
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Week 1 starts on this date. Leave blank to hide attendance week tracking until you're ready.</p>
             </div>

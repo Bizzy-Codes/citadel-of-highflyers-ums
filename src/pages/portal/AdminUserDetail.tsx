@@ -10,6 +10,7 @@ import ContactParentDialog from '../../components/portal/ContactParentDialog';
 import { buildLoginDetailsMessage } from '../../lib/outreach';
 import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
 import { upperName } from '../../lib/names';
+import DateWheelInput from '../../components/common/DateWheelInput';
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
@@ -385,7 +386,7 @@ const AdminUserDetail = () => {
                       </select>
                     </Field>
                     <Field label="Date of Birth">
-                      <input type="date" style={inputStyle} value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+                      <DateWheelInput kind="birth" value={form.dateOfBirth} onChange={(v) => setForm({ ...form, dateOfBirth: v })} />
                     </Field>
                     <Field label="Nationality">
                       <input style={inputStyle} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
