@@ -40,6 +40,7 @@ import AdminAttendance from './pages/portal/AdminAttendance'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
+import CitadelAI from './components/ai/CitadelAI'
 import './index.css'
 
 // The "My Students" sidebar link has no class name to point at directly --
@@ -172,6 +173,7 @@ function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <CitadelAI />
     </BrowserRouter>
   )
 }

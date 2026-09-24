@@ -192,7 +192,7 @@ const Admissions = () => {
         </header>
 
         <main className="container admission-form-container">
-          <form onSubmit={handlePaymentSubmit} className="card glass admission-form">
+          <form data-ai="adm-pay" onSubmit={handlePaymentSubmit} className="card glass admission-form">
             {error && <div className="admission-form-error">{error}</div>}
 
             <div className="admission-fee-row">
@@ -318,17 +318,17 @@ const Admissions = () => {
 
           <h3 className="admission-section-title">Child's Information</h3>
           <div className="admission-grid">
-            <Field label="Surname"><input style={inputStyle} required value={form.surname} onChange={(e) => set({ surname: upperName(e.target.value) })} /></Field>
-            <Field label="First Name"><input style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: upperName(e.target.value) })} /></Field>
+            <Field label="Surname"><input data-ai="adm-surname" style={inputStyle} required value={form.surname} onChange={(e) => set({ surname: upperName(e.target.value) })} /></Field>
+            <Field label="First Name"><input data-ai="adm-firstname" style={inputStyle} required value={form.firstName} onChange={(e) => set({ firstName: upperName(e.target.value) })} /></Field>
             <Field label="Other Names"><input style={inputStyle} value={form.otherNames} onChange={(e) => set({ otherNames: upperName(e.target.value) })} /></Field>
-            <Field label="Email Address"><input type="email" style={inputStyle} required value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="you@example.com" /></Field>
+            <Field label="Email Address"><input data-ai="adm-email" type="email" style={inputStyle} required value={form.email} onChange={(e) => set({ email: e.target.value })} placeholder="you@example.com" /></Field>
             <Field label="Sex">
               <select style={inputStyle} value={form.sex} onChange={(e) => set({ sex: e.target.value as 'Male' | 'Female' })}>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
             </Field>
-            <Field label="Date of Birth"><DateWheelInput kind="birth" required value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} /></Field>
+            <Field label="Date of Birth"><div data-ai="adm-dob"><DateWheelInput kind="birth" required value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} /></div></Field>
             <Field label="Nationality"><input style={inputStyle} required value={form.nationality} onChange={(e) => set({ nationality: e.target.value })} /></Field>
             <Field label="State of Origin"><input style={inputStyle} required value={form.stateOfOrigin} onChange={(e) => set({ stateOfOrigin: e.target.value })} /></Field>
             <Field label="L.G.A"><input style={inputStyle} required value={form.lga} onChange={(e) => set({ lga: e.target.value })} /></Field>
@@ -359,7 +359,7 @@ const Admissions = () => {
             <Field label="Any Health Challenge?"><input style={inputStyle} value={form.healthChallenge} onChange={(e) => set({ healthChallenge: e.target.value })} /></Field>
             <Field label="If any, specify"><input style={inputStyle} value={form.healthChallengeDetails} onChange={(e) => set({ healthChallengeDetails: e.target.value })} /></Field>
             <Field label="School Last Attended (transfer pupils only)"><input style={inputStyle} value={form.schoolLastAttended} onChange={(e) => set({ schoolLastAttended: e.target.value })} /></Field>
-            <Field label="Who is responsible for picking the child"><input style={inputStyle} required value={form.pickupPerson} onChange={(e) => set({ pickupPerson: upperName(e.target.value) })} /></Field>
+            <Field label="Who is responsible for picking the child"><input data-ai="adm-pickup" style={inputStyle} required value={form.pickupPerson} onChange={(e) => set({ pickupPerson: upperName(e.target.value) })} /></Field>
             <Field label="Their Phone Number(s)"><input type="tel" style={inputStyle} required value={form.pickupPhone} onChange={(e) => set({ pickupPhone: e.target.value })} /></Field>
           </div>
           <Field label="Does the child have siblings at Citadel? If yes, state names">
@@ -416,7 +416,7 @@ const Admissions = () => {
             )}
           </Field>
 
-          <button type="submit" className="btn btn-primary lg" style={{ width: '100%', marginTop: '10px' }} disabled={submitting}>
+          <button data-ai="adm-submit" type="submit" className="btn btn-primary lg" style={{ width: '100%', marginTop: '10px' }} disabled={submitting}>
             {submitting ? 'Submitting...' : 'Submit Application'}
           </button>
         </form>

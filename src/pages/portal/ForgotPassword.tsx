@@ -75,6 +75,7 @@ const ForgotPassword = () => {
                 <div className="input-field">
                   <Mail size={18} className="input-icon" />
                   <input
+                    data-ai="forgot-email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
@@ -84,14 +85,14 @@ const ForgotPassword = () => {
                 </div>
               </div>
 
-              <button type="submit" className="login-submit btn-primary" disabled={isLoading}>
+              <button data-ai="forgot-submit" type="submit" className="login-submit btn-primary" disabled={isLoading}>
                 {isLoading ? (<><Loader2 size={20} className="animate-spin" /> Sending...</>) : 'Send Verification Code'}
               </button>
             </form>
           )}
 
           {sent && !verified && (
-            <form className="login-form animate-fade-in" onSubmit={handleVerifyOtp}>
+            <form data-ai="forgot-otp" className="login-form animate-fade-in" onSubmit={handleVerifyOtp}>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '-16px' }}>
                 If an account exists for <strong>{email}</strong>, we've sent a verification code. Enter it below (check spam too).
               </p>

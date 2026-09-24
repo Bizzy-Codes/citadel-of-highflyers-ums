@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, Mail, User, Eye, EyeOff, ArrowLeft, Loader2, UserPlus, Upload } from 'lucide-react';
 import { useAuth, type StudentDetails } from '../../context/AuthContext';
 import './Login.css';
@@ -32,6 +32,19 @@ const Login = () => {
   const [details, setDetails] = useState<StudentDetails>({});
   const [regPhoto, setRegPhoto] = useState<File | null>(null);
   const setDetail = (patch: Partial<StudentDetails>) => setDetails((d) => ({ ...d, ...patch }));
+
+  // /login?register=student or ?register=staff opens straight on the
+  // sign-up form -- Citadel AI links here, and it works as a normal link.
+  const [searchParams] = useSearchParams();
+  // Applied when the link changes (not on every render), so the visitor
+  // can still switch tabs by hand afterwards.
+  const registerParam = searchParams.get('register');
+  const [appliedParam, setAppliedParam] = useState<string | null>(null);
+  if (registerParam && registerParam !== appliedParam) {
+    setAppliedParam(registerParam);
+    setIsRegistering(true);
+    setRegRole(registerParam === 'staff' ? 'teacher' : 'student');
+  }
 
   const navigate = useNavigate();
   const { login, registerStudent, registerStaff, currentUser } = useAuth();
@@ -115,6 +128,7 @@ const Login = () => {
                   <div className="input-field">
                     <Mail size={18} className="input-icon" />
                     <input
+                      data-ai="login-id"
                       type="text"
                       placeholder="Your name, CH 001, or you@example.com"
                       value={email}
@@ -129,6 +143,7 @@ const Login = () => {
                   <div className="input-field">
                     <Lock size={18} className="input-icon" />
                     <input
+                      data-ai="login-password"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={password}
@@ -153,7 +168,7 @@ const Login = () => {
                   <Link to="/forgot-password">Forgot Password?</Link>
                 </div>
 
-                <button type="submit" className="login-submit btn-primary" disabled={isLoading}>
+                <button data-ai="login-submit" type="submit" className="login-submit btn-primary" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 size={20} className="animate-spin" />
@@ -166,7 +181,7 @@ const Login = () => {
               </form>
 
               <div className="login-footer">
-                <p>New here? <button onClick={() => setIsRegistering(true)} style={{ color: 'var(--primary)', fontWeight: '600', textDecoration: 'underline' }}>Create an Account</button></p>
+                <p>New here? <button data-ai="login-create" onClick={() => setIsRegistering(true)} style={{ color: 'var(--primary)', fontWeight: '600', textDecoration: 'underline' }}>Create an Account</button></p>
               </div>
             </>
           )}
@@ -180,7 +195,7 @@ const Login = () => {
 
               <div className="input-group">
                 <label>I am registering as a:</label>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <div data-ai="reg-role" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                   <button
                     type="button"
                     onClick={() => setRegRole('student')}
@@ -204,6 +219,7 @@ const Login = () => {
                 <div className="input-field">
                   <User size={18} className="input-icon" />
                   <input
+                    data-ai="reg-name"
                     type="text"
                     placeholder="JOHN DOE"
                     value={regName}
@@ -218,6 +234,7 @@ const Login = () => {
                 <div className="input-field">
                   <Mail size={18} className="input-icon" />
                   <input
+                    data-ai="reg-email"
                     type="email"
                     placeholder="you@example.com"
                     value={regEmail}
@@ -244,7 +261,7 @@ const Login = () => {
 
               {regRole === 'student' && (
                 <>
-                  <p style={{ fontSize: '13px', fontWeight: 700, margin: '20px 0 4px' }}>Pupil Details</p>
+                  <p data-ai="reg-details" style={{ fontSize: '13px', fontWeight: 700, margin: '20px 0 4px' }}>Pupil Details</p>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>
                     The school keeps these on your child's record. Everything here is optional &mdash;
                     but the more you fill in now, the less the office has to chase later.
@@ -346,6 +363,7 @@ const Login = () => {
                 <div className="input-field">
                   <Lock size={18} className="input-icon" />
                   <input
+                    data-ai="reg-password"
                     type="password"
                     placeholder="••••••••"
                     value={regPassword}
@@ -356,7 +374,7 @@ const Login = () => {
                 </div>
               </div>
 
-              <button type="submit" className="login-submit btn-primary" style={{ marginTop: '16px' }} disabled={isLoading}>
+              <button data-ai="reg-submit" type="submit" className="login-submit btn-primary" style={{ marginTop: '16px' }} disabled={isLoading}>
                 {isLoading ? (<><Loader2 size={18} className="animate-spin" /> Registering...</>) : (<><UserPlus size={18} style={{ marginRight: '8px' }} /> Register Now</>)}
               </button>
 

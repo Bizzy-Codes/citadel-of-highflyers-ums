@@ -209,12 +209,14 @@
 }
 
 @media (max-width: 768px) {
-  /* Out of the header entirely on a phone -- bottom-right, where it
-     can't compete with the nav for space. */
+  /* Out of the header entirely on a phone -- bottom-left, where it
+     can't compete with the nav for space. Bottom-right belongs to the
+     Citadel AI button. */
   .theme-toggle-float {
     top: auto;
     bottom: 18px;
-    right: 14px;
+    right: auto;
+    left: 14px;
     padding: 10px 14px;
     font-size: 12px;
   }

@@ -84,7 +84,7 @@ const StudentAssignments = () => {
                     <>
                       <input ref={(el) => { fileInputRefs.current[a.id] = el; }} type="file" style={{ display: 'none' }}
                         onChange={(e) => { handleFileChosen(a.id, e.target.files?.[0] ?? null); e.target.value = ''; }} />
-                      <button className="btn btn-primary sm" disabled={submittingId === a.id} onClick={() => fileInputRefs.current[a.id]?.click()}>
+                      <button data-ai="assignment-submit" className="btn btn-primary sm" disabled={submittingId === a.id} onClick={() => fileInputRefs.current[a.id]?.click()}>
                         <Upload size={14} /> {submittingId === a.id ? 'Uploading...' : 'Submit Work'}
                       </button>
                     </>

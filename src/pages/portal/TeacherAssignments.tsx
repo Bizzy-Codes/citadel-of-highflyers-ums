@@ -67,7 +67,7 @@ const TeacherAssignments = () => {
             <h2 style={{ marginBottom: '4px' }}>Assignments {currentUser?.assignedClass ? `— ${currentUser.assignedClass}` : ''}</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with an optional brief, then review and grade pupil submissions.</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> New Assignment</button>
+          <button data-ai="assign-new" className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> New Assignment</button>
         </div>
 
         <div className="card glass" style={{ padding: '0' }}>
@@ -101,12 +101,12 @@ const TeacherAssignments = () => {
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
                 <label>Title</label>
-                <input type="text" required value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })}
+                <input data-ai="assign-title" type="text" required value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })}
                   style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
               <div className="input-group">
                 <label>Subject</label>
-                <input type="text" required value={input.subject} onChange={(e) => setInput({ ...input, subject: e.target.value })}
+                <input data-ai="assign-subject" type="text" required value={input.subject} onChange={(e) => setInput({ ...input, subject: e.target.value })}
                   style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
               <div className="input-group">
@@ -116,7 +116,7 @@ const TeacherAssignments = () => {
               </div>
               <div className="input-group">
                 <label>Due Date (optional)</label>
-                <DateWheelInput value={input.dueDate} onChange={(v) => setInput({ ...input, dueDate: v })} title="Due date" />
+                <div data-ai="assign-due"><DateWheelInput value={input.dueDate} onChange={(v) => setInput({ ...input, dueDate: v })} title="Due date" /></div>
               </div>
               <div className="input-group">
                 <label>Attach a brief (optional)</label>
@@ -124,7 +124,7 @@ const TeacherAssignments = () => {
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                 <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsCreating(false); setFile(null); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? 'Posting...' : 'Post Assignment'}</button>
+                <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? 'Posting...' : 'Post Assignment'}</button>
               </div>
             </form>
           </div>

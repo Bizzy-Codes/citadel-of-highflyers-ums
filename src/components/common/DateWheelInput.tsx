@@ -43,17 +43,24 @@ interface WheelProps {
 const Wheel = ({ items, index, onChange, label }: WheelProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState(index);
+  // Follow the selection when it changes from outside (e.g. 31 -> 28
+  // when the month becomes February).
+  const [prevIndex, setPrevIndex] = useState(index);
+  if (index !== prevIndex) {
+    setPrevIndex(index);
+    setLive(index);
+  }
   const settle = useRef<number | undefined>(undefined);
   const drag = useRef<{ y: number; top: number } | null>(null);
 
   // Snap to the selected row whenever the selection changes from
   // outside (first open, or the day being clamped after a month change)
   // -- but not while it matches where the user already scrolled to.
+  // Moving scrollTop fires onScroll, which updates the highlight.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     if (Math.round(el.scrollTop / ROW) !== index) el.scrollTop = index * ROW;
-    setLive(index);
   }, [index, items.length]);
 
   const pick = (i: number, smooth = true) => {
