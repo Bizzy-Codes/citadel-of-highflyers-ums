@@ -10,13 +10,16 @@
 -- later visitors get the saved clip in well under a second. Answers
 -- that mention anyone's own details are never stored.
 --
--- Private bucket with no policies: only the citadel-ai function
--- (service role) reads or writes it. Roughly 100-500 KB per clip.
+-- Public-read bucket: it only ever holds answers that are the same for
+-- everyone, and browsers fetch saved clips straight from the storage
+-- CDN (reading them through the function took up to 6 s). Only the
+-- citadel-ai function (service role) can write. ~100-500 KB per clip.
 -- ============================================================
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('ai-voice', 'ai-voice', false, 3145728, array['audio/wav', 'audio/x-wav', 'audio/L16'])
+values ('ai-voice', 'ai-voice', true, 3145728, array['audio/wav', 'audio/x-wav', 'audio/L16'])
 on conflict (id) do nothing;
+update storage.buckets set public = true where id = 'ai-voice';
 
 -- Storage used by the saved clips, for the admin page.
 create or replace function public.ai_voice_stats()

@@ -77,9 +77,38 @@ function cacheUrl(text: string) {
 // share: the words are the same for everyone (an FAQ answer, the fees),
 // so the server may keep the clip for the next visitor. Never set for
 // anything mentioning the person's own details.
+// Saved clips live in the public "ai-voice" bucket under a hash of the
+// voice and the words. KEEP IN SYNC with clipPath and TTS_VOICES in the
+// citadel-ai function.
+const SAVED_VOICE = 'Sulafat';
+async function savedClipUrl(text: string): Promise<string | null> {
+  if (!crypto?.subtle) return null; // http:// pages have no hashing; the function still works
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${SAVED_VOICE}|${text}`));
+  const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+  return supabase.storage.from('ai-voice').getPublicUrl(`${hex}.wav`).data.publicUrl;
+}
+
+async function bytesToBase64(buf: ArrayBuffer) {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 async function fetchClip(text: string, share: boolean) {
   const saved = await cachedClip(text);
   if (saved) return saved;
+  // Same-for-everyone answers: try the saved clip straight from storage
+  // first -- a fraction of a second, no Gemini call.
+  if (share) {
+    const url = await savedClipUrl(text).catch(() => null);
+    const res = url ? await fetch(url).catch(() => null) : null;
+    if (res?.ok) {
+      const clip = { audio: await bytesToBase64(await res.arrayBuffer()), mimeType: 'audio/wav' };
+      saveClip(text, clip);
+      return clip;
+    }
+  }
   const { data, error } = await supabase.functions.invoke('citadel-ai', { body: { tts: text, share } });
   if (error || !data?.audio) return null;
   const clip = { audio: String(data.audio), mimeType: String(data.mimeType ?? '') };
