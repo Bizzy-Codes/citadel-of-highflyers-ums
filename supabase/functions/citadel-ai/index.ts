@@ -7,11 +7,28 @@
 // there under the visitor's own login, so the AI can never see anything
 // the visitor couldn't already see themselves.
 //
+// It also turns voice recordings into words (for browsers whose own
+// speech recognition doesn't work), and keeps a shared store of answers
+// to general questions so repeat questions come back instantly
+// (ai_answer_cache, patch_32).
+//
 // The Gemini key lives in the GEMINI_API_KEY secret and never leaves
 // this function. GEMINI_MODEL optionally overrides the model.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SCHOOL_FACTS } from './knowledge.ts';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
+const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+async function sha256(text: string) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+// Changes whenever knowledge.ts (or the rules below) change, which
+// retires every stored answer at once.
+const PROMPT_VERSION = 'v3';
+const FACTS_VERSION = (await sha256(PROMPT_VERSION + SCHOOL_FACTS)).slice(0, 16);
+const CACHE_DAYS = 7;
 // Tried in order. The free tier often answers "high demand" (503) for
 // one model while another is fine, so a busy or missing model just
 // means trying the next.
@@ -117,13 +134,108 @@ function toolDeclarations(ctx: ClientContext) {
   return decls.length ? [{ functionDeclarations: decls }] : undefined;
 }
 
+type GeminiResult =
+  | { ok: true; content: { role: string; parts: Record<string, unknown>[] }; model: string }
+  | { ok: false; status: number };
+
+// Asks Gemini, moving down the model list whenever one is busy or gone.
+// Thinking is kept "low": these are short, simple answers, and deep
+// thinking was most of the wait. A model that doesn't understand the
+// setting gets the request again without it.
+async function callGemini(payload: Record<string, unknown>): Promise<GeminiResult> {
+  let lastError = 'No model available';
+  for (const model of MODELS) {
+    for (const thinking of [true, false]) {
+      const body = thinking
+        ? { ...payload, generationConfig: { ...(payload.generationConfig as object), thinkingConfig: { thinkingLevel: 'low' } } }
+        : payload;
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const content = data?.candidates?.[0]?.content ?? { role: 'model', parts: [] };
+        if (!content.role) content.role = 'model';
+        if (!content.parts) content.parts = [];
+        return { ok: true, content, model };
+      }
+      const detail = JSON.stringify(data).slice(0, 300);
+      if (res.status === 400 && thinking && /think/i.test(detail)) continue; // retry without the setting
+      if (res.status === 404 || res.status === 429 || res.status >= 500) {
+        lastError = `${model}: ${res.status} ${detail}`;
+        console.error('gemini unavailable, trying next model', lastError);
+        break;
+      }
+      console.error('gemini error', model, res.status, detail);
+      return { ok: false, status: 502 };
+    }
+  }
+  console.error('all models failed', lastError);
+  return { ok: false, status: 429 };
+}
+
+const failure = (status: number) => status === 429
+  ? json({ error: 'busy' }, 429)
+  : json({ error: 'The AI service had a problem. Please try again.' }, 502);
+
+// ---- voice recordings -> words -----------------------------------------
+
+const AUDIO_TYPES = /^audio\/(webm|ogg|mp4|mpeg|mp3|wav|x-wav|aac|m4a|x-m4a)(;.*)?$/;
+
+async function transcribe(audio: { mimeType?: string; data?: string }) {
+  const mimeType = String(audio.mimeType ?? '').toLowerCase();
+  const data = String(audio.data ?? '');
+  if (!AUDIO_TYPES.test(mimeType) || !data) return json({ error: 'Bad audio' }, 400);
+  // ~20 seconds of compressed speech is well under 1 MB.
+  if (data.length > 2_000_000) return json({ error: 'Recording too long' }, 413);
+
+  const result = await callGemini({
+    contents: [{
+      role: 'user',
+      parts: [
+        { inlineData: { mimeType: mimeType.split(';')[0], data } },
+        { text: 'Write down exactly what the speaker says, in the words they use (English or Nigerian Pidgin). Output only those words, nothing else. If nobody speaks, output nothing.' },
+      ],
+    }],
+    generationConfig: { temperature: 0, maxOutputTokens: 400 },
+  });
+  if (!result.ok) return failure(result.status);
+  const text = result.content.parts.map((p) => (typeof p.text === 'string' && !p.thought ? p.text : '')).join(' ').trim();
+  return json({ text });
+}
+
+// ---- shared answer store ------------------------------------------------
+
+const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+// Only a guest's opening question, in plain text, is shareable: it
+// can't contain anything personal, and the answer doesn't depend on who
+// asked. The key includes the pages/guides offered, since those shape
+// the answer.
+async function cacheKeyFor(contents: unknown[], ctx: ClientContext): Promise<{ key: string; question: string } | null> {
+  if (ctx.signedIn || ctx.role !== 'guest' || contents.length !== 1) return null;
+  const first = contents[0] as { role?: string; parts?: { text?: unknown }[] };
+  if (first?.role !== 'user' || first.parts?.length !== 1 || typeof first.parts[0].text !== 'string') return null;
+  const question = normalise(first.parts[0].text);
+  if (!question || question.length > 200) return null;
+  const offered = [...(ctx.pages ?? []).map((p) => p.key), '|', ...(ctx.guides ?? []).map((g) => g.key)].join(',');
+  return { key: await sha256(`${FACTS_VERSION}|${offered}|${question}`), question };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!GEMINI_API_KEY) return json({ error: 'Citadel AI is not set up yet (missing GEMINI_API_KEY).' }, 500);
 
-  let body: { contents?: unknown[]; context?: ClientContext };
+  let body: { contents?: unknown[]; context?: ClientContext; transcribe?: { mimeType?: string; data?: string } };
   try { body = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
+
+  if (body.transcribe) return transcribe(body.transcribe);
 
   // Keep requests small: the last 30 turns, and no more than ~24k
   // characters overall. Stops the endpoint being used as a free
@@ -132,41 +244,39 @@ Deno.serve(async (req) => {
   if (!contents.length) return json({ error: 'Nothing to answer' }, 400);
   if (JSON.stringify(contents).length > 24_000) return json({ error: 'That conversation is too long. Start a new chat.' }, 413);
   const ctx = body.context ?? {};
+  const started = Date.now();
 
-  const payload = {
+  const cache = await cacheKeyFor(contents, ctx).catch(() => null);
+  if (cache) {
+    const since = new Date(Date.now() - CACHE_DAYS * 86_400_000).toISOString();
+    const { data: hit } = await db.from('ai_answer_cache')
+      .select('content, hits').eq('key', cache.key).gte('created_at', since).maybeSingle();
+    if (hit) {
+      db.from('ai_answer_cache').update({ hits: (hit.hits ?? 0) + 1 }).eq('key', cache.key).then(() => {});
+      return json({ content: hit.content, model: 'cache', ms: Date.now() - started });
+    }
+  }
+
+  const result = await callGemini({
     systemInstruction: { parts: [{ text: systemPrompt(ctx) }] },
     contents,
     tools: toolDeclarations(ctx),
     // Room for the model's hidden "thinking" too -- the prompt, not this
     // limit, is what keeps the visible replies short.
     generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
-  };
+  });
+  if (!result.ok) return failure(result.status);
 
-  const started = Date.now();
-  let lastError = 'No model available';
-  for (const model of MODELS) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-        body: JSON.stringify(payload),
-      },
-    );
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 404 || res.status === 429 || res.status >= 500) {
-      lastError = `${model}: ${res.status} ${JSON.stringify(data).slice(0, 300)}`;
-      console.error('gemini unavailable, trying next model', lastError);
-      continue;
-    }
-    if (!res.ok) {
-      console.error('gemini error', res.status, JSON.stringify(data).slice(0, 500));
-      return json({ error: 'The AI service had a problem. Please try again.' }, 502);
-    }
-    const content = data?.candidates?.[0]?.content ?? { role: 'model', parts: [] };
-    if (!content.role) content.role = 'model';
-    return json({ content, model, ms: Date.now() - started });
+  // Store it for the next person -- but only a complete answer that
+  // says something (a reply with no words just opens a page, and the
+  // browser asks again for words when it was a question).
+  const parts = result.content.parts;
+  const hasText = parts.some((p) => typeof p.text === 'string' && p.text.trim() && !p.thought);
+  if (cache && hasText) {
+    await db.from('ai_answer_cache').upsert({
+      key: cache.key, question: cache.question, content: result.content, hits: 0, created_at: new Date().toISOString(),
+    }).then(({ error }) => { if (error) console.error('cache write failed', error.message); });
   }
-  console.error('all models failed', lastError);
-  return json({ error: 'busy' }, 429);
+
+  return json({ content: result.content, model: result.model, ms: Date.now() - started });
 });

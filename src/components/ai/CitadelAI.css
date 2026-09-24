@@ -81,7 +81,22 @@
 }
 .cai-mic { background: var(--primary); color: #fff; }
 .cai-mic.on { background: var(--error); animation: cai-pulse 1s ease-in-out infinite; }
+.cai-mic:disabled { opacity: 0.5; cursor: default; }
+.cai-mic.busy { background: var(--accent); color: var(--primary); }
 .cai-send { background: transparent; color: var(--primary); }
+
+/* The bar that replaces the text box while the mic is on. */
+.cai-voicebar { min-height: 62px; }
+.cai-voice-text {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  font-size: 14px; font-weight: 600; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.cai-voice-text small { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.cai-level { display: flex; align-items: center; gap: 3px; height: 30px; }
+.cai-level i { display: block; width: 4px; border-radius: 2px; background: var(--error); transition: height 0.1s linear; }
+.cai-cancel { color: var(--text-muted); }
+.cai-cancel:hover { background: var(--bg-light); }
 .cai-send:disabled { color: var(--text-muted); cursor: default; }
 
 /* Shown instead of the panel while a guide is running. */

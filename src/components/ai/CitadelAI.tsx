@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2 } from 'lucide-react';
+import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, pagesFor, type AiRole } from './catalog';
 import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
-import { canListen, listen, speak, stopSpeaking } from './voice';
+import { blobToBase64, canUseVoice, speak, startVoice, stopSpeaking, type VoiceSession, type VoiceStatus } from './voice';
+import { instantAnswer } from './instant';
 import './CitadelAI.css';
 
 // Citadel AI: the floating helper on every page of the website and
@@ -49,15 +50,19 @@ const CitadelAI = () => {
   const auth = useAuth();
   const { currentUser } = auth;
   const role: AiRole = (currentUser?.role as AiRole | undefined) ?? 'guest';
+  // Names are stored in capitals ("ADA OKEKE"); greet as "Ada".
+  const rawFirst = currentUser?.name?.split(' ')[0];
+  const niceFirstName = rawFirst ? rawFirst.charAt(0) + rawFirst.slice(1).toLowerCase() : undefined;
 
   const [open, setOpen] = useState(false);
   const [{ bubbles, contents }, setChat] = useState(load);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [voice, setVoice] = useState<VoiceStatus | null>(null);
+  const listening = voice !== null;
   const [voiceOn, setVoiceOn] = useState(false);
   const [guide, setGuide] = useState<{ g: Guide; step: number; waiting: boolean } | null>(null);
-  const stopListening = useRef<() => void>(() => {});
+  const voiceSession = useRef<VoiceSession | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Function results waiting to go out with the visitor's next message
@@ -137,7 +142,7 @@ const CitadelAI = () => {
       const page = pagesFor(role).find((p) => p.key === args.page);
       if (!page) return { result: { ok: false, error: `That page is not available for this visitor (role ${role}).` }, needsReply: true };
       navigate(page.path);
-      return { result: { ok: true, opened: page.label }, needsReply: false, note: `Opening ${page.label.toLowerCase()}.` };
+      return { result: { ok: true, opened: page.label }, needsReply: false, note: `Opening ${page.label.replace(/\s*\(.*\)/, '').toLowerCase()}.` };
     }
     if (name === 'start_guide') {
       const g = guidesFor(role).find((x) => x.key === args.guide);
@@ -209,6 +214,22 @@ const CitadelAI = () => {
     setInput('');
     let history: Content[] = [...contents, { role: 'user', parts: [...pending.current, { text: q }] }];
     pending.current = [];
+
+    // Common requests are answered right here, with no wait. They still
+    // go into the history so Gemini has the context for follow-ups.
+    const instant = instantAnswer(q, {
+      role, firstName: niceFirstName, today: isoToday(),
+      assignments: auth.assignments, mySubmissions: auth.mySubmissions, academicCalendar: auth.academicCalendar,
+    });
+    if (instant) {
+      history = [...history, { role: 'model', parts: [{ text: instant.text }] }];
+      setChat((c) => ({ contents: history, bubbles: [...c.bubbles, { from: 'user', text: q }] }));
+      say(instant.text);
+      if (instant.openPage) runTool('open_page', { page: instant.openPage });
+      if (instant.startGuide) runTool('start_guide', { guide: instant.startGuide });
+      return;
+    }
+
     setChat((c) => ({ contents: history, bubbles: [...c.bubbles, { from: 'user', text: q }] }));
     setBusy(true);
 
@@ -268,25 +289,52 @@ const CitadelAI = () => {
       setChat((c) => ({ ...c, contents: history }));
       setBusy(false);
     }
-  }, [busy, contents, context, runTool, say]);
+  }, [busy, contents, context, runTool, say, role, niceFirstName, auth.assignments, auth.mySubmissions, auth.academicCalendar]);
 
   // ---- voice -------------------------------------------------------
 
+  const transcribe = useCallback(async (audio: Blob) => {
+    const data = await blobToBase64(audio);
+    const res = await supabase.functions.invoke('citadel-ai', {
+      body: { transcribe: { mimeType: audio.type || 'audio/webm', data } },
+    });
+    if (res.error) throw res.error;
+    return String(res.data?.text ?? '');
+  }, []);
+
+  // Keep the latest ask() for the voice callback, which outlives renders.
+  const askRef = useRef(ask);
+  askRef.current = ask;
+
   const toggleMic = () => {
-    if (listening) { stopListening.current(); return; }
+    // Pressed again while listening: stop now and use what was heard.
+    if (voiceSession.current) {
+      voiceSession.current.stop();
+      return;
+    }
     stopSpeaking();
     setVoiceOn(true);
-    setListening(true);
-    stopListening.current = listen(
-      (t) => setInput(t),
-      (finalText, err) => {
-        setListening(false);
-        if (finalText) ask(finalText);
-        else if (err === 'not-allowed' || err === 'service-not-allowed') say('Please allow the microphone in your browser, then tap the mic again.', true);
-        else if (err && err !== 'aborted' && err !== 'no-speech') say("I couldn't hear that. Please tap the mic and try again, or type.", true);
+    voiceSession.current = startVoice({
+      onStatus: (s) => {
+        setVoice(s);
+        if (s.kind === 'listening' && s.text) setInput(s.text);
       },
-    );
+      onDone: (finalText, err) => {
+        voiceSession.current = null;
+        setVoice(null);
+        if (finalText) { askRef.current(finalText); return; }
+        setInput('');
+        if (err === 'not-allowed') say('Please allow the microphone for this site in your browser settings, then tap the mic again.', true);
+        else if (err === 'unsupported') say("Voice doesn't work in this browser. Please type your question instead.", true);
+        else if (err === 'no-speech') say("I didn't hear anything. Tap the mic and speak, then tap it again when you finish.", true);
+        else if (err && err !== 'aborted') say("I couldn't hear that clearly. Please tap the mic and try again, or type.", true);
+      },
+      transcribe,
+    });
   };
+
+  // Close the mic if the panel closes or the page unmounts mid-recording.
+  useEffect(() => () => voiceSession.current?.cancel(), []);
 
   const reset = () => {
     stopSpeaking();
@@ -300,9 +348,8 @@ const CitadelAI = () => {
   };
 
   const suggestions = SUGGESTIONS[role];
-  const firstName = currentUser?.name?.split(' ')[0];
-  const greeting = firstName
-    ? `Hello ${firstName.charAt(0) + firstName.slice(1).toLowerCase()}! I'm Citadel AI. What would you like to do?`
+  const greeting = niceFirstName
+    ? `Hello ${niceFirstName}! I'm Citadel AI. What would you like to do?`
     : "Hello! I'm Citadel AI. Ask me anything about the school, or tap the mic and talk to me.";
 
   // Never during a test: it would be a way to get help, and the camera
@@ -347,7 +394,7 @@ const CitadelAI = () => {
                 <RotateCcw size={17} />
               </button>
             )}
-            <button type="button" className="cai-icon" onClick={() => { setOpen(false); stopSpeaking(); }} aria-label="Close">
+            <button type="button" className="cai-icon" onClick={() => { setOpen(false); stopSpeaking(); voiceSession.current?.cancel(); }} aria-label="Close">
               <X size={19} />
             </button>
           </header>
@@ -368,25 +415,57 @@ const CitadelAI = () => {
             </div>
           )}
 
-          <form className="cai-input" onSubmit={(e) => { e.preventDefault(); ask(input); }}>
-            {canListen() && (
-              <button type="button" className={`cai-mic${listening ? ' on' : ''}`} onClick={toggleMic}
-                aria-label={listening ? 'Stop listening' : 'Speak to Citadel AI'}>
-                <Mic size={19} />
+          {voice ? (
+            // While the mic is on, the whole bar says so -- and the big
+            // button stops it, always, straight away.
+            <div className="cai-input cai-voicebar" aria-live="polite">
+              {voice.kind === 'transcribing' ? (
+                <>
+                  <span className="cai-mic busy"><Loader2 size={19} className="animate-spin" /></span>
+                  <span className="cai-voice-text">Getting your words…</span>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="cai-mic on" onClick={toggleMic} aria-label="Stop and send">
+                    <Square size={16} fill="currentColor" />
+                  </button>
+                  <span className="cai-voice-text">
+                    {voice.kind === 'listening' && voice.text ? voice.text : 'Listening… speak now'}
+                    <small>Tap the red button when you finish{voice.kind === 'recording' ? ` · 0:${String(voice.seconds).padStart(2, '0')}` : ''}</small>
+                  </span>
+                  {voice.kind === 'recording' && (
+                    <span className="cai-level" aria-hidden="true">
+                      {[0.3, 0.6, 1, 0.6, 0.3].map((w, i) => (
+                        <i key={i} style={{ height: `${6 + Math.round(voice.level * w * 22)}px` }} />
+                      ))}
+                    </span>
+                  )}
+                  <button type="button" className="cai-icon cai-cancel" onClick={() => voiceSession.current?.cancel()} aria-label="Cancel">
+                    <X size={18} />
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <form className="cai-input" onSubmit={(e) => { e.preventDefault(); ask(input); }}>
+              {canUseVoice() && (
+                <button type="button" className="cai-mic" onClick={toggleMic} aria-label="Speak to Citadel AI" disabled={busy}>
+                  <Mic size={19} />
+                </button>
+              )}
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask me anything…"
+                maxLength={500}
+                aria-label="Message Citadel AI"
+              />
+              <button type="submit" className="cai-send" disabled={busy || !input.trim()} aria-label="Send">
+                <Send size={17} />
               </button>
-            )}
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={listening ? 'Listening…' : 'Ask me anything…'}
-              maxLength={500}
-              aria-label="Message Citadel AI"
-            />
-            <button type="submit" className="cai-send" disabled={busy || !input.trim()} aria-label="Send">
-              <Send size={17} />
-            </button>
-          </form>
+            </form>
+          )}
         </section>
       )}
     </>
