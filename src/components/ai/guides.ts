@@ -98,7 +98,7 @@ export const GUIDES: Guide[] = [
       { target: 'adm-submit', text: 'When you have filled everything, press this button to send the application.', advance: 'click' },
     ],
     doneSelector: '[data-ai="adm-pay"]',
-    doneText: 'Your application has been sent! The last step is the N2,000 processing fee. Choose cash or bank transfer on this page.',
+    doneText: 'Your application has been sent! The last step is the 2,000 naira processing fee. Choose cash or bank transfer on this page.',
   },
   {
     key: 'submit_assignment',

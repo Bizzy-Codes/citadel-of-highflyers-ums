@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { supabase } from '../../lib/supabaseClient';
+import { allVoiceLines } from '../../components/ai/voiceLines';
 import { ArrowLeft, Sparkles, Trash2, RefreshCw, Loader2, Pencil, Save, X, Database, Volume2 } from 'lucide-react';
 
 // Admin > Citadel AI: what people ask the helper, the ready-made FAQ
@@ -131,8 +132,14 @@ const AdminCitadelAI = () => {
     });
   };
 
-  const voiceNote = (v?: { newly_saved?: number; remaining?: number }) =>
-    v ? ` Voices: ${v.newly_saved ?? 0} recorded${v.remaining ? `, ${v.remaining} still to do (press again, or it carries on tonight)` : ', all done'}.` : '';
+  const voiceNote = (v?: { newly_saved?: number; remaining?: number; out_of_allowance?: boolean; pieces?: number }) =>
+    v ? ` Voices: ${(v.pieces ?? 0) - (v.remaining ?? 0)} of ${v.pieces ?? 0} lines recorded (${v.newly_saved ?? 0} just now).`
+      + (v.remaining
+        ? v.out_of_allowance
+          ? ' Google\'s free daily voice allowance is used up; the rest are recorded over the next nights.'
+          : ' Press again to record more, or it carries on tonight.'
+        : ' All done.')
+      : '';
 
   const learnNow = () => run('learn', async () => {
     const { data, error } = await supabase.functions.invoke('citadel-ai', { body: { refresh_faq: true } });
@@ -142,6 +149,12 @@ const AdminCitadelAI = () => {
   });
 
   const recordVoices = () => run('voices', async () => {
+    // Queue every fixed line the helper can say (page openings, guide
+    // steps, built-in and FAQ answers), then record what we can now.
+    const lines = allVoiceLines(faqs.filter((f) => f.enabled));
+    const { error: queueError } = await supabase.from('ai_voice_queue')
+      .upsert(lines.map((l) => ({ text: l.text, priority: l.priority })), { onConflict: 'text' });
+    if (queueError) return `Couldn't queue the voice lines: ${queueError.message}`;
     const { data, error } = await supabase.functions.invoke('citadel-ai', { body: { prerender_voice: true } });
     if (error) return "Couldn't record voices right now. Please try again later.";
     return voiceNote(data).trim();

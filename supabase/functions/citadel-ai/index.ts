@@ -259,7 +259,14 @@ async function saveClip(say: string, base64: string) {
 // splitForSpeech in src/components/ai/speak.ts -- saved clips are found
 // by their exact text.
 function splitForSpeech(text: string): string[] {
-  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
+  // A sentence ends at . ! or ? followed by a space -- so "gmail.com"
+  // stays whole -- but not after a short title like "St." or "Mr.".
+  const sentences: string[] = [];
+  for (const part of text.split(/(?<=[.!?]["')\]]*)\s+/)) {
+    const prev = sentences[sentences.length - 1];
+    if (prev && /\b(St|Mr|Mrs|Ms|Dr|Rev|No|Int'l)\.$/.test(prev)) sentences[sentences.length - 1] = `${prev} ${part}`;
+    else if (part.trim()) sentences.push(part.trim());
+  }
   const pieces: string[] = [];
   for (const s of sentences) {
     const last = pieces[pieces.length - 1];
@@ -288,21 +295,34 @@ async function tts(text: unknown, share: unknown) {
 // ask hears the natural voice straight away. Stops quietly when the
 // free-tier limit is reached; the next run carries on.
 async function prerenderVoices(budgetMs = 100_000) {
+  // The app's fixed lines, queued by the admin page (patch_35), most-used
+  // first -- then every FAQ answer, in case one was added or edited since.
+  const { data: queued } = await db.from('ai_voice_queue').select('text').order('priority').order('created_at').limit(2000);
   const { data: faqs } = await db.from('ai_faq').select('answer').eq('enabled', true);
-  const pieces = [...new Set((faqs ?? []).flatMap((f) => splitForSpeech(String(f.answer).replace(/[*_#`]/g, '').trim())))];
+  const pieces = [...new Set([
+    ...(queued ?? []).map((q) => String(q.text)),
+    ...(faqs ?? []).flatMap((f) => splitForSpeech(String(f.answer).replace(/[*_#`]/g, '').trim())),
+  ])];
+  const { data: files } = await db.storage.from('ai-voice').list('', { limit: 5000 });
+  const saved = new Set((files ?? []).map((f) => f.name));
   let made = 0, had = 0;
   // A function run is cut off after ~150 s; stop well before and let the
   // next run (nightly, or the admin button) carry on.
   const stopAt = Date.now() + budgetMs;
+  let outOfAllowance = false;
   for (const p of pieces) {
-    if (Date.now() > stopAt) break;
-    const { data: exists } = await db.storage.from('ai-voice').list('', { search: (await clipPath(p)).replace('.wav', '') });
-    if (exists?.length) { had++; continue; }
+    if (saved.has(await clipPath(p))) { had++; continue; }
+    // Keep counting what's already saved, but stop recording once time
+    // or the day's free allowance runs out.
+    if (outOfAllowance || Date.now() > stopAt) continue;
     const clip = await generateClip(p);
-    if (!clip) break;
+    if (!clip) { outOfAllowance = true; continue; }
     if (/wav/i.test(clip.mimeType)) { await saveClip(p, clip.audio); made++; }
   }
-  return { pieces: pieces.length, already_saved: had, newly_saved: made, remaining: pieces.length - had - made };
+  return {
+    pieces: pieces.length, already_saved: had, newly_saved: made,
+    remaining: pieces.length - had - made, out_of_allowance: outOfAllowance,
+  };
 }
 
 async function generateClip(say: string): Promise<{ audio: string; mimeType: string; model: string; voice: string } | null> {

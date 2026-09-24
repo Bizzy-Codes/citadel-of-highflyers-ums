@@ -23,6 +23,7 @@ const Login = () => {
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [regRole, setRegRole] = useState<'student' | 'teacher'>('student');
 
   // A returning pupil fills in the same bio/guardian block a new
@@ -364,13 +365,21 @@ const Login = () => {
                   <Lock size={18} className="input-icon" />
                   <input
                     data-ai="reg-password"
-                    type="password"
+                    type={showRegPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     minLength={8}
                     required
                   />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
 

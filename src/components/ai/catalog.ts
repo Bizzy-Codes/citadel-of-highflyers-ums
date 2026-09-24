@@ -77,6 +77,34 @@ export const DATA_TOOLS_BY_ROLE: Record<AiRole, string[]> = {
 
 export const pagesFor = (role: AiRole) => PAGES.filter((p) => p.roles.includes(role));
 
+// What Citadel AI says when it opens a page. One wording everywhere, so
+// the voice clip for each line can be recorded in advance (voiceLines.ts).
+export const openingLine = (page: AiPage) => {
+  if (SPOKEN_OPENING[page.key]) return SPOKEN_OPENING[page.key];
+  const label = page.label.replace(/\s*\(.*\)/, '').replace(/^My /, 'your ');
+  return `Opening ${label.charAt(0).toLowerCase()}${label.slice(1)}.`;
+};
+
+// Where the page label (written for Gemini) doesn't read well aloud.
+const SPOKEN_OPENING: Record<string, string> = {
+  home: 'Opening the home page.',
+  admissions: 'Opening the admissions page.',
+  fees: 'Opening the school fees page.',
+  founders: 'Opening the founders page.',
+  gallery: 'Opening the photo gallery.',
+  login: 'Opening the log in page.',
+  sign_up: 'Opening the sign-up page.',
+  staff_sign_up: 'Opening the staff sign-up page.',
+  forgot_password: 'Opening the password reset page.',
+  teacher_assignments: 'Opening your assignments page.',
+  teacher_tests: 'Opening your tests page.',
+  report_cards: 'Opening report cards.',
+  attendance_register: 'Opening the attendance register.',
+  admin_calendar: 'Opening the academic calendar settings.',
+  ai_admin: 'Opening the Citadel AI page.',
+  pending: 'Opening the approval page.',
+};
+
 // Starter questions shown when the chat opens, per role.
 export const SUGGESTIONS: Record<AiRole, string[]> = {
   guest: ['How do I register my child?', 'How much are the school fees?', 'Help me log in'],

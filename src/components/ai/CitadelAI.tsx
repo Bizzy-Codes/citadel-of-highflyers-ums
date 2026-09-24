@@ -3,11 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
-import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, pagesFor, type AiRole } from './catalog';
+import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, openingLine, pagesFor, type AiRole } from './catalog';
 import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
 import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceStatus } from './voice';
-import { speak, stopSpeaking, unlockAudio } from './speak';
+import { prefetchVoices, speak, stopSpeaking, unlockAudio } from './speak';
 import { instantAnswer } from './instant';
 import { loadFaqs, matchFaq, type FaqRow } from './faq';
 
@@ -156,7 +156,7 @@ const CitadelAI = () => {
       const page = pagesFor(role).find((p) => p.key === args.page);
       if (!page) return { result: { ok: false, error: `That page is not available for this visitor (role ${role}).` }, needsReply: true };
       navigate(page.path);
-      return { result: { ok: true, opened: page.label }, needsReply: false, note: `Opening ${page.label.replace(/\s*\(.*\)/, '').toLowerCase()}.` };
+      return { result: { ok: true, opened: page.label }, needsReply: false, note: openingLine(page) };
     }
     if (name === 'start_guide') {
       const g = guidesFor(role).find((x) => x.key === args.guide);
@@ -373,6 +373,19 @@ const CitadelAI = () => {
   const openPanel = () => {
     setOpen(true);
     setTimeout(() => inputRef.current?.focus(), 50);
+    // Bring the voice for the suggested questions (and the guides they
+    // start) onto the device now, so tapping one speaks immediately.
+    const lines: string[] = [];
+    for (const s of SUGGESTIONS[role]) {
+      const a = matchFaq(s, role, faqs) ?? instantAnswer(s, {
+        role, today: isoToday(), assignments: auth.assignments, mySubmissions: auth.mySubmissions, academicCalendar: auth.academicCalendar,
+      });
+      if (!a || a.personal) continue;
+      lines.push(a.text);
+      const g = a.startGuide && guidesFor(role).find((x) => x.key === a.startGuide);
+      if (g) lines.push(...g.steps.map((st) => st.text));
+    }
+    prefetchVoices(lines).catch(() => {});
   };
 
   const suggestions = SUGGESTIONS[role];

@@ -13,7 +13,8 @@ import { supabase } from '../../lib/supabaseClient';
 // full stops instead of running everything together.
 
 const CACHE_NAME = 'citadel-ai-voice-v1';
-const MAX_WAIT_MS = 7000; // first piece slower than this and the browser voice speaks instead
+const MAX_WAIT_MS = 4000;   // personal answers: wait this long for Gemini's voice, then use the device's
+const SAVED_WAIT_MS = 2500; // recorded lines: normally ~1 s from storage, instant from the device
 
 let ctx: AudioContext | null = null;
 let current: AudioBufferSourceNode | null = null;
@@ -95,20 +96,23 @@ async function bytesToBase64(buf: ArrayBuffer) {
   return btoa(bin);
 }
 
-async function fetchClip(text: string, share: boolean) {
-  const saved = await cachedClip(text);
-  if (saved) return saved;
-  // Same-for-everyone answers: try the saved clip straight from storage
-  // first -- a fraction of a second, no Gemini call.
-  if (share) {
-    const url = await savedClipUrl(text).catch(() => null);
-    const res = url ? await fetch(url).catch(() => null) : null;
-    if (res?.ok) {
-      const clip = { audio: await bytesToBase64(await res.arrayBuffer()), mimeType: 'audio/wav' };
-      saveClip(text, clip);
-      return clip;
-    }
-  }
+type Clip = { audio: string; mimeType: string };
+
+// A clip already recorded: on this device, or saved on the server.
+// Never asks Gemini, so it's quick (a second at most) or null.
+async function savedClip(text: string): Promise<Clip | null> {
+  const local = await cachedClip(text);
+  if (local) return local;
+  const url = await savedClipUrl(text).catch(() => null);
+  const res = url ? await fetch(url).catch(() => null) : null;
+  if (!res?.ok) return null;
+  const clip = { audio: await bytesToBase64(await res.arrayBuffer()), mimeType: 'audio/wav' };
+  saveClip(text, clip);
+  return clip;
+}
+
+// A fresh clip from Gemini (several seconds on the free tier).
+async function generatedClip(text: string, share: boolean): Promise<Clip | null> {
   const { data, error } = await supabase.functions.invoke('citadel-ai', { body: { tts: text, share } });
   if (error || !data?.audio) return null;
   const clip = { audio: String(data.audio), mimeType: String(data.mimeType ?? '') };
@@ -116,13 +120,40 @@ async function fetchClip(text: string, share: boolean) {
   return clip;
 }
 
+// A same-for-everyone line that isn't recorded yet: record it now, in
+// the background, so it's ready for the next person. Once per visit.
+const recording = new Set<string>();
+function recordLater(text: string) {
+  if (recording.has(text)) return;
+  recording.add(text);
+  generatedClip(text, true).catch(() => {});
+}
+
+// Fetch the recorded clips for these lines onto the device ahead of
+// time (e.g. the suggested questions when the panel opens), so they
+// play instantly. Only already-recorded clips; never asks Gemini.
+export async function prefetchVoices(texts: string[]) {
+  for (const t of texts) {
+    for (const piece of splitForSpeech(speechText(t))) {
+      await savedClip(piece).catch(() => null);
+    }
+  }
+}
+
 // Speech takes about as long to generate as to play, so a long answer
 // is voiced a sentence (or two short ones) at a time: the first starts
 // within a few seconds, and each next piece is prepared while the
 // current one plays. KEEP IN SYNC with splitForSpeech in the citadel-ai
 // function -- saved clips are looked up by their exact text.
-function splitForSpeech(text: string): string[] {
-  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
+export function splitForSpeech(text: string): string[] {
+  // A sentence ends at . ! or ? followed by a space -- so "gmail.com"
+  // stays whole -- but not after a short title like "St." or "Mr.".
+  const sentences: string[] = [];
+  for (const part of text.split(/(?<=[.!?]["')\]]*)\s+/)) {
+    const prev = sentences[sentences.length - 1];
+    if (prev && /\b(St|Mr|Mrs|Ms|Dr|Rev|No|Int'l)\.$/.test(prev)) sentences[sentences.length - 1] = `${prev} ${part}`;
+    else if (part.trim()) sentences.push(part.trim());
+  }
   const pieces: string[] = [];
   for (const s of sentences) {
     const last = pieces[pieces.length - 1];
@@ -143,8 +174,13 @@ function playBuffer(c: AudioContext, buf: AudioBuffer): Promise<void> {
   });
 }
 
+// Text as it should be spoken: no markdown, and "₦54,900" read as
+// "54,900 naira" rather than a symbol.
+export const speechText = (text: string) =>
+  text.replace(/[*_#`]/g, '').replace(/₦\s?([\d,]+(?:\.\d+)?)/g, '$1 naira').trim();
+
 export async function speak(text: string, { share = false }: { share?: boolean } = {}) {
-  const clean = text.replace(/[*_#`]/g, '').trim();
+  const clean = speechText(text);
   if (!clean) return;
   stopSpeaking();
   const mine = ++turn;
@@ -152,24 +188,31 @@ export async function speak(text: string, { share = false }: { share?: boolean }
   if (!c) { browserSpeak(clean); return; }
 
   const pieces = splitForSpeech(clean);
-  const clips: Promise<{ audio: string; mimeType: string } | null>[] = [];
-  const clipFor = (i: number) => (clips[i] ??= fetchClip(pieces[i], share).catch(() => null));
+  const clips: Promise<Clip | null>[] = [];
+  // Same-for-everyone lines only ever use recorded clips (instant), so
+  // nobody waits on Gemini for them; personal answers are generated.
+  const clipFor = (i: number) => (clips[i] ??= (share ? savedClip(pieces[i]) : generatedClip(pieces[i], false)).catch(() => null));
+  const fallBack = (from: number) => {
+    browserSpeak(pieces.slice(from).join(' '));
+    if (share) pieces.slice(from).forEach(recordLater);
+  };
 
-  // Don't leave them waiting: if the first piece is slow, the device's
-  // own voice reads the whole answer instead.
+  // Never leave them waiting: if the natural voice isn't ready in time,
+  // the device's own voice speaks now (and, for a shared line, the
+  // natural one is recorded for next time).
   const first = await Promise.race([
     clipFor(0),
-    new Promise<null>((r) => setTimeout(() => r(null), MAX_WAIT_MS)),
+    new Promise<null>((r) => setTimeout(() => r(null), share ? SAVED_WAIT_MS : MAX_WAIT_MS)),
   ]);
   if (mine !== turn) return; // something newer started, or they pressed stop
-  if (!first) { browserSpeak(clean); return; }
+  if (!first) { fallBack(0); return; }
 
   try {
     if (c.state === 'suspended') await c.resume();
     for (let i = 0; i < pieces.length; i++) {
       const clip = i === 0 ? first : await clipFor(i);
       if (mine !== turn) return;
-      if (!clip) { browserSpeak(pieces.slice(i).join(' ')); return; }
+      if (!clip) { fallBack(i); return; }
       if (i + 1 < pieces.length) clipFor(i + 1); // prepare the next piece while this one plays
       const buf = await clipToBuffer(c, clip.audio, clip.mimeType);
       if (mine !== turn) return;

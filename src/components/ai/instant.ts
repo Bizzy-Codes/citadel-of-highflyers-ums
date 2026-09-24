@@ -1,6 +1,6 @@
 import type { Assignment, AssignmentSubmission, AcademicCalendar } from '../../context/AuthContext';
 import { FEE_SCHEDULES, feeTotals, naira } from '../../lib/feeSchedule';
-import { pagesFor, type AiRole } from './catalog';
+import { openingLine, pagesFor, type AiRole } from './catalog';
 import { guidesFor } from './guides';
 
 // Answers Citadel AI can give on the spot, without asking Gemini:
@@ -194,8 +194,7 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
   // Plain navigation: "open my results", "take me to gallery", "profile".
   const page = (NAV.test(q) || words <= 2) ? matchPage(q, role) : null;
   if (page && pages.has(page)) {
-    const label = pagesFor(role).find((p) => p.key === page)!.label.replace(/\s*\(.*\)/, '');
-    return { text: `Opening ${label.charAt(0).toLowerCase() + label.slice(1)}.`, openPage: page };
+    return { text: openingLine(pagesFor(role).find((p) => p.key === page)!), openPage: page };
   }
 
   return null;
