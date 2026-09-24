@@ -209,6 +209,251 @@ async function transcribe(audio: { mimeType?: string; data?: string }) {
   return json({ text });
 }
 
+// ---- natural voice (answers read aloud) ---------------------------------
+// The browser's built-in voices sound flat and robotic, so answers are
+// spoken by Gemini's text-to-speech instead: a warm, clear American
+// voice at a child-friendly pace. The browser falls back to its own
+// voice if this fails. Model names change often, so the TTS model is
+// looked up from Google's model list rather than hard-coded.
+
+const TTS_VOICES = [Deno.env.get('GEMINI_TTS_VOICE'), 'Sulafat', 'Kore'].filter((v): v is string => !!v);
+let ttsModels: string[] | null = null;
+
+async function findTtsModels(): Promise<string[]> {
+  if (ttsModels) return ttsModels;
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    headers: { 'x-goog-api-key': GEMINI_API_KEY },
+  });
+  const data = await res.json().catch(() => ({}));
+  const names: string[] = (data?.models ?? [])
+    .map((m: { name?: string }) => String(m.name ?? '').replace(/^models\//, ''))
+    .filter((n: string) => /tts/i.test(n));
+  // Flash before Pro (faster), newest first.
+  names.sort((a, b) => Number(/pro/i.test(a)) - Number(/pro/i.test(b)) || b.localeCompare(a));
+  ttsModels = names;
+  return names;
+}
+
+// Saved clips (patch_34): answers that are the same for everyone are
+// voiced once and kept, because generating takes 7-16 s on the free tier.
+const clipPath = async (say: string) => `${(await sha256(`${TTS_VOICES[0]}|${say}`)).slice(0, 40)}.wav`;
+
+async function savedClip(say: string): Promise<string | null> {
+  const { data } = await db.storage.from('ai-voice').download(await clipPath(say));
+  if (!data) return null;
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function saveClip(say: string, base64: string) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const { error } = await db.storage.from('ai-voice').upload(await clipPath(say), bytes, { contentType: 'audio/wav', upsert: true });
+  if (error) console.error('voice clip not saved', error.message);
+}
+
+// Answers are voiced a sentence or two at a time. KEEP IN SYNC with
+// splitForSpeech in src/components/ai/speak.ts -- saved clips are found
+// by their exact text.
+function splitForSpeech(text: string): string[] {
+  const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [text];
+  const pieces: string[] = [];
+  for (const s of sentences) {
+    const last = pieces[pieces.length - 1];
+    if (last && (last.length < 40 || s.length < 25)) pieces[pieces.length - 1] = `${last} ${s}`;
+    else pieces.push(s);
+  }
+  return pieces;
+}
+
+async function tts(text: unknown, share: unknown) {
+  const say = String(text ?? '').replace(/[*_#`]/g, '').trim().slice(0, 700);
+  if (!say) return json({ error: 'Nothing to say' }, 400);
+  if (share === true) {
+    const saved = await savedClip(say).catch(() => null);
+    if (saved) return json({ audio: saved, mimeType: 'audio/wav', saved: true });
+  }
+  const made = await generateClip(say);
+  if (!made) return json({ error: 'busy' }, 429);
+  // Only clips the browser marked as the same for everyone are kept.
+  // The format must be WAV for the saved copy to play back correctly.
+  if (share === true && /wav/i.test(made.mimeType)) await saveClip(say, made.audio);
+  return json(made);
+}
+
+// Voices every FAQ answer ahead of time, so even the first person to
+// ask hears the natural voice straight away. Stops quietly when the
+// free-tier limit is reached; the next run carries on.
+async function prerenderVoices(budgetMs = 100_000) {
+  const { data: faqs } = await db.from('ai_faq').select('answer').eq('enabled', true);
+  const pieces = [...new Set((faqs ?? []).flatMap((f) => splitForSpeech(String(f.answer).replace(/[*_#`]/g, '').trim())))];
+  let made = 0, had = 0;
+  // A function run is cut off after ~150 s; stop well before and let the
+  // next run (nightly, or the admin button) carry on.
+  const stopAt = Date.now() + budgetMs;
+  for (const p of pieces) {
+    if (Date.now() > stopAt) break;
+    const { data: exists } = await db.storage.from('ai-voice').list('', { search: (await clipPath(p)).replace('.wav', '') });
+    if (exists?.length) { had++; continue; }
+    const clip = await generateClip(p);
+    if (!clip) break;
+    if (/wav/i.test(clip.mimeType)) { await saveClip(p, clip.audio); made++; }
+  }
+  return { pieces: pieces.length, already_saved: had, newly_saved: made, remaining: pieces.length - had - made };
+}
+
+async function generateClip(say: string): Promise<{ audio: string; mimeType: string; model: string; voice: string } | null> {
+  const models = await findTtsModels().catch(() => []);
+  for (const model of models) {
+    for (const voice of TTS_VOICES) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+        body: JSON.stringify({
+          // Only the words to say. The newer TTS models read any "Say
+          // warmly: ..." style direction aloud as part of the text, so
+          // the warmth comes from the voice chosen instead.
+          contents: [{ role: 'user', parts: [{ text: say }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const audio = data?.candidates?.[0]?.content?.parts?.find((p: { inlineData?: unknown }) => p.inlineData)?.inlineData;
+      if (res.ok && audio?.data) return { audio: audio.data, mimeType: audio.mimeType ?? 'audio/L16;rate=24000', model, voice };
+      const detail = JSON.stringify(data).slice(0, 200);
+      if (res.status === 400 && /voice/i.test(detail)) continue; // try the next voice
+      console.error('tts unavailable', model, res.status, detail);
+      break; // try the next model
+    }
+  }
+  return null;
+}
+
+// ---- learning FAQs from real questions ----------------------------------
+// Runs on the 1st and 15th (pg_cron, patch_33) or when an admin presses
+// "Learn from questions now". Takes the last two weeks of questions that
+// had to go to Gemini, groups the common ones, and writes ready answers
+// into ai_faq so they're instant next time.
+
+// KEEP IN SYNC with src/components/ai/catalog.ts and guides.ts.
+const PAGE_KEYS = ['home', 'admissions', 'fees', 'founders', 'gallery', 'login', 'sign_up', 'staff_sign_up', 'forgot_password',
+  'dashboard', 'assignments', 'tests', 'results', 'attendance', 'portal_fees', 'teacher_dashboard', 'attendance_register',
+  'my_pupils', 'teacher_assignments', 'teacher_tests', 'report_cards', 'admin_dashboard', 'user_management',
+  'admin_admissions', 'admin_payments', 'admin_calendar', 'admin_attendance', 'graduates', 'school_calendar', 'timetable',
+  'messages', 'profile', 'support', 'pending', 'ai_admin'];
+const GUIDE_KEYS = ['pupil_sign_up', 'staff_sign_up', 'log_in', 'forgot_password', 'apply_admission', 'submit_assignment', 'post_assignment'];
+const ROLES = ['guest', 'student', 'teacher', 'teacher_pending', 'admin'];
+
+async function isAllowedToRefresh(req: Request, token: unknown): Promise<boolean> {
+  if (typeof token === 'string' && token.length > 20) {
+    const { data } = await db.from('ai_settings').select('value').eq('key', 'refresh_token').maybeSingle();
+    if (data?.value && data.value === token) return true;
+  }
+  const jwt = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!jwt) return false;
+  const { data: { user } } = await db.auth.getUser(jwt);
+  if (!user) return false;
+  const { data: profile } = await db.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  return profile?.role === 'admin';
+}
+
+async function refreshFaq() {
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const { data: rows, error } = await db.from('ai_questions')
+    .select('question, role').eq('handled', 'gemini').gte('created_at', since).limit(3000);
+  if (error) return json({ error: error.message }, 500);
+
+  const groups = new Map<string, { question: string; roles: Set<string>; count: number }>();
+  for (const r of rows ?? []) {
+    const k = normalise(r.question);
+    if (!k) continue;
+    const g = groups.get(k) ?? { question: r.question, roles: new Set<string>(), count: 0 };
+    g.count++; g.roles.add(r.role);
+    groups.set(k, g);
+  }
+  const top = [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 80);
+  if (!top.length) return json({ ok: true, added: 0, updated: 0, note: 'No questions to learn from yet.' });
+
+  const { data: existing } = await db.from('ai_faq').select('id, phrases, source');
+  const known = (existing ?? []).map((f) => f.phrases[0]).slice(0, 200);
+
+  const result = await callGemini({
+    systemInstruction: { parts: [{ text: `You maintain the FAQ for Citadel AI, the helper on a Nigerian primary school's website and portal. Answers are shown and read aloud to parents, young pupils and teachers.
+
+SCHOOL FACTS (the only facts you may use):
+${SCHOOL_FACTS}` }] },
+    contents: [{ role: 'user', parts: [{ text: `Here are questions people asked in the last two weeks, with how many times and by which roles:
+${top.map((g) => `- (${g.count}x, ${[...g.roles].join('/')}) ${g.question}`).join('\n')}
+
+Group questions that mean the same thing. For each group asked 3 or more times in total, write one FAQ entry. Skip a group if:
+- it's already covered by one of these existing FAQs: ${known.join(' | ')}
+- the answer depends on the person's own data (their assignments, results, marks, attendance numbers) -- unless the whole answer is just opening the right page;
+- the facts above don't contain the answer (never guess).
+
+Each entry: phrases = 4 to 8 short lower-case ways people ask it (include the real wording, and Pidgin if they used it); roles = which of ${ROLES.join(', ')} it's for; answer = one to three short, simple, warm sentences with no markdown; open_page and/or start_guide only if helpful, chosen from pages [${PAGE_KEYS.join(', ')}] and guides [${GUIDE_KEYS.join(', ')}]; count = total times asked.` }] }],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 6000,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            phrases: { type: 'ARRAY', items: { type: 'STRING' } },
+            roles: { type: 'ARRAY', items: { type: 'STRING' } },
+            answer: { type: 'STRING' },
+            open_page: { type: 'STRING' },
+            start_guide: { type: 'STRING' },
+            count: { type: 'INTEGER' },
+          },
+          required: ['phrases', 'roles', 'answer', 'count'],
+        },
+      },
+    },
+  });
+  if (!result.ok) return failure(result.status);
+
+  let entries: { phrases: string[]; roles: string[]; answer: string; open_page?: string; start_guide?: string; count: number }[] = [];
+  try {
+    const raw = result.content.parts.map((p) => (typeof p.text === 'string' && !p.thought ? p.text : '')).join('');
+    entries = JSON.parse(raw);
+  } catch {
+    return json({ error: 'The AI returned something unreadable. Try again later.' }, 502);
+  }
+
+  let added = 0, updated = 0;
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const phrases = [...new Set((e.phrases ?? []).map(normalise).filter((p) => p && p.length <= 120))].slice(0, 12);
+    const roles = (e.roles ?? []).filter((r) => ROLES.includes(r));
+    const answer = String(e.answer ?? '').trim().slice(0, 500);
+    if (phrases.length < 2 || !roles.length || !answer || (e.count ?? 0) < 3) continue;
+    const row = {
+      phrases, roles, answer,
+      open_page: e.open_page && PAGE_KEYS.includes(e.open_page) ? e.open_page : null,
+      start_guide: e.start_guide && GUIDE_KEYS.includes(e.start_guide) ? e.start_guide : null,
+      source: 'learned', asked: e.count, updated_at: new Date().toISOString(),
+    };
+    // Update a learned entry that already covers one of these phrasings
+    // rather than adding a near-duplicate. Built-in ones are left alone.
+    const match = (existing ?? []).find((f) => f.source === 'learned' && f.phrases.some((p: string) => phrases.includes(p)));
+    if (match) {
+      await db.from('ai_faq').update({ ...row, phrases: [...new Set([...match.phrases, ...phrases])].slice(0, 16) }).eq('id', match.id);
+      updated++;
+    } else {
+      await db.from('ai_faq').insert(row);
+      added++;
+    }
+  }
+  return json({ ok: true, looked_at: rows?.length ?? 0, added, updated });
+}
+
 // ---- shared answer store ------------------------------------------------
 
 const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -232,10 +477,23 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!GEMINI_API_KEY) return json({ error: 'Citadel AI is not set up yet (missing GEMINI_API_KEY).' }, 500);
 
-  let body: { contents?: unknown[]; context?: ClientContext; transcribe?: { mimeType?: string; data?: string } };
+  let body: {
+    contents?: unknown[]; context?: ClientContext; transcribe?: { mimeType?: string; data?: string };
+    tts?: string; share?: boolean; refresh_faq?: boolean; prerender_voice?: boolean; token?: string;
+  };
   try { body = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
 
   if (body.transcribe) return transcribe(body.transcribe);
+  if (body.tts !== undefined) return tts(body.tts, body.share);
+  if (body.refresh_faq || body.prerender_voice) {
+    if (!(await isAllowedToRefresh(req, body.token))) return json({ error: 'Not allowed' }, 403);
+    if (body.prerender_voice) return json({ ok: true, ...(await prerenderVoices()) });
+    // Learn new answers, then voice them (and any not voiced yet).
+    const learned = await refreshFaq();
+    const voices = await prerenderVoices(50_000).catch(() => null); // learning already used some of the time
+    const summary = await learned.json();
+    return json({ ...summary, voices }, learned.status);
+  }
 
   // Keep requests small: the last 30 turns, and no more than ~24k
   // characters overall. Stops the endpoint being used as a free

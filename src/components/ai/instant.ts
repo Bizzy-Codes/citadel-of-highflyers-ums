@@ -14,6 +14,9 @@ export interface InstantAnswer {
   text: string;
   openPage?: string;   // a page key from catalog.ts
   startGuide?: string; // a guide key from guides.ts
+  // Mentions the person's own details (their name, their assignments):
+  // its voice clip must never be stored for others.
+  personal?: boolean;
 }
 
 export interface InstantContext {
@@ -112,7 +115,10 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
 
   // Greetings and thanks (short messages only).
   if (words <= 4 && /^(hi|hello|hey|hy|helo|good (morning|afternoon|evening|day)|how far|howfa|how you dey|wetin dey|morning|evening)\b/.test(q)) {
-    return { text: `Hello${ctx.firstName ? ` ${ctx.firstName}` : ''}! How can I help you today? You can ask me a question, or say something like "take me to ${role === 'guest' ? 'admissions' : 'my assignments'}".` };
+    return {
+      text: `Hello${ctx.firstName ? ` ${ctx.firstName}` : ''}! How can I help you today? You can ask me a question, or say something like "take me to ${role === 'guest' ? 'admissions' : 'my assignments'}".`,
+      personal: !!ctx.firstName,
+    };
   }
   if (words <= 5 && /^(thanks|thank you|thank u|tanks|thx|ok thanks|okay thanks|e se|nagode|daalu)\b/.test(q)) {
     return { text: "You're welcome! I'm here if you need anything else." };
@@ -172,7 +178,7 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
     const text = todo.length === 0
       ? "Good news, you don't have any assignment to do right now. I've opened your assignments page."
       : `Yes, you have ${todo.length} assignment${todo.length > 1 ? 's' : ''} to do. ${list}${todo.length > 3 ? ', and more' : ''}. I've opened your assignments page.`;
-    return { text, openPage: 'assignments' };
+    return { text, openPage: 'assignments', personal: todo.length > 0 };
   }
 
   // The term calendar, for anyone who can see it.

@@ -6,8 +6,18 @@ import { useAuth } from '../../context/AuthContext';
 import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, pagesFor, type AiRole } from './catalog';
 import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
-import { blobToBase64, canUseVoice, speak, startVoice, stopSpeaking, type VoiceSession, type VoiceStatus } from './voice';
+import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceStatus } from './voice';
+import { speak, stopSpeaking, unlockAudio } from './speak';
 import { instantAnswer } from './instant';
+import { loadFaqs, matchFaq, type FaqRow } from './faq';
+
+// Every question goes into the log admins see (words only, no name or
+// account) -- it's what the two-weekly FAQ learning reads. Best effort:
+// a failed log never gets in the visitor's way.
+function logQuestion(question: string, role: AiRole, handled: 'instant' | 'faq' | 'cache' | 'gemini') {
+  supabase.rpc('log_ai_question', { p_question: question.slice(0, 300), p_role: role, p_handled: handled })
+    .then(({ error }) => { if (error) console.warn('Citadel AI: could not log question', error.message); });
+}
 import './CitadelAI.css';
 
 // Citadel AI: the floating helper on every page of the website and
@@ -63,6 +73,8 @@ const CitadelAI = () => {
   const [voiceOn, setVoiceOn] = useState(false);
   const [guide, setGuide] = useState<{ g: Guide; step: number; waiting: boolean } | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
+  const [faqs, setFaqs] = useState<FaqRow[]>([]);
+  useEffect(() => { loadFaqs().then(setFaqs).catch(() => {}); }, []);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Function results waiting to go out with the visitor's next message
@@ -80,9 +92,11 @@ const CitadelAI = () => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [bubbles, busy, open]);
 
-  const say = useCallback((text: string, error = false) => {
+  // share: the words are the same for everyone, so the voice clip can be
+  // kept and reused (see speak.ts). Never for answers with personal details.
+  const say = useCallback((text: string, error = false, share = false) => {
     setChat((c) => ({ ...c, bubbles: [...c.bubbles, { from: 'bot', text, error }] }));
-    if (voiceOnRef.current && !error) speak(text);
+    if (voiceOnRef.current && !error) speak(text, { share });
   }, []);
 
   // ---- guides ------------------------------------------------------
@@ -97,7 +111,7 @@ const CitadelAI = () => {
   const finishGuide = useCallback((text: string) => {
     setGuide(null);
     setOpen(true);
-    say(text);
+    say(text, false, true);
   }, [say]);
 
   const nextStep = useCallback(() => {
@@ -116,7 +130,7 @@ const CitadelAI = () => {
 
   // Speak each step as it comes up.
   useEffect(() => {
-    if (guide && !guide.waiting && voiceOnRef.current) speak(guide.g.steps[guide.step].text);
+    if (guide && !guide.waiting && voiceOnRef.current) speak(guide.g.steps[guide.step].text, { share: true });
   }, [guide?.g, guide?.step, guide?.waiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch for the guide's finish line -- e.g. after "Register Now" the
@@ -211,20 +225,25 @@ const CitadelAI = () => {
     const q = text.trim();
     if (!q || busy) return;
     stopSpeaking();
+    unlockAudio();
     setInput('');
     let history: Content[] = [...contents, { role: 'user', parts: [...pending.current, { text: q }] }];
     pending.current = [];
 
-    // Common requests are answered right here, with no wait. They still
-    // go into the history so Gemini has the context for follow-ups.
-    const instant = instantAnswer(q, {
+    // Common requests are answered right here, with no wait: first the
+    // FAQ list (built-in + learned from real questions), then the
+    // built-in handlers. They still go into the history so Gemini has
+    // the context for follow-ups.
+    const fromFaq = matchFaq(q, role, faqs);
+    const instant = fromFaq ?? instantAnswer(q, {
       role, firstName: niceFirstName, today: isoToday(),
       assignments: auth.assignments, mySubmissions: auth.mySubmissions, academicCalendar: auth.academicCalendar,
     });
     if (instant) {
+      logQuestion(q, role, fromFaq ? 'faq' : 'instant');
       history = [...history, { role: 'model', parts: [{ text: instant.text }] }];
       setChat((c) => ({ contents: history, bubbles: [...c.bubbles, { from: 'user', text: q }] }));
-      say(instant.text);
+      say(instant.text, false, !instant.personal);
       if (instant.openPage) runTool('open_page', { page: instant.openPage });
       if (instant.startGuide) runTool('start_guide', { guide: instant.startGuide });
       return;
@@ -247,6 +266,7 @@ const CitadelAI = () => {
           history = history.slice(0, -1);
           break;
         }
+        if (round === 0) logQuestion(q, role, data?.model === 'cache' ? 'cache' : 'gemini');
         const reply: Content = data?.content ?? { role: 'model', parts: [] };
         // Keep every part exactly as sent -- newer models attach hidden
         // "thought signatures" that must come back unchanged.
@@ -282,14 +302,14 @@ const CitadelAI = () => {
         // Only page moves / guides: no need for another round trip.
         // Hold the results until the visitor's next message.
         pending.current = responses;
-        if (!replyText && notes.length) say(notes.join(' '));
+        if (!replyText && notes.length) say(notes.join(' '), false, true);
         break;
       }
     } finally {
       setChat((c) => ({ ...c, contents: history }));
       setBusy(false);
     }
-  }, [busy, contents, context, runTool, say, role, niceFirstName, auth.assignments, auth.mySubmissions, auth.academicCalendar]);
+  }, [busy, contents, context, runTool, say, role, niceFirstName, faqs, auth.assignments, auth.mySubmissions, auth.academicCalendar]);
 
   // ---- voice -------------------------------------------------------
 
@@ -313,7 +333,15 @@ const CitadelAI = () => {
       return;
     }
     stopSpeaking();
+    unlockAudio();
     setVoiceOn(true);
+    // Browsers only allow the microphone on secure (https) pages -- an
+    // http:// address (e.g. opening a test copy by its Wi-Fi address on
+    // a phone) can never use it, so say that rather than "unsupported".
+    if (!window.isSecureContext) {
+      say('The microphone only works on the secure (https) website. Please type your question here for now.', true);
+      return;
+    }
     voiceSession.current = startVoice({
       onStatus: (s) => {
         setVoice(s);
@@ -448,7 +476,7 @@ const CitadelAI = () => {
             </div>
           ) : (
             <form className="cai-input" onSubmit={(e) => { e.preventDefault(); ask(input); }}>
-              {canUseVoice() && (
+              {(canUseVoice() || !window.isSecureContext) && (
                 <button type="button" className="cai-mic" onClick={toggleMic} aria-label="Speak to Citadel AI" disabled={busy}>
                   <Mic size={19} />
                 </button>

@@ -37,6 +37,7 @@ import StudentAttendance from './pages/portal/StudentAttendance'
 import AdminCalendar from './pages/portal/AdminCalendar'
 import SchoolCalendar from './pages/portal/SchoolCalendar'
 import AdminAttendance from './pages/portal/AdminAttendance'
+import AdminCitadelAI from './pages/portal/AdminCitadelAI'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
@@ -153,6 +154,9 @@ function App() {
         } />
         <Route path="/portal/admin/users/:userId" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminUserDetail /></ProtectedRoute>
+        } />
+        <Route path="/portal/admin/citadel-ai" element={
+          <ProtectedRoute allowedRoles={['admin']}><AdminCitadelAI /></ProtectedRoute>
         } />
         <Route path="/portal/admin/graduates" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminGraduates /></ProtectedRoute>

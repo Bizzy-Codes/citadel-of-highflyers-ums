@@ -56,6 +56,7 @@ export const PAGES: AiPage[] = [
   { key: 'admin_calendar', label: 'Set the academic calendar / term', path: '/portal/admin/calendar', roles: ADMIN },
   { key: 'admin_attendance', label: 'Attendance overview', path: '/portal/admin/attendance', roles: ADMIN },
   { key: 'graduates', label: 'Graduated pupils', path: '/portal/admin/graduates', roles: ADMIN },
+  { key: 'ai_admin', label: 'Citadel AI questions and FAQ answers', path: '/portal/admin/citadel-ai', roles: ADMIN },
 
   // Portal -- shared
   { key: 'school_calendar', label: 'School calendar for this term', path: '/portal/calendar', roles: PUPIL_TEACHER },

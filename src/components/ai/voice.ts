@@ -266,32 +266,3 @@ export function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-// ---- reading answers aloud ------------------------------------------
-
-let cachedVoice: SpeechSynthesisVoice | null = null;
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (cachedVoice) return cachedVoice;
-  const voices = window.speechSynthesis?.getVoices() ?? [];
-  cachedVoice = voices.find((v) => v.lang === 'en-NG')
-    ?? voices.find((v) => v.lang === 'en-GB')
-    ?? voices.find((v) => v.lang.startsWith('en'))
-    ?? null;
-  return cachedVoice;
-}
-
-export function speak(text: string) {
-  try {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    synth.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g, ''));
-    const voice = pickVoice();
-    if (voice) { u.voice = voice; u.lang = voice.lang; }
-    u.rate = 0.95;
-    synth.speak(u);
-  } catch { /* speech not available -- text is still on screen */ }
-}
-
-export function stopSpeaking() {
-  try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
-}
