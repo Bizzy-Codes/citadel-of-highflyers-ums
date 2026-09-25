@@ -66,7 +66,9 @@ export const GUIDES: Guide[] = [
     path: '/login',
     steps: [
       { target: 'login-id', text: 'Type your name, or your login ID like CH 001.', advance: 'next' },
-      { target: 'login-password', text: 'Type your password. New accounts from the school start with citadel1234.', advance: 'next' },
+      // Never name a password here (or anywhere in Citadel AI) -- not even
+      // the default. Anyone could use it with someone else's name.
+      { target: 'login-password', text: "Type your password. If you've forgotten it, the school office can help.", advance: 'next' },
       { target: 'login-submit', text: 'Now press Sign In to Portal.', advance: 'click' },
     ],
     donePath: (p) => p.startsWith('/portal'),

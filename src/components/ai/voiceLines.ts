@@ -18,6 +18,7 @@ const PRIORITY: Record<AiRole, number> = { guest: 1, student: 3, teacher: 4, tea
 
 // Questions whose built-in answers are fixed text.
 const SAMPLE_QUESTIONS = [
+  'what is the default password', 'how do i log in as admin',
   'hi', 'thank you', 'how much are the school fees', 'where is the school located', 'what is the phone number',
   'register my child', 'register as teacher', 'apply for admission', 'log in', 'forgot my password',
   'post an assignment', 'submit my homework', 'open the register', 'do i have any assignment',

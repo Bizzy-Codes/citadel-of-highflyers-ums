@@ -8,14 +8,17 @@ import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
 import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceStatus } from './voice';
 import { prefetchVoices, speak, stopSpeaking, unlockAudio } from './speak';
-import { instantAnswer } from './instant';
+import { NO_PASSWORDS, SECRET_LOOKING, instantAnswer } from './instant';
 import { loadFaqs, matchFaq, type FaqRow } from './faq';
 
 // Every question goes into the log admins see (words only, no name or
 // account) -- it's what the two-weekly FAQ learning reads. Best effort:
 // a failed log never gets in the visitor's way.
 function logQuestion(question: string, role: AiRole, handled: 'instant' | 'faq' | 'cache' | 'gemini') {
-  supabase.rpc('log_ai_question', { p_question: question.slice(0, 300), p_role: role, p_handled: handled })
+  // Someone who types their own password ("my password is ...") must not
+  // have it end up in a log admins can read.
+  const safe = SECRET_LOOKING.test(question) ? '(removed: looked like it contained a password)' : question.slice(0, 300);
+  supabase.rpc('log_ai_question', { p_question: safe, p_role: role, p_handled: handled })
     .then(({ error }) => { if (error) console.warn('Citadel AI: could not log question', error.message); });
 }
 import './CitadelAI.css';
@@ -94,7 +97,9 @@ const CitadelAI = () => {
 
   // share: the words are the same for everyone, so the voice clip can be
   // kept and reused (see speak.ts). Never for answers with personal details.
-  const say = useCallback((text: string, error = false, share = false) => {
+  const say = useCallback((raw: string, error = false, share = false) => {
+    // Never show or speak anything that looks like a password.
+    const text = SECRET_LOOKING.test(raw) ? NO_PASSWORDS : raw;
     setChat((c) => ({ ...c, bubbles: [...c.bubbles, { from: 'bot', text, error }] }));
     if (voiceOnRef.current && !error) speak(text, { share });
   }, []);

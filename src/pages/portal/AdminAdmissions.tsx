@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AdmissionApplication } from '../../context/AuthContext';
 import { UserPlus, Download, CheckCircle2, XCircle, FileCheck, MessageCircle, Receipt, GraduationCap, Bell, FileText, Trash2, ExternalLink } from 'lucide-react';
-import { CLASSES, DEFAULT_ACCOUNT_PASSWORD } from '../../lib/accounts';
+import { CLASSES } from '../../lib/accounts';
+import { useDefaultAccountPassword } from '../../lib/defaultPassword';
 import { buildReceiptReminderMessage, buildLoginDetailsMessage, toWhatsAppNumber } from '../../lib/outreach';
 import ContactParentDialog, { type ParentContact } from '../../components/portal/ContactParentDialog';
 
@@ -25,6 +26,7 @@ const AdminAdmissions = () => {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [loading, setLoading] = useState(true);
+  const defaultPassword = useDefaultAccountPassword();
   const [filter, setFilter] = useState<'pending' | 'awaiting-receipt' | 'all'>('pending');
   const [selected, setSelected] = useState<AdmissionApplication | null>(null);
   const [note, setNote] = useState('');
@@ -165,7 +167,7 @@ const AdminAdmissions = () => {
     // admin has to copy out of. The login shown is the pupil's NAME --
     // the email on the account is a parent's, and quoting that made it
     // read as the parent's own login rather than the child's.
-    const loginPassword = password ?? DEFAULT_ACCOUNT_PASSWORD;
+    const loginPassword = password ?? defaultPassword ?? '(ask the school office)';
     const created = students.find((s) => s.email?.toLowerCase() === email.toLowerCase());
     setAdmittedInfo({
       name: fullName,

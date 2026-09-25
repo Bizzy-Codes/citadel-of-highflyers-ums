@@ -16,8 +16,11 @@ export interface FaqRow {
   start_guide: string | null;
 }
 
-const STORE = 'citadel-ai-faq-v1';
-const MAX_AGE = 6 * 60 * 60 * 1000;
+// Bump the version to make every device drop its copy at once (v1 held
+// an answer that gave out the default password).
+const STORE = 'citadel-ai-faq-v2';
+const MAX_AGE = 60 * 60 * 1000; // an hour, so an admin's edits reach everyone soon
+try { localStorage.removeItem('citadel-ai-faq-v1'); } catch { /* ignore */ }
 let memory: FaqRow[] | null = null;
 let loading: Promise<FaqRow[]> | null = null;
 

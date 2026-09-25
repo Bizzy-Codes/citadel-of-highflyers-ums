@@ -2,6 +2,10 @@
 // it's the same information the website already shows -- and it is sent
 // to Gemini with every question, so keep it short and factual.
 //
+// NEVER add anything private: passwords (not even the default one),
+// admin names/emails/logins, keys, internal links or how the system is
+// built. Whatever is here, anyone can get the AI to repeat.
+//
 // KEEP IN SYNC: fees and bank details mirror src/lib/feeSchedule.ts and
 // the application fee in src/pages/marketing/Admissions.tsx. After
 // editing, redeploy the function (`supabase functions deploy citadel-ai`).
@@ -36,7 +40,7 @@ FEES PER TERM (the "Financial Involvement" sheet on the Fees page)
 THE PORTAL (for pupils, parents, teachers and admins)
 - Pupils (or their parents) create an account themselves from the login page ("Create an Account", choose Pupil). No email check -- they can sign in straight away. The school then puts them in their class.
 - Brothers and sisters can all be registered with the same parent email.
-- Pupils sign in with their NAME or login ID (like "CH 001") and password. Accounts made by the school start with the password citadel1234, which they should change.
+- Pupils sign in with their NAME or login ID (like "CH 001") and their password. The school gives each family their password privately. They can change it on their Profile page.
 - Teachers register with "Create an Account" and choose Staff. An admin must approve them before they can use the portal.
 - Forgot password: use "Forgot Password?" on the login page, or ask the school office to reset it.
 - Inside the portal pupils can see assignments (and upload their work), tests, results and report cards, attendance, the school calendar, timetable, fees, messages and their profile.

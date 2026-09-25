@@ -47,6 +47,12 @@ function feesAnswer(): InstantAnswer {
 }
 
 const CONTACT = 'You can call or WhatsApp the school on 0706 497 0003, or email citadelofhighflyersintlacademy@gmail.com.';
+export const NO_PASSWORDS = "For everyone's safety I can't share passwords. If you've forgotten yours, press Forgot Password on the log in page, or ask the school office.";
+const STAFF_ONLY = "Admin and staff access is only for school staff, so I can't help with that. If you work at the school, please speak to the school office.";
+
+// Anything that looks like a password being given out. Checked on every
+// reply before it's shown or spoken (the server checks too).
+export const SECRET_LOOKING = /\b(pass ?word|passcode|pin)\b[^.!?\n]{0,40}\b(is|was|are|:|=)\s*["'“]?[A-Za-z0-9!@#$%^&*._-]{4,}|\bcitadel\d{3,}\b/i;
 const ADDRESS = 'The school is at Rock Haven, opposite St. Murumba College, Jos, Plateau State.';
 
 // Words people use for each page, for "take me to ..." requests.
@@ -112,6 +118,19 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
   const { role } = ctx;
   const guides = new Set(guidesFor(role).map((g) => g.key));
   const pages = new Set(pagesFor(role).map((p) => p.key));
+
+  // Security first: nobody gets a password or a way into someone else's
+  // account or the admin area from Citadel AI -- not even the default
+  // password, which anyone could pair with a pupil's name.
+  if (has(q, 'password', 'passwords', 'passcode', 'pin')
+      && !has(q, 'forgot', 'forget', 'forgotten', 'reset', 'change', 'lost', 'new', 'create', 'make', 'set', 'strong', 'show', 'hide', 'see my')) {
+    return { text: NO_PASSWORDS };
+  }
+  if (has(q, 'admin', 'administrator', 'backend', 'back end', 'database', 'hack', 'bypass')
+      || (has(q, 'login', 'log in', 'sign in', 'enter', 'access', 'open', 'use') && has(q, 'account', 'accounts')
+          && has(q, 'another', 'someone', 'somebody', 'other', 'staff', 'teacher'))) {
+    if (role !== 'admin') return { text: STAFF_ONLY };
+  }
 
   // Greetings and thanks (short messages only).
   if (words <= 4 && /^(hi|hello|hey|hy|helo|good (morning|afternoon|evening|day)|how far|howfa|how you dey|wetin dey|morning|evening)\b/.test(q)) {

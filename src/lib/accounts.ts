@@ -1,16 +1,7 @@
-// The password every new account is created with.
-//
-// Families were being read a 10-character random string over the phone
-// and couldn't type it in or remember it, so every account now starts
-// on one short, easy-to-say default that the parent (or the admin) can
-// change from the portal afterwards.
-//
-// NOTE: the Edge Function that actually creates accounts
-// (supabase/functions/admin-create-user/index.ts) runs on Deno and
-// cannot import from src/, so it carries its own copy of this value.
-// If you change it here, change it there too -- they must match, and
-// the function must be REDEPLOYED for a change to take effect.
-export const DEFAULT_ACCOUNT_PASSWORD = 'citadel1234';
+// The password new accounts start with lives ONLY in the Edge Function
+// (supabase/functions/admin-create-user/index.ts). Never put it back in
+// src/: this code is downloaded by every visitor. Admin screens get it
+// from the function -- see src/lib/defaultPassword.ts.
 
 // Classes, in school order. Kept here so the admissions form, the admit
 // dialog, the sign-up form and the admin screens can't drift apart.

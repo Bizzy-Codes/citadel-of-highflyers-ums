@@ -8,7 +8,8 @@ import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, 
 import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
 import ContactParentDialog from '../../components/portal/ContactParentDialog';
 import { buildLoginDetailsMessage } from '../../lib/outreach';
-import { DEFAULT_ACCOUNT_PASSWORD, CLASSES } from '../../lib/accounts';
+import { CLASSES } from '../../lib/accounts';
+import { useDefaultAccountPassword } from '../../lib/defaultPassword';
 import { upperName } from '../../lib/names';
 import DateWheelInput from '../../components/common/DateWheelInput';
 
@@ -60,6 +61,7 @@ const AdminUserDetail = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [settingPassword, setSettingPassword] = useState(false);
+  const defaultPassword = useDefaultAccountPassword();
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
@@ -221,8 +223,9 @@ const AdminUserDetail = () => {
   // could not reliably type or remember the random strings this used to
   // generate, which is the whole reason for a single known default.
   const useDefaultPassword = () => {
-    setNewPassword(DEFAULT_ACCOUNT_PASSWORD);
-    setConfirmPassword(DEFAULT_ACCOUNT_PASSWORD);
+    if (!defaultPassword) { setPasswordError("Couldn't load the default password. Refresh the page and try again."); return; }
+    setNewPassword(defaultPassword);
+    setConfirmPassword(defaultPassword);
     setShowPassword(true);
     setPasswordMessage(null);
     setPasswordError(null);
@@ -261,7 +264,7 @@ const AdminUserDetail = () => {
         message={buildLoginDetailsMessage({
           studentName: user.name,
           displayId: user.displayId,
-          password: DEFAULT_ACCOUNT_PASSWORD,
+          password: defaultPassword ?? '(ask the school office)',
           className: user.grade,
         })}
         onClose={() => setSendingLogin(false)}
@@ -451,7 +454,7 @@ const AdminUserDetail = () => {
               {passwordError && <div className="admission-form-error">{passwordError}</div>}
               {passwordMessage && <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '12px 16px', borderRadius: '10px', fontSize: '14px' }}>{passwordMessage}</div>}
               <button type="button" onClick={useDefaultPassword} className="btn btn-outline sm" style={{ alignSelf: 'flex-start' }}>
-                <Wand2 size={14} /> Use Default Password ({DEFAULT_ACCOUNT_PASSWORD})
+                <Wand2 size={14} /> Use Default Password{defaultPassword ? ` (${defaultPassword})` : ''}
               </button>
               <Field label="New Password">
                 <div style={{ position: 'relative' }}>

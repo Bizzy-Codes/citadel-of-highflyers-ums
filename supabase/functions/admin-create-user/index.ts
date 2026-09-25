@@ -36,10 +36,13 @@ function json(body: unknown, status = 200) {
 // Change it here and it changes everywhere -- this is the only place a
 // new account's password is decided. NOTE: editing this file is not
 // enough on its own; the function has to be redeployed for it to take
-// effect (`supabase functions deploy admin-create-user`). Keep this in
-// sync with src/lib/accounts.ts, which carries its own copy for the
-// browser bundle.
-const DEFAULT_PASSWORD = 'citadel1234';
+// effect (`supabase functions deploy admin-create-user`). This is the
+// ONLY copy: admin screens fetch it via action 'default_password', and
+// Citadel AI must never be told it.
+//
+// Set the DEFAULT_ACCOUNT_PASSWORD secret (Supabase > Edge Functions >
+// Secrets) to change it without writing the new one into the code.
+const DEFAULT_PASSWORD = Deno.env.get('DEFAULT_ACCOUNT_PASSWORD') || 'citadel1234';
 
 function isEmailTaken(message: string) {
   return /already been registered|already registered|already exists|duplicate/i.test(message);
@@ -90,6 +93,13 @@ Deno.serve(async (req) => {
   const body = await req.json();
   const action = body.action ?? 'create';
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  // The default password, for admin screens (only admins get this far).
+  // It isn't in the website's own code any more, because that code is
+  // downloaded by every visitor.
+  if (action === 'default_password') {
+    return json({ password: DEFAULT_PASSWORD });
+  }
 
   if (action === 'set_password') {
     const { userId, newPassword } = body;
