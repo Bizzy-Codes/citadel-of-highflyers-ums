@@ -112,6 +112,10 @@ Deno.serve(async (req) => {
       return json({ error: error.message }, 400);
     }
 
+    // The admin (and whoever they read it to) now knows this password,
+    // so the person picks their own next time they log in (patch_37).
+    await adminClient.from('profiles').update({ must_change_password: true }).eq('id', userId);
+
     return json({ ok: true });
   }
 
@@ -172,9 +176,13 @@ Deno.serve(async (req) => {
 
   // Admin-created accounts are pre-vetted, so a teacher added this way
   // skips the 'teacher_pending' approval step that self-registered
-  // teachers go through.
-  if (role === 'teacher' && data.user) {
-    await adminClient.from('profiles').update({ role: 'teacher' }).eq('id', data.user.id);
+  // teachers go through. Every account made here starts on the shared
+  // default password, so its owner must choose their own at first log
+  // in (patch_37).
+  if (data.user) {
+    await adminClient.from('profiles')
+      .update(role === 'teacher' ? { role: 'teacher', must_change_password: true } : { must_change_password: true })
+      .eq('id', data.user.id);
   }
 
   return json({ id: data.user?.id, password: tempPassword });

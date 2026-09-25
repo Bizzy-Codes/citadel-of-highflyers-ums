@@ -153,6 +153,9 @@ export interface User {
   pickupPhone?: string;
   welcomeSeenAt?: string;
   admissionApplicationId?: string;
+  // Still on a password someone else knows (the school's default, or one
+  // an admin set): the portal sends them to choose their own (patch_37).
+  mustChangePassword?: boolean;
 }
 
 // The bio/guardian half of a pupil's profile -- the block the admission
@@ -608,6 +611,7 @@ const mapProfileRow = (row: any): User => ({
   pickupPhone: row.pickup_phone ?? undefined,
   welcomeSeenAt: row.welcome_seen_at ?? undefined,
   admissionApplicationId: row.admission_application_id ?? undefined,
+  mustChangePassword: !!row.must_change_password,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: (row.results ?? []).map((r: any) => ({
     id: r.id, subject: r.subject, score: r.score, grade: r.grade, term: r.term, session: r.session, createdAt: r.created_at,
@@ -1100,9 +1104,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error?.message ?? null };
   };
 
+  // Used by "Choose your own password" and the reset-password page. Once
+  // the new password is saved, the "must change password" flag is
+  // cleared (patch_37) and the profile reloaded, so the portal opens up.
   const updatePassword = async (newPassword: string) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+    const { error: flagError } = await supabase.rpc('password_changed');
+    if (flagError) console.error('updatePassword: clearing must_change_password failed', flagError);
+    const userId = session?.user.id;
+    if (userId) await refreshCurrentProfile(userId);
+    return { error: null };
   };
 
   // Creates the account directly and returns it usable right away -- no

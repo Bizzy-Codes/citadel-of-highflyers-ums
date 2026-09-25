@@ -8,6 +8,7 @@ import Gallery from './pages/marketing/Gallery'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
 import ResetPassword from './pages/portal/ResetPassword'
+import SetPassword from './pages/portal/SetPassword'
 import PendingApproval from './pages/portal/PendingApproval'
 import Dashboard from './pages/portal/Dashboard'
 import Profile from './pages/portal/Profile'
@@ -71,6 +72,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Deliberately not behind ProtectedRoute: it's where ProtectedRoute
+            sends people who must choose their own password first. */}
+        <Route path="/portal/set-password" element={<SetPassword />} />
 
         <Route path="/portal/pending" element={
           <ProtectedRoute allowedRoles={['teacher_pending']}><PendingApproval /></ProtectedRoute>

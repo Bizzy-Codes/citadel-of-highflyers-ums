@@ -56,7 +56,8 @@ const Login = () => {
   // login()) avoids acting on a stale closure value.
   useEffect(() => {
     if (!currentUser) return;
-    if (currentUser.role === 'admin') navigate('/portal/admin');
+    if (currentUser.mustChangePassword) navigate('/portal/set-password');
+    else if (currentUser.role === 'admin') navigate('/portal/admin');
     else if (currentUser.role === 'teacher') navigate('/portal/teacher');
     else if (currentUser.role === 'teacher_pending') navigate('/portal/pending');
     else navigate('/portal');
