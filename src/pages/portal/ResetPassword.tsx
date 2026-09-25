@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Loader2 } from 'lucide-react';
+import { Lock, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import './Login.css';
@@ -16,6 +16,8 @@ const ResetPassword = () => {
   const [ready, setReady] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // One eye shows both boxes, so people can check they match.
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -82,7 +84,11 @@ const ResetPassword = () => {
                 <label>New Password</label>
                 <div className="input-field">
                   <Lock size={18} className="input-icon" />
-                  <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
 
@@ -90,7 +96,7 @@ const ResetPassword = () => {
                 <label>Confirm New Password</label>
                 <div className="input-field">
                   <Lock size={18} className="input-icon" />
-                  <input type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                  <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
                 </div>
               </div>
 

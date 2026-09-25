@@ -36,10 +36,13 @@ function json(body: unknown, status = 200) {
 // Change it here and it changes everywhere -- this is the only place a
 // new account's password is decided. NOTE: editing this file is not
 // enough on its own; the function has to be redeployed for it to take
-// effect (`supabase functions deploy admin-create-user`). Keep this in
-// sync with src/lib/accounts.ts, which carries its own copy for the
-// browser bundle.
-const DEFAULT_PASSWORD = 'citadel1234';
+// effect (`supabase functions deploy admin-create-user`). This is the
+// ONLY copy: admin screens fetch it via action 'default_password', and
+// Citadel AI must never be told it.
+//
+// Set the DEFAULT_ACCOUNT_PASSWORD secret (Supabase > Edge Functions >
+// Secrets) to change it without writing the new one into the code.
+const DEFAULT_PASSWORD = Deno.env.get('DEFAULT_ACCOUNT_PASSWORD') || 'citadel1234';
 
 function isEmailTaken(message: string) {
   return /already been registered|already registered|already exists|duplicate/i.test(message);
@@ -91,6 +94,13 @@ Deno.serve(async (req) => {
   const action = body.action ?? 'create';
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // The default password, for admin screens (only admins get this far).
+  // It isn't in the website's own code any more, because that code is
+  // downloaded by every visitor.
+  if (action === 'default_password') {
+    return json({ password: DEFAULT_PASSWORD });
+  }
+
   if (action === 'set_password') {
     const { userId, newPassword } = body;
     if (!userId || typeof newPassword !== 'string' || newPassword.length < 6) {
@@ -101,6 +111,10 @@ Deno.serve(async (req) => {
     if (error) {
       return json({ error: error.message }, 400);
     }
+
+    // The admin (and whoever they read it to) now knows this password,
+    // so the person picks their own next time they log in (patch_37).
+    await adminClient.from('profiles').update({ must_change_password: true }).eq('id', userId);
 
     return json({ ok: true });
   }
@@ -162,9 +176,13 @@ Deno.serve(async (req) => {
 
   // Admin-created accounts are pre-vetted, so a teacher added this way
   // skips the 'teacher_pending' approval step that self-registered
-  // teachers go through.
-  if (role === 'teacher' && data.user) {
-    await adminClient.from('profiles').update({ role: 'teacher' }).eq('id', data.user.id);
+  // teachers go through. Every account made here starts on the shared
+  // default password, so its owner must choose their own at first log
+  // in (patch_37).
+  if (data.user) {
+    await adminClient.from('profiles')
+      .update(role === 'teacher' ? { role: 'teacher', must_change_password: true } : { must_change_password: true })
+      .eq('id', data.user.id);
   }
 
   return json({ id: data.user?.id, password: tempPassword });

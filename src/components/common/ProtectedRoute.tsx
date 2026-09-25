@@ -21,6 +21,11 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Still on a password someone else knows: choose their own first.
+  if (currentUser.mustChangePassword) {
+    return <Navigate to="/portal/set-password" replace />;
+  }
+
   if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
     const fallback = currentUser.role === 'admin' ? '/portal/admin'
       : currentUser.role === 'teacher' ? '/portal/teacher'
