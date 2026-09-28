@@ -73,7 +73,6 @@ const PAGE_WORDS: Record<string, string[]> = {
   home: ['home', 'homepage', 'main page', 'website'],
   admissions: ['admission', 'admissions', 'apply', 'application', 'enrol', 'enroll'],
   fees: ['fees', 'fee', 'school fees', 'price', 'prices', 'payment', 'financial'],
-  prospectus: ['prospectus', 'brochure', 'vision', 'mission', 'about the school', 'about school', 'curriculum'],
   founders: ['founder', 'founders', 'management', 'proprietor', 'owner', 'owners'],
   gallery: ['gallery', 'photos', 'pictures', 'pics'],
   login: ['login', 'log in', 'sign in', 'signin', 'portal'],
@@ -161,12 +160,9 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
     return { text: 'Your staff account is waiting for the school admin to approve it. Once they do, you can use the portal. ' + CONTACT };
   }
 
-  // Who we are: vision, mission, prospectus.
+  // Who we are: vision and mission (on the home page).
   if (has(q, 'vision', 'mission', 'motto', 'values', 'what do you stand for', 'what una stand for')) {
-    return { text: `${VISION} ${MISSION} I've opened our prospectus for you.`, openPage: 'prospectus' };
-  }
-  if (has(q, 'prospectus', 'brochure', 'about the school', 'about your school', 'tell me about citadel', 'tell me about the school')) {
-    return { text: "Here is our prospectus. It has our vision and mission, what we teach, our classes and how to apply.", openPage: 'prospectus' };
+    return { text: `${VISION} ${MISSION}` };
   }
 
   // Money: only for people signed in to the portal.

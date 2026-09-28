@@ -27,7 +27,6 @@ SCHOOL
 - Curriculum: British-Nigerian integrated curriculum, STEM and digital literacy for every grade, small class sizes, digital tools and video resources in lessons.
 - Classes, in order: Daycare, Reception, Kindergarten 1, Kindergarten 2, Pre-Grade, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5.
   The "Kindergarten" arm is Reception to Kindergarten 2; the "Graders" arm is Pre-Grade to Grade 5.
-- The Prospectus page on the website has the vision, mission, curriculum, classes and how to apply.
 
 PEOPLE
 - Founder & Visionary: Pastor Chrispraise Iwunna (United Nations Peace Ambassador).

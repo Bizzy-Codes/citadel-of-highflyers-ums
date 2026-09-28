@@ -422,7 +422,7 @@ const PAGE_KEYS = ['home', 'admissions', 'fees', 'founders', 'gallery', 'login',
   'dashboard', 'assignments', 'tests', 'results', 'attendance', 'portal_fees', 'teacher_dashboard', 'attendance_register',
   'my_pupils', 'teacher_assignments', 'teacher_tests', 'report_cards', 'admin_dashboard', 'user_management',
   'admin_admissions', 'admin_payments', 'admin_calendar', 'admin_attendance', 'graduates', 'school_calendar', 'timetable',
-  'messages', 'profile', 'support', 'pending', 'ai_admin', 'prospectus'];
+  'messages', 'profile', 'support', 'pending', 'ai_admin'];
 const GUIDE_KEYS = ['pupil_sign_up', 'staff_sign_up', 'log_in', 'forgot_password', 'apply_admission', 'submit_assignment', 'post_assignment'];
 const ROLES = ['guest', 'student', 'teacher', 'teacher_pending', 'admin'];
 
