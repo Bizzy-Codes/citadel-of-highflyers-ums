@@ -103,6 +103,7 @@ const Home = () => {
             <Link to="/" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Home</Link>
             <Link to="/founders" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Founders</Link>
             <Link to="/admissions" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Admissions</Link>
+            <Link to="/prospectus" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Prospectus</Link>
             <Link to="/gallery" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Gallery</Link>
             <a href="#contact-section" className="glowing-text" onClick={() => setIsMenuOpen(false)}>Contact Us</a>
             <button onClick={toggleTheme} className="nav-links-theme-toggle">
@@ -400,6 +401,7 @@ const Home = () => {
                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <Link to="/founders">Founders</Link>
                   <Link to="/admissions">Admissions</Link>
+                  <Link to="/prospectus">Prospectus</Link>
                   <Link to="/gallery">Gallery</Link>
                   <Link to="/login">Portal Dashboard</Link>
                </div>

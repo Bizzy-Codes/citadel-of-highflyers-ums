@@ -8,7 +8,7 @@ import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
 import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceStatus } from './voice';
 import { prefetchVoices, speak, stopSpeaking, unlockAudio } from './speak';
-import { NO_PASSWORDS, SECRET_LOOKING, instantAnswer } from './instant';
+import { MONEY_LOOKING, MONEY_PRIVATE, NO_PASSWORDS, SECRET_LOOKING, instantAnswer } from './instant';
 import { loadFaqs, matchFaq, type FaqRow } from './faq';
 
 // Every question goes into the log admins see (words only, no name or
@@ -85,6 +85,8 @@ const CitadelAI = () => {
   const pending = useRef<Part[]>([]);
   const voiceOnRef = useRef(voiceOn);
   voiceOnRef.current = voiceOn;
+  const roleRef = useRef(role);
+  roleRef.current = role;
 
   useEffect(() => {
     try { sessionStorage.setItem(STORE, JSON.stringify({ bubbles: bubbles.slice(-40), contents: contents.slice(-30) })); }
@@ -98,8 +100,11 @@ const CitadelAI = () => {
   // share: the words are the same for everyone, so the voice clip can be
   // kept and reused (see speak.ts). Never for answers with personal details.
   const say = useCallback((raw: string, error = false, share = false) => {
-    // Never show or speak anything that looks like a password.
-    const text = SECRET_LOOKING.test(raw) ? NO_PASSWORDS : raw;
+    // Never show or speak anything that looks like a password -- nor, to
+    // a visitor who isn't signed in, any fees or payment details.
+    const text = SECRET_LOOKING.test(raw) ? NO_PASSWORDS
+      : roleRef.current === 'guest' && MONEY_LOOKING.test(raw) ? MONEY_PRIVATE
+      : raw;
     setChat((c) => ({ ...c, bubbles: [...c.bubbles, { from: 'bot', text, error }] }));
     if (voiceOnRef.current && !error) speak(text, { share });
   }, []);

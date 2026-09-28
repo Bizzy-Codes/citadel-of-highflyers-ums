@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabaseClient';
 import type { AiRole } from './catalog';
-import type { InstantAnswer } from './instant';
+import { MONEY_LOOKING, type InstantAnswer } from './instant';
 
 // Ready-made answers from the ai_faq table (patch_33): built-in ones,
 // plus ones the citadel-ai function learns every two weeks from what
@@ -96,5 +96,7 @@ export function matchFaq(question: string, role: AiRole, faqs: FaqRow[]): Instan
     text: best.row.answer,
     openPage: best.row.open_page ?? undefined,
     startGuide: best.row.start_guide ?? undefined,
+    // Money answers are portal-only: never kept in the public voice store.
+    personal: MONEY_LOOKING.test(best.row.answer),
   };
 }

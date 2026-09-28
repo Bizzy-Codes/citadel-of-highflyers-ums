@@ -24,7 +24,9 @@ export const PAGES: AiPage[] = [
   // Public website
   { key: 'home', label: 'Website home page', path: '/', roles: EVERYONE },
   { key: 'admissions', label: 'Apply for admission (new pupils)', path: '/admissions', roles: EVERYONE },
-  { key: 'fees', label: 'School fees sheet (Financial Involvement)', path: '/fees', roles: EVERYONE },
+  // Portal users only: fees are private (the school's decision).
+  { key: 'fees', label: 'School fees sheet (Financial Involvement)', path: '/fees', roles: SIGNED_IN },
+  { key: 'prospectus', label: 'School prospectus (vision, mission, curriculum, classes, how to apply)', path: '/prospectus', roles: EVERYONE },
   { key: 'founders', label: 'Founders and management team', path: '/founders', roles: EVERYONE },
   { key: 'gallery', label: 'Photo gallery', path: '/gallery', roles: EVERYONE },
   { key: 'login', label: 'Portal log in page', path: '/login', roles: GUEST },
@@ -90,6 +92,7 @@ const SPOKEN_OPENING: Record<string, string> = {
   home: 'Opening the home page.',
   admissions: 'Opening the admissions page.',
   fees: 'Opening the school fees page.',
+  prospectus: 'Opening the school prospectus.',
   founders: 'Opening the founders page.',
   gallery: 'Opening the photo gallery.',
   login: 'Opening the log in page.',
@@ -107,7 +110,7 @@ const SPOKEN_OPENING: Record<string, string> = {
 
 // Starter questions shown when the chat opens, per role.
 export const SUGGESTIONS: Record<AiRole, string[]> = {
-  guest: ['How do I register my child?', 'How much are the school fees?', 'Help me log in'],
+  guest: ['How do I register my child?', 'Show me the prospectus', 'Help me log in'],
   student: ['Do I have any assignment?', 'Show me the school calendar', 'Open my results'],
   teacher: ['Open the register', 'Post an assignment', 'Show me the school calendar'],
   teacher_pending: ['Why can’t I use the portal yet?', 'How do I contact the school?'],

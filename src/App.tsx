@@ -5,6 +5,7 @@ import Founders from './pages/marketing/Founders'
 import Admissions from './pages/marketing/Admissions'
 import FinancialInvolvement from './pages/marketing/FinancialInvolvement'
 import Gallery from './pages/marketing/Gallery'
+import Prospectus from './pages/marketing/Prospectus'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
 import ResetPassword from './pages/portal/ResetPassword'
@@ -69,6 +70,7 @@ function App() {
         <Route path="/fees" element={<FinancialInvolvement />} />
         <Route path="/fees/:section" element={<FinancialInvolvement />} />
         <Route path="/gallery" element={<Gallery />} />
+        <Route path="/prospectus" element={<Prospectus />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

@@ -43,8 +43,21 @@ function feesAnswer(): InstantAnswer {
     text: `School fees per term: Reception and Kindergarten pay ₦${naira(k.tuition)} tuition plus ₦${naira(k.registration)} registration (₦${naira(feeTotals(k).total)} with uniforms). `
       + `Pre-Grade and Graders pay ₦${naira(g.tuition)} tuition plus ₦${naira(g.registration)} registration (₦${naira(feeTotals(g).total)} with uniforms). I've opened the full fees sheet for you.`,
     openPage: 'fees',
+    personal: true, // portal-only information: never stored as a public voice clip
   };
 }
+
+const VISION = 'Our vision: we are poised to raise Godly future generals.';
+const MISSION = 'Our mission: to create an enabling environment where children, through divine wisdom, are raised spiritually, socially, emotionally, morally and academically to become future generals.';
+
+// Money is private (the school's decision): fees, prices, uniform costs,
+// the application fee and bank details are only for people signed in
+// to the portal. Visitors get this instead. The server says the same.
+export const MONEY_PRIVATE = 'For privacy, school fees and payment details are only shared inside the portal. Please log in to see them, or contact the school on WhatsApp 0706 497 0003.';
+export const MONEY_LOOKING = /₦|\bN\s?\d|\bnaira\b|\bkobo\b|\b\d{1,3}(,\d{3})+\b|\b\d{2,3}k\b|\bthousand\b|account (number|no)|\bbank\b|first bank|\b\d{10}\b/i;
+const ASKS_ABOUT_MONEY = ['fee', 'fees', 'school fees', 'tuition', 'how much', 'price', 'prices', 'cost', 'costs', 'pay', 'paying',
+  'payment', 'payments', 'money', 'amount', 'charge', 'charges', 'bank', 'account number', 'account no', 'naira', 'uniform price',
+  'levy', 'levies', 'bill', 'bills', 'afford', 'expensive', 'cheap', 'discount', 'scholarship'];
 
 const CONTACT = 'You can call or WhatsApp the school on 0706 497 0003, or email citadelofhighflyersintlacademy@gmail.com.';
 export const NO_PASSWORDS = "For everyone's safety I can't share passwords. If you've forgotten yours, press Forgot Password on the log in page, or ask the school office.";
@@ -60,6 +73,7 @@ const PAGE_WORDS: Record<string, string[]> = {
   home: ['home', 'homepage', 'main page', 'website'],
   admissions: ['admission', 'admissions', 'apply', 'application', 'enrol', 'enroll'],
   fees: ['fees', 'fee', 'school fees', 'price', 'prices', 'payment', 'financial'],
+  prospectus: ['prospectus', 'brochure', 'vision', 'mission', 'about the school', 'about school', 'curriculum'],
   founders: ['founder', 'founders', 'management', 'proprietor', 'owner', 'owners'],
   gallery: ['gallery', 'photos', 'pictures', 'pics'],
   login: ['login', 'log in', 'sign in', 'signin', 'portal'],
@@ -147,9 +161,20 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
     return { text: 'Your staff account is waiting for the school admin to approve it. Once they do, you can use the portal. ' + CONTACT };
   }
 
+  // Who we are: vision, mission, prospectus.
+  if (has(q, 'vision', 'mission', 'motto', 'values', 'what do you stand for', 'what una stand for')) {
+    return { text: `${VISION} ${MISSION} I've opened our prospectus for you.`, openPage: 'prospectus' };
+  }
+  if (has(q, 'prospectus', 'brochure', 'about the school', 'about your school', 'tell me about citadel', 'tell me about the school')) {
+    return { text: "Here is our prospectus. It has our vision and mission, what we teach, our classes and how to apply.", openPage: 'prospectus' };
+  }
+
+  // Money: only for people signed in to the portal.
+  if (role === 'guest' && has(q, ...ASKS_ABOUT_MONEY)) return { text: MONEY_PRIVATE };
+
   // School facts.
-  if (has(q, 'fee', 'fees', 'school fees', 'how much', 'price', 'cost') && !has(q, 'receipt', 'upload', 'paid')) {
-    if (role === 'guest' || pages.has('fees')) return feesAnswer();
+  if (has(q, 'fee', 'fees', 'school fees', 'how much', 'price', 'cost', 'tuition') && !has(q, 'receipt', 'upload', 'paid')) {
+    if (pages.has('fees')) return feesAnswer();
   }
   if (has(q, 'where', 'address', 'location', 'located') && has(q, 'school', 'una', 'you', 'citadel', 'located', 'address', 'location') && !matchPage(q, role)) {
     return { text: `${ADDRESS} ${CONTACT}` };

@@ -149,23 +149,23 @@ const Founders = () => {
                </div>
             </section>
 
-            {/* Administrative Officer: Ozoegwu Onyinye Claire */}
+            {/* Administrative Officer: Ozoegwu Onyinye Clare */}
             <section className="founder-section animate-fade-in">
                <div className="founder-content">
                   <div className="founder-image-wrapper">
                      <div className="founder-card-bg"></div>
-                     <PhotoSlot src="/gallery/founder-admin.jpg" alt="Ozoegwu Onyinye Claire" label="Photo: Ozoegwu Onyinye Claire" className="founder-img" />
+                     <PhotoSlot src="/gallery/founder-admin.jpg" alt="Ozoegwu Onyinye Clare" label="Photo: Ozoegwu Onyinye Clare" className="founder-img" />
                      <div className="founder-badge founder-1"><Sparkles size={16} /> Admin</div>
                   </div>
                   <div className="founder-text">
-                     <h2><span>Ozoegwu Onyinye Claire</span></h2>
+                     <h2><span>Ozoegwu Onyinye Clare</span></h2>
                      <p className="founder-role">Administrative Officer</p>
                      <div className="quote-box glass-purple">
                         <Quote className="quote-icon" />
                         <p>A well-run school is felt long before it's seen -- in every form filed correctly, every question answered promptly, and every family made to feel welcome.</p>
                      </div>
                      <p className="description text-muted">
-                        As Administrative Officer, Ozoegwu Onyinye Claire manages the day-to-day administrative operations of Citadel of Highflyers -- from pupil records and correspondence to coordinating between parents, staff, and management. Her attention to detail and commitment to smooth, efficient operations keep the administrative backbone of the school running seamlessly, so teachers and pupils can focus on what matters most: learning and growth.
+                        As Administrative Officer, Ozoegwu Onyinye Clare manages the day-to-day administrative operations of Citadel of Highflyers -- from pupil records and correspondence to coordinating between parents, staff, and management. Her attention to detail and commitment to smooth, efficient operations keep the administrative backbone of the school running seamlessly, so teachers and pupils can focus on what matters most: learning and growth.
                      </p>
                   </div>
                </div>
