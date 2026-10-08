@@ -573,6 +573,95 @@ async function cacheKeyFor(contents: unknown[], ctx: ClientContext): Promise<{ k
   return { key: await sha256(`${FACTS_VERSION}|${offered}|${question}`), question };
 }
 
+// ---- live voice (Gemini Live API) ----------------------------------------
+// The browser talks to Gemini directly over a WebSocket, so it needs a
+// credential -- but never the real key. This mints a single-use token
+// that lives for minutes and is LOCKED to the model, instructions and
+// tools chosen here, so the browser cannot loosen any of them. A visitor
+// who is not signed in gets instructions with no fee amounts in them at
+// all: there is nothing for the voice to leak.
+//
+// Models are tried in order (the browser asks for the next one if the
+// first will not connect). GEMINI_LIVE_MODEL puts your own choice first.
+const LIVE_MODELS = [Deno.env.get('GEMINI_LIVE_MODEL'), 'gemini-3.1-flash-live-preview', 'gemini-2.5-flash-native-audio-preview-12-2025']
+  .filter((m): m is string => !!m);
+const LIVE_VOICE = Deno.env.get('GEMINI_LIVE_VOICE') ?? 'Sulafat';
+
+const LIVE_RULES = `
+
+YOU ARE SPEAKING OUT LOUD in a live voice conversation:
+- Speak in short, warm, simple sentences (one to three). No lists, no spelling out symbols. Say numbers the way a person would.
+- Answer in the language the person speaks (English or Nigerian Pidgin).
+- If they go quiet or say goodbye, say a short goodbye.
+- You can open pages and start guides with your tools while you talk: say what you are doing in a few words as you do it.
+- The rules about privacy, passwords and money above apply to everything you say.`;
+
+const liveHits = new Map<string, number[]>();
+function liveRateLimited(key: string) {
+  const now = Date.now();
+  const recent = (liveHits.get(key) ?? []).filter((t) => now - t < 60_000);
+  recent.push(now);
+  liveHits.set(key, recent);
+  return recent.length > 6; // sessions per minute per person / network
+}
+
+async function mintLiveToken(req: Request, body: { live?: { attempt?: number }; context?: ClientContext }) {
+  const caller = await whoIsCalling(req).catch(() => null);
+  const ctx: ClientContext = { ...(body.context ?? {}) };
+  ctx.signedIn = !!caller;
+  ctx.role = caller?.role ?? 'guest';
+  ctx.name = caller?.name;
+  ctx.className = caller?.className;
+  if (!caller) ctx.dataTools = [];
+
+  const who = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (liveRateLimited(caller ? ctx.name ?? who : who)) return json({ error: 'busy' }, 429);
+
+  const attempt = Math.max(0, Math.min(Number(body.live?.attempt ?? 0) || 0, LIVE_MODELS.length - 1));
+  const model = `models/${LIVE_MODELS[attempt]}`;
+  const setup = {
+    model,
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: LIVE_VOICE } } },
+    },
+    systemInstruction: { parts: [{ text: systemPrompt(ctx) + LIVE_RULES }] },
+    tools: toolDeclarations(ctx),
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
+  };
+
+  try {
+    const { GoogleGenAI } = await import('npm:@google/genai');
+    const client = new GoogleGenAI({ apiKey: GEMINI_API_KEY, httpOptions: { apiVersion: 'v1alpha' } });
+    const now = Date.now();
+    const token = await client.authTokens.create({
+      config: {
+        uses: 1,
+        expireTime: new Date(now + 12 * 60_000).toISOString(),
+        newSessionExpireTime: new Date(now + 2 * 60_000).toISOString(),
+        // The SDK's own (flat) shape of the same settings, locked into the token.
+        liveConnectConstraints: {
+          model: LIVE_MODELS[attempt],
+          config: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: LIVE_VOICE } } },
+            systemInstruction: setup.systemInstruction.parts[0].text,
+            tools: setup.tools,
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+          },
+        },
+        httpOptions: { apiVersion: 'v1alpha' },
+      },
+    });
+    return json({ token: token.name, model, setup });
+  } catch (err) {
+    console.error('live token failed', (err as Error).message);
+    return json({ error: 'Live voice is not available right now.' }, 502);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -580,10 +669,12 @@ Deno.serve(async (req) => {
 
   let body: {
     contents?: unknown[]; context?: ClientContext; transcribe?: { mimeType?: string; data?: string };
+    live?: { attempt?: number };
     tts?: string; share?: boolean; refresh_faq?: boolean; prerender_voice?: boolean; forget_voice?: string[]; token?: string;
   };
   try { body = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
 
+  if (body.live) return mintLiveToken(req, body);
   if (body.transcribe) return transcribe(body.transcribe);
   if (body.tts !== undefined) return tts(body.tts, body.share);
   if (body.refresh_faq || body.prerender_voice || body.forget_voice) {

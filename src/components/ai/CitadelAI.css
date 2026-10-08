@@ -184,3 +184,16 @@
 }
 .cai-return:hover { filter: brightness(1.08); }
 @media print { .cai-return { display: none; } }
+
+/* Live talk */
+.cai-livebtn { background: var(--primary); color: #fff; }
+.cai-orb {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: radial-gradient(circle at 35% 35%, #c4b5fd, var(--primary));
+  box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5);
+  animation: cai-orb-idle 2s ease-in-out infinite;
+}
+.cai-orb.speaking { animation: cai-orb-speak 0.7s ease-in-out infinite; }
+.cai-orb.thinking, .cai-orb.connecting { animation: cai-orb-idle 0.9s ease-in-out infinite; opacity: 0.7; }
+@keyframes cai-orb-idle { 0%,100% { transform: scale(0.92); } 50% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(124, 58, 237, 0.12); } }
+@keyframes cai-orb-speak { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); box-shadow: 0 0 0 12px rgba(124, 58, 237, 0.18); } }

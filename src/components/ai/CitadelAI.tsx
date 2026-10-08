@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square, ArrowLeft } from 'lucide-react';
+import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square, ArrowLeft, AudioLines } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, openingLine, pagesFor, type AiRole } from './catalog';
@@ -10,6 +10,7 @@ import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceSta
 import { prefetchVoices, speak, stopSpeaking, unlockAudio } from './speak';
 import { MONEY_LOOKING, MONEY_PRIVATE, NO_PASSWORDS, SECRET_LOOKING, bankAnswer, instantAnswer } from './instant';
 import { loadFaqs, matchFaq, type FaqRow } from './faq';
+import { canUseLive, startLive, type LiveSession, type LiveStatus } from './live';
 
 // Every question goes into the log admins see (words only, no name or
 // account) -- it's what the two-weekly FAQ learning reads. Best effort:
@@ -76,6 +77,9 @@ const CitadelAI = () => {
   const [voiceOn, setVoiceOn] = useState(false);
   const [guide, setGuide] = useState<{ g: Guide; step: number; waiting: boolean } | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
+  // Live talk (real-time voice with Gemini Live) -- see live.ts.
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  const liveSession = useRef<LiveSession | null>(null);
   // When Citadel AI opens a page for someone, remember where they were so
   // a "Back" button can take them straight back -- instead of the page's
   // own Home link dropping them on the website's front page.
@@ -330,6 +334,49 @@ const CitadelAI = () => {
     }
   }, [busy, contents, context, runTool, say, role, niceFirstName, faqs, auth.assignments, auth.mySubmissions, auth.academicCalendar]);
 
+  // ---- live talk ----------------------------------------------------
+
+  const toggleLive = useCallback(async () => {
+    if (liveSession.current) { liveSession.current.stop(); return; }
+    stopSpeaking();
+    unlockAudio();
+    voiceSession.current?.cancel();
+    if (!window.isSecureContext) {
+      say('Live talk only works on the secure (https) website.', true);
+      return;
+    }
+    setLiveStatus('connecting');
+    const session = await startLive({
+      context,
+      onStatus: setLiveStatus,
+      onTool: async (name, args) => runTool(name, args).result,
+      isForbidden: (spoken) => SECRET_LOOKING.test(spoken) || (roleRef.current === 'guest' && MONEY_LOOKING.test(spoken)),
+      onTurn: (userText, botText) => {
+        if (userText) logQuestion(userText, roleRef.current, 'gemini');
+        setChat((c) => ({
+          contents: [...c.contents,
+            ...(userText ? [{ role: 'user' as const, parts: [{ text: userText }] }] : []),
+            ...(botText ? [{ role: 'model' as const, parts: [{ text: botText }] }] : [])],
+          bubbles: [...c.bubbles,
+            ...(userText ? [{ from: 'user' as const, text: userText }] : []),
+            ...(botText ? [{ from: 'bot' as const, text: botText }] : [])],
+        }));
+      },
+      onEnd: (reason, detail) => {
+        liveSession.current = null;
+        setLiveStatus(null);
+        if (reason === 'blocked') say(roleRef.current === 'guest' ? MONEY_PRIVATE : NO_PASSWORDS, true);
+        else if (reason === 'idle') say('I stopped listening because it was quiet. Tap Talk live to start again.');
+        else if (reason === 'error') {
+          say(detail === 'mic'
+            ? 'Please allow the microphone for this site in your browser settings, then tap Talk live again.'
+            : 'Live talk is not available right now. You can still type, or use the mic button.', true);
+        }
+      },
+    });
+    liveSession.current = session;
+  }, [context, runTool, say]);
+
   // ---- voice -------------------------------------------------------
 
   const transcribe = useCallback(async (audio: Blob) => {
@@ -381,7 +428,7 @@ const CitadelAI = () => {
   };
 
   // Close the mic if the panel closes or the page unmounts mid-recording.
-  useEffect(() => () => voiceSession.current?.cancel(), []);
+  useEffect(() => () => { voiceSession.current?.cancel(); liveSession.current?.stop(); }, []);
 
   const reset = () => {
     stopSpeaking();
@@ -456,7 +503,7 @@ const CitadelAI = () => {
             <div className="cai-avatar"><Sparkles size={18} aria-hidden="true" /></div>
             <div className="cai-title">
               <strong>Citadel AI</strong>
-              <span>{listening ? 'Listening…' : busy ? 'Thinking…' : 'Type or tap the mic'}</span>
+              <span>{liveStatus ? 'Live talk' : listening ? 'Listening…' : busy ? 'Thinking…' : 'Type or tap the mic'}</span>
             </div>
             <button type="button" className="cai-icon" onClick={() => { setVoiceOn((v) => !v); stopSpeaking(); }}
               aria-label={voiceOn ? 'Stop reading answers aloud' : 'Read answers aloud'} title={voiceOn ? 'Voice on' : 'Voice off'}>
@@ -488,7 +535,16 @@ const CitadelAI = () => {
             </div>
           )}
 
-          {voice ? (
+          {liveStatus ? (
+            <div className="cai-input cai-voicebar cai-live" aria-live="polite">
+              <span className={`cai-orb ${liveStatus}`} aria-hidden="true" />
+              <span className="cai-voice-text">
+                {liveStatus === 'connecting' ? 'Connecting…' : liveStatus === 'speaking' ? 'Speaking…' : liveStatus === 'thinking' ? 'Thinking…' : 'Listening… just talk'}
+                <small>Talk normally — you can interrupt me</small>
+              </span>
+              <button type="button" className="cai-mic on" onClick={toggleLive} aria-label="End live talk"><Square size={16} fill="currentColor" /></button>
+            </div>
+          ) : voice ? (
             // While the mic is on, the whole bar says so -- and the big
             // button stops it, always, straight away.
             <div className="cai-input cai-voicebar" aria-live="polite">
@@ -521,6 +577,11 @@ const CitadelAI = () => {
             </div>
           ) : (
             <form className="cai-input" onSubmit={(e) => { e.preventDefault(); ask(input); }}>
+              {canUseLive() && (
+                <button type="button" className="cai-mic cai-livebtn" onClick={toggleLive} aria-label="Talk live with Citadel AI" title="Talk live" disabled={busy}>
+                  <AudioLines size={19} />
+                </button>
+              )}
               {(canUseVoice() || !window.isSecureContext) && (
                 <button type="button" className="cai-mic" onClick={toggleMic} aria-label="Speak to Citadel AI" disabled={busy}>
                   <Mic size={19} />
