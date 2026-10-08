@@ -26,6 +26,8 @@ export const PAGES: AiPage[] = [
   { key: 'admissions', label: 'Apply for admission (new pupils)', path: '/admissions', roles: EVERYONE },
   // Portal users only: fees are private (the school's decision).
   { key: 'fees', label: 'School fees sheet (Financial Involvement)', path: '/fees', roles: SIGNED_IN },
+  // The school's bank details, on a page with NO fee amounts -- anyone may see it.
+  { key: 'bank_details', label: 'School bank details (account number, where to pay)', path: '/bank-details', roles: EVERYONE },
   { key: 'founders', label: 'Founders and management team', path: '/founders', roles: EVERYONE },
   { key: 'gallery', label: 'Photo gallery', path: '/gallery', roles: EVERYONE },
   { key: 'login', label: 'Portal log in page', path: '/login', roles: GUEST },
@@ -91,6 +93,7 @@ const SPOKEN_OPENING: Record<string, string> = {
   home: 'Opening the home page.',
   admissions: 'Opening the admissions page.',
   fees: 'Opening the school fees page.',
+  bank_details: 'Opening the school bank details.',
   founders: 'Opening the founders page.',
   gallery: 'Opening the photo gallery.',
   login: 'Opening the log in page.',

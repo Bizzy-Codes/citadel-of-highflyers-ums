@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
 import CalendarTableView from '../../components/portal/CalendarTableView';
 import { extractCalendarTables, canExtract, type CalendarTable } from '../../lib/calendarExtract';
-import { Save, Upload, FileText, Loader2, Table2, X, Plus, AlertTriangle, Pencil } from 'lucide-react';
+import { Save, Upload, FileText, Loader2, Table2, X, Plus, AlertTriangle, Pencil, Image as ImageIcon } from 'lucide-react';
+import { calendarFileToPictures, canMakePictures } from '../../lib/calendarImages';
 import DateWheelInput from '../../components/common/DateWheelInput';
 
 const inputStyle: React.CSSProperties = {
@@ -14,7 +15,7 @@ const inputStyle: React.CSSProperties = {
 const AdminCalendar = () => {
   const {
     academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument,
-    publishAcademicCalendarTables, getAcademicCalendarDocumentUrl,
+    publishAcademicCalendarTables, publishAcademicCalendarImages, getAcademicCalendarDocumentUrl,
   } = useAuth();
   const [term, setTerm] = useState('');
   // Raw text, not a number -- see the note on the CA score fields in
@@ -39,6 +40,12 @@ const AdminCalendar = () => {
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState('');
   const [publishing, setPublishing] = useState(false);
+
+  // Pictures of the calendar pages, checked here before they go live.
+  const [pictureDraft, setPictureDraft] = useState<{ blob: Blob; url: string }[] | null>(null);
+  const [makingPictures, setMakingPictures] = useState(false);
+  const [publishingPictures, setPublishingPictures] = useState(false);
+  useEffect(() => () => { pictureDraft?.forEach((p) => URL.revokeObjectURL(p.url)); }, [pictureDraft]);
 
   // Fills the editable fields once the calendar arrives from the
   // async initial load, and again after this page's own save updates
@@ -107,6 +114,38 @@ const AdminCalendar = () => {
     }
   };
 
+  const handleMakePictures = async () => {
+    if (!documentUrl || !documentName) return;
+    setMakingPictures(true);
+    setConvertError('');
+    try {
+      const response = await fetch(documentUrl);
+      if (!response.ok) throw new Error(`could not download the file (${response.status})`);
+      const file = new File([await response.blob()], documentName);
+      const blobs = await calendarFileToPictures(file);
+      setPictureDraft(blobs.map((blob) => ({ blob, url: URL.createObjectURL(blob) })));
+    } catch (err) {
+      setConvertError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMakingPictures(false);
+    }
+  };
+
+  const handlePublishPictures = async () => {
+    if (!pictureDraft) return;
+    setPublishingPictures(true);
+    const { error } = await publishAcademicCalendarImages(pictureDraft.map((p) => p.blob));
+    setPublishingPictures(false);
+    if (error) { setConvertError(error); return; }
+    setPictureDraft(null);
+  };
+
+  const handleTakeDownPictures = async () => {
+    if (!window.confirm('Take the calendar pictures down? Pupils and teachers will see the table instead (if one is published).')) return;
+    const { error } = await publishAcademicCalendarImages([]);
+    if (error) setConvertError(error);
+  };
+
   const editTable = (tableIdx: number, change: (table: CalendarTable) => CalendarTable) =>
     setDraft((tables) => tables?.map((t, i) => (i === tableIdx ? change(t) : t)) ?? null);
 
@@ -125,7 +164,7 @@ const AdminCalendar = () => {
 
   return (
     <PortalLayout title="Academic Calendar">
-      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: draft ? '1100px' : '700px' }}>
+      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: draft ? '1100px' : '800px' }}>
         <div className="card glass" style={{ padding: '30px', borderRadius: '24px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>Term Settings</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>
@@ -210,8 +249,14 @@ const AdminCalendar = () => {
               <FileText size={18} color="var(--primary)" />
               <span style={{ flex: 1, fontSize: '14px', minWidth: '140px' }}>{documentName}</span>
               {documentUrl && <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline sm">View</a>}
+              {canMakePictures(documentName) && (
+                <button className="btn btn-primary sm" onClick={handleMakePictures} disabled={makingPictures}>
+                  {makingPictures ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                  {makingPictures ? 'Making pictures...' : 'Show as picture'}
+                </button>
+              )}
               {canExtract(documentName) && (
-                <button className="btn btn-primary sm" onClick={handleConvert} disabled={converting}>
+                <button className="btn btn-outline sm" onClick={handleConvert} disabled={converting}>
                   {converting ? <Loader2 size={16} className="animate-spin" /> : <Table2 size={16} />}
                   {converting ? 'Reading...' : 'Convert to table'}
                 </button>
@@ -246,6 +291,44 @@ const AdminCalendar = () => {
             />
           </label>
         </div>
+
+        {pictureDraft && (
+          <div className="card glass" style={{ padding: '30px', borderRadius: '24px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>Check the pictures before publishing</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
+              This is how the calendar will look on the School Calendar page &mdash; exactly like the file you uploaded, shown right on the page.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {pictureDraft.map((p, i) => (
+                <img key={i} src={p.url} alt={`Calendar page ${i + 1}`} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary lg" onClick={handlePublishPictures} disabled={publishingPictures}>
+                {publishingPictures ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {publishingPictures ? 'Publishing...' : 'Publish to pupils & teachers'}
+              </button>
+              <button className="btn btn-outline lg" onClick={() => setPictureDraft(null)} disabled={publishingPictures}>Discard</button>
+            </div>
+          </div>
+        )}
+
+        {!pictureDraft && (academicCalendar?.documentImages.length ?? 0) > 0 && (
+          <div className="card glass" style={{ padding: '30px', borderRadius: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>Published as pictures</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Pupils and teachers see these pages on the School Calendar page.</p>
+              </div>
+              <button className="btn btn-outline sm" onClick={handleTakeDownPictures}><X size={14} /> Take down</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {academicCalendar!.documentImages.map((url, i) => (
+                <img key={url} src={url} alt={`Calendar page ${i + 1}`} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {draft && (
           <div className="card glass" style={{ padding: '30px', borderRadius: '24px' }}>

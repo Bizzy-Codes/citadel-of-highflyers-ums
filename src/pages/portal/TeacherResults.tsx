@@ -116,6 +116,15 @@ const TeacherResults = () => {
   }, [selectedId, term, session, sheetSubjects.length, reloadKey]);
 
   const setCell = (subject: string, key: keyof ScoreRow, value: string) => {
+    // Hard limits at the keyboard: CA1/CA2 are out of 20, the exam out of
+    // 60. A mark past the maximum (or a negative one) is refused here,
+    // not just flagged later on save.
+    if (value !== '') {
+      const max = key === 'exam' ? 60 : 20;
+      const num = Number(value);
+      if (Number.isNaN(num) || num < 0) return;
+      if (num > max) { alert(`The highest mark here is ${max}.`); return; }
+    }
     setScores((prev) => ({ ...prev, [subject]: { ...(prev[subject] ?? BLANK_ROW), [key]: value } }));
     setScoresSaved(false);
   };

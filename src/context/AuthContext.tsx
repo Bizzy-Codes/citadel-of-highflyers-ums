@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
@@ -217,6 +217,11 @@ export interface Notification {
   // Who it was meant for. 'direct' rows carry a recipient_id; the rest
   // are deliberate announcements aimed at a role (or everyone).
   audience?: 'all' | 'students' | 'teachers' | 'admins' | 'direct';
+  recipientId?: string;
+  // Poster / flyer attached to the notice (public URL), if any.
+  imageUrl?: string;
+  // While this date is in the future the notice pops up at every login.
+  popupUntil?: string;
 }
 
 export interface DirectMessage {
@@ -405,6 +410,8 @@ export interface AcademicCalendar {
   // it rendered in the portal instead of downloading the file. Empty
   // until an admin converts the upload and publishes the result.
   documentTables: CalendarTable[];
+  // The calendar as pictures (one per page) shown straight on the page.
+  documentImages: string[];
   updatedAt: string;
   // The structured "which term/session are we in right now" that
   // results and report cards read so teachers never re-type it per
@@ -478,6 +485,8 @@ interface AuthContextType {
   updateUser: (id: string, data: Partial<User>) => Promise<{ error: string | null }>;
   uploadAvatar: (file: File) => Promise<{ error: string | null }>;
   removeAvatar: () => Promise<{ error: string | null }>;
+  adminUploadAvatar: (userId: string, file: File) => Promise<{ error: string | null }>;
+  adminRemoveAvatar: (userId: string) => Promise<{ error: string | null }>;
   deleteUser: (id: string) => Promise<{ error: string | null }>;
   approveTeacher: (id: string) => Promise<void>;
   promoteStudent: (id: string) => Promise<{ error: string | null; previousClass?: string; newClass?: string; graduated?: boolean }>;
@@ -491,6 +500,7 @@ interface AuthContextType {
     term: Result['term'],
     sessionValue: string,
     rows: { subject: string; ca1: number; ca2: number; exam: number }[],
+    opts?: { skipLimits?: boolean },
   ) => Promise<{ error: string | null }>;
   getReportCard: (studentId: string, term: Result['term'], session: string) => Promise<ReportCardData | null>;
   upsertReportCard: (studentId: string, term: Result['term'], session: string, data: ReportCardData) => Promise<void>;
@@ -501,8 +511,16 @@ interface AuthContextType {
   updateTimetable: (className: string, entries: TimetableEntry[]) => Promise<void>;
   notifications: Notification[];
   addNotification: (
-    notification: Omit<Notification, 'id' | 'date'> & { recipientId?: string; audience?: Notification['audience'] }
-  ) => Promise<void>;
+    notification: Omit<Notification, 'id' | 'date' | 'imageUrl' | 'popupUntil'> & {
+      recipientId?: string; audience?: Notification['audience'];
+      // Public URL from uploadAnnouncementImage, and how many days the
+      // notice should keep popping up at login (0/undefined = list only).
+      imageUrl?: string; popupDays?: number;
+    }
+  ) => Promise<{ error: string | null }>;
+  uploadAnnouncementImage: (file: File) => Promise<{ error: string | null; url?: string }>;
+  unreadMessageCount: number;
+  refreshUnreadMessages: () => Promise<void>;
   exportData: () => void;
   assignments: Assignment[];
   mySubmissions: Record<string, AssignmentSubmission>;
@@ -548,6 +566,7 @@ interface AuthContextType {
   subscribeToTestAttempts: (testId: string, onChange: (attempt: TestAttempt) => void) => () => void;
   subscribeToTestViolations: (testId: string, onViolation: (violation: ExamViolation) => void) => () => void;
   sweepExpiredAttempts: (testId: string) => Promise<void>;
+  reopenTestAttempt: (attemptId: string, mode: 'resume' | 'restart') => Promise<{ error: string | null }>;
   getAttemptProgress: (testId: string) => Promise<AttemptProgress[]>;
   createTestSnapshotSender: (testId: string) => { send: (payload: TestSnapshot) => void; close: () => void };
   subscribeToTestSnapshots: (testId: string, onSnap: (s: TestSnapshot) => void) => () => void;
@@ -563,6 +582,7 @@ interface AuthContextType {
   updateAcademicCalendar: (input: { term: string; totalWeeks: number; termStartDate: string | null; currentTerm?: string; currentSession?: string }) => Promise<{ error: string | null }>;
   uploadAcademicCalendarDocument: (file: File) => Promise<{ error: string | null }>;
   publishAcademicCalendarTables: (tables: CalendarTable[]) => Promise<{ error: string | null }>;
+  publishAcademicCalendarImages: (images: Blob[]) => Promise<{ error: string | null }>;
   getAcademicCalendarDocumentUrl: () => string | null;
   getClassAttendanceForRange: (className: string, startDate: string, endDate: string) => Promise<AttendanceRecord[]>;
   markClassAttendanceBulk: (className: string, records: { studentId: string; date: string; status: AttendanceStatus }[]) => Promise<{ error: string | null }>;
@@ -573,7 +593,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapProfileRow = (row: any): User => ({
   id: row.id,
@@ -622,7 +641,7 @@ const mapProfileRow = (row: any): User => ({
     grade: h.grade, session: h.session, results: h.results ?? [],
   })),
 });
-
+//
 const PROFILE_SELECT = '*, results(*), academic_history(*)';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -742,6 +761,7 @@ const mapAcademicCalendarRow = (row: any): AcademicCalendar => {
     documentPath: row.document_path,
     documentName: row.document_name,
     documentTables: Array.isArray(row.document_tables) ? row.document_tables : [],
+    documentImages: Array.isArray(row.document_images) ? row.document_images : [],
     updatedAt: row.updated_at,
     currentTerm: validTerm ? row.current_term : parsed.term,
     currentSession: row.current_session || parsed.session,
@@ -870,7 +890,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [staff, setStaff] = useState<User[]>([]);
   const [subjectsByClass, setSubjectsByClass] = useState<Record<string, string[]>>({});
   const [timetables, setTimetables] = useState<Record<string, TimetableEntry[]>>({});
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [rawNotifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
   const [tests, setTests] = useState<Test[]>([]);
@@ -916,6 +937,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications((data ?? []).map((row) => ({
       id: row.id, title: row.title, message: row.message, date: row.created_at, type: row.type,
       audience: row.audience ?? 'all',
+      recipientId: row.recipient_id ?? undefined,
+      imageUrl: row.image_url ?? undefined,
+      popupUntil: row.popup_until ?? undefined,
     })));
   }, []);
 
@@ -1009,6 +1033,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    try { sessionStorage.removeItem('citadel:loginPopupsShown'); } catch { /* storage blocked */ }
     await supabase.auth.signOut();
   };
 
@@ -1245,6 +1270,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null };
   };
 
+  // The office can set or clear anyone's photo (pupils who have none, or
+  // whose picture is being taken at school). Admin only -- storage RLS
+  // (patch_38) and the profiles update policy both enforce it too.
+  const adminUploadAvatar = async (userId: string, file: File) => {
+    if (currentUser?.role !== 'admin') return { error: 'Only the office can change another person\'s photo.' };
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${userId}/avatar.${ext}`;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (uploadError) return { error: uploadError.message };
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
+    const { error: dbError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+    if (dbError) return { error: dbError.message };
+    // Refresh the lists only -- never the signed-in profile, which is the admin.
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  const adminRemoveAvatar = async (userId: string) => {
+    if (currentUser?.role !== 'admin') return { error: 'Only the office can change another person\'s photo.' };
+    const { data: files } = await supabase.storage.from('avatars').list(userId);
+    if (files && files.length > 0) {
+      await supabase.storage.from('avatars').remove(files.map(f => `${userId}/${f.name}`));
+    }
+    const { error: dbError } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId);
+    if (dbError) return { error: dbError.message };
+    await refreshProfiles();
+    return { error: null };
+  };
+
   const removeAvatar = async () => {
     if (!session?.user.id) return { error: 'Not signed in' };
     const userId = session.user.id;
@@ -1332,9 +1387,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     term: Result['term'],
     sessionValue: string,
     rows: { subject: string; ca1: number; ca2: number; exam: number }[],
+    opts?: { skipLimits?: boolean },
   ): Promise<{ error: string | null }> => {
     const subjects = rows.map((r) => r.subject).filter(Boolean);
     if (subjects.length === 0) return { error: null };
+
+    const outOfRange = opts?.skipLimits ? undefined : rows.find((r) =>
+      (r.ca1 || 0) < 0 || (r.ca1 || 0) > 20 || (r.ca2 || 0) < 0 || (r.ca2 || 0) > 20 || (r.exam || 0) < 0 || (r.exam || 0) > 60);
+    if (outOfRange) return { error: `Marks for ${outOfRange.subject} are out of range (CA is out of 20, exam out of 60).` };
 
     const { error: delError } = await supabase.from('results').delete()
       .eq('student_id', studentId).eq('term', term).eq('session', sessionValue)
@@ -1594,15 +1654,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!session?.user.id) return { error: 'Not signed in' };
     const studentId = session.user.id;
 
-    // Resubmitting: clear out any prior (ungraded) submission first --
-    // RLS only allows this delete while grade is still null, so a
-    // graded submission simply won't be removed and the insert below
-    // will fail on the unique constraint, surfacing as an error.
-    await supabase.from('assignment_submissions').delete().eq('assignment_id', assignmentId).eq('student_id', studentId);
+    // Phone file names often carry spaces, brackets or emoji that the
+    // storage service refuses as a key ("Invalid key"). The pupil still
+    // sees their own file name; only the stored path is cleaned.
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'work';
+    const path = `${assignmentId}/submissions/${studentId}/${Date.now()}-${safeName}`;
 
-    const path = `${assignmentId}/submissions/${studentId}/${file.name}`;
+    // Upload FIRST. If the connection drops mid-upload (common on a phone),
+    // the pupil keeps the submission they already had instead of losing it.
     const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
     if (uploadError) return { error: uploadError.message };
+
+    // Resubmitting: clear out any prior (ungraded) submission -- RLS only
+    // allows this delete while grade is still null, so a graded submission
+    // simply won't be removed and the insert below will fail on the unique
+    // constraint, surfacing as an error.
+    await supabase.from('assignment_submissions').delete().eq('assignment_id', assignmentId).eq('student_id', studentId);
 
     const { error: insertError } = await supabase.from('assignment_submissions').insert({
       assignment_id: assignmentId,
@@ -1652,9 +1719,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // just a "your change saved" confirmation should not be a
   // notification at all -- show it in the page.
   const addNotification = async (
-    notif: Omit<Notification, 'id' | 'date'> & { recipientId?: string; audience?: Notification['audience'] }
+    notif: Omit<Notification, 'id' | 'date' | 'imageUrl' | 'popupUntil'> & {
+      recipientId?: string; audience?: Notification['audience']; imageUrl?: string; popupDays?: number;
+    }
   ) => {
+    const popupUntil = notif.popupDays && notif.popupDays > 0
+      ? new Date(Date.now() + notif.popupDays * 86_400_000).toISOString()
+      : null;
     const { error } = await supabase.from('notifications').insert({
+      image_url: notif.imageUrl ?? null,
+      popup_until: popupUntil,
       title: notif.title,
       message: notif.message,
       type: notif.type,
@@ -1662,9 +1736,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       audience: notif.recipientId ? 'direct' : (notif.audience ?? 'all'),
       created_by: currentUser?.id ?? null,
     });
-    if (error) { console.error('addNotification failed', error); return; }
+    if (error) { console.error('addNotification failed', error); return { error: error.message }; }
     await refreshNotifications();
+    return { error: null };
   };
+
+  // Poster / flyer for an announcement. Public bucket (patch_38): the
+  // image has to load for every pupil and parent without a signed link.
+  const uploadAnnouncementImage = async (file: File) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${session.user.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('announcement-images').upload(path, file, { upsert: false });
+    if (error) return { error: error.message };
+    const { data } = supabase.storage.from('announcement-images').getPublicUrl(path);
+    return { error: null, url: data.publicUrl };
+  };
+
+  // Notices a person should see: addressed to them, or a broadcast.
+  // Other people's personal notices ("Welcome to Grade 2", "Report card
+  // updated") are filtered out here as well as in the database, so they
+  // never show up in an admin's or teacher's list.
+  const notifications = useMemo(
+    () => rawNotifications.filter((n) => !n.recipientId || n.recipientId === currentUser?.id),
+    [rawNotifications, currentUser?.id],
+  );
+
+  // Unread private messages: drives the login pop-up, the header badge
+  // and the Messages menu badge. Refreshed live when a message arrives.
+  const refreshUnreadMessages = useCallback(async () => {
+    const uid = session?.user.id;
+    if (!uid) { setUnreadMessageCount(0); return; }
+    const { count, error } = await supabase.from('direct_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', uid).is('read_at', null);
+    if (!error) setUnreadMessageCount(count ?? 0);
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    const uid = session?.user.id;
+    if (!uid) return;
+    const first = setTimeout(refreshUnreadMessages, 0);
+    const channel = supabase
+      .channel(`unread-dm-${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages', filter: `recipient_id=eq.${uid}` }, () => { refreshUnreadMessages(); })
+      .subscribe();
+    const poll = setInterval(refreshUnreadMessages, 60_000);
+    return () => { clearTimeout(first); clearInterval(poll); supabase.removeChannel(channel); };
+  }, [session?.user.id, refreshUnreadMessages]);
 
   // Who the current user is allowed to see in the "Private Chats"
   // contact list. RLS on profiles already limits what actually comes
@@ -1730,6 +1849,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('sender_id', otherUserId)
       .eq('recipient_id', session.user.id)
       .is('read_at', null);
+    refreshUnreadMessages();
   };
 
   // Realtime subscription for one open conversation. Returns an
@@ -1899,6 +2019,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  };
+
+  // A teacher reopens a pupil's terminated test: 'resume' keeps their
+  // answers and the time they had left; 'restart' wipes it for a fresh go.
+  const reopenTestAttempt = async (attemptId: string, mode: 'resume' | 'restart') => {
+    const { error } = await supabase.rpc('reopen_test_attempt', { p_attempt_id: attemptId, p_mode: mode });
+    return { error: error?.message ?? null };
   };
 
   const sweepExpiredAttempts = async (testId: string) => {
@@ -2266,6 +2393,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: null };
   };
 
+  // Uploads each page picture and publishes their links. An empty list
+  // takes the pictures down again.
+  const publishAcademicCalendarImages = async (images: Blob[]) => {
+    if (!currentUser) return { error: 'Not signed in' };
+    const stamp = Date.now();
+    const urls: string[] = [];
+    for (let i = 0; i < images.length; i++) {
+      const type = images[i].type;
+      const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+      const path = `calendar/pages/${stamp}-${i + 1}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('school-documents').upload(path, images[i], { contentType: type || 'image/jpeg' });
+      if (upErr) return { error: `Could not upload page ${i + 1}: ${upErr.message}` };
+      urls.push(supabase.storage.from('school-documents').getPublicUrl(path).data.publicUrl);
+    }
+    const { error } = await supabase.from('academic_calendar').update({
+      document_images: urls, updated_by: currentUser.id, updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+    if (error) {
+      return { error: /document_images|column|schema cache/i.test(error.message)
+        ? 'The database is missing the document_images column -- run patch_38.sql in the Supabase SQL editor.'
+        : error.message };
+    }
+    await refreshAcademicCalendar();
+    return { error: null };
+  };
+
   // The school-documents bucket is public, so the URL is a plain,
   // permanent path -- no signed-URL round trip needed like the
   // private payment-receipts/admission-photos buckets use.
@@ -2345,10 +2498,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       students, staff, currentUser, loading,
       login, logout, registerStudent, registerStaff, requestPasswordReset, verifyRecoveryOtp, updatePassword, createUser,
       markWelcomeSeen,
-      updateUser, uploadAvatar, removeAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults, importAdmissionDetails, linkProfileToApplication, getUnassignedStudents, assignStudentToClass,
+      updateUser, uploadAvatar, removeAvatar, adminUploadAvatar, adminRemoveAvatar, deleteUser, approveTeacher, promoteStudent, addResult, saveSubjectResults, importAdmissionDetails, linkProfileToApplication, getUnassignedStudents, assignStudentToClass,
       getReportCard, upsertReportCard, getSubjectStats,
       subjectsByClass, updateSubjects, timetables, updateTimetable,
-      notifications, addNotification, exportData,
+      notifications, addNotification, uploadAnnouncementImage, unreadMessageCount, refreshUnreadMessages, exportData,
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
@@ -2358,12 +2511,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
       getAttemptsForTest, getAnswersForAttempt, gradeEssayAnswer, getViolationsForTest,
-      subscribeToTestAttempts, subscribeToTestViolations, sweepExpiredAttempts,
+      subscribeToTestAttempts, subscribeToTestViolations, sweepExpiredAttempts, reopenTestAttempt,
       getAttemptProgress, createTestSnapshotSender, subscribeToTestSnapshots,
       getMyAttemptForTest, getAttemptById, startTestAttempt, getAttemptQuestions, saveTestAnswer,
       submitTestAttempt, recordTestViolation, finalizeMyExpiredAttempts,
       adminSetPassword,
-      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, publishAcademicCalendarTables, getAcademicCalendarDocumentUrl,
+      academicCalendar, updateAcademicCalendar, uploadAcademicCalendarDocument, publishAcademicCalendarTables, publishAcademicCalendarImages, getAcademicCalendarDocumentUrl,
       getClassAttendanceForRange, markClassAttendanceBulk, getMyAttendance, getStudentAttendance,
       getClassAttendanceNotes, upsertAttendanceNote,
     }}>

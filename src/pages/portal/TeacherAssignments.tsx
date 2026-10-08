@@ -8,7 +8,7 @@ import DateWheelInput from '../../components/common/DateWheelInput';
 const emptyInput: NewAssignmentInput = { subject: '', title: '', description: '', dueDate: '' };
 
 const TeacherAssignments = () => {
-  const { currentUser, assignments, createAssignment, deleteAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
+  const { currentUser, students, assignments, createAssignment, deleteAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
   const [input, setInput] = useState<NewAssignmentInput>(emptyInput);
   const [file, setFile] = useState<File | null>(null);
@@ -52,12 +52,22 @@ const TeacherAssignments = () => {
   };
 
   const handleDownload = async (path: string) => {
+    // Open the tab inside the tap so a phone doesn't block it.
+    const tab = window.open('', '_blank');
     const url = await getAssignmentFileUrl(path);
-    if (url) window.open(url, '_blank');
-    else alert('Could not generate a download link.');
+    if (url) {
+      if (tab) tab.location.replace(url); else window.location.assign(url);
+    } else {
+      tab?.close();
+      alert('Could not generate a download link.');
+    }
   };
 
   const viewingAssignment = assignments.find((a) => a.id === viewingId);
+  // Who in the class has not handed it in yet.
+  const classPupils = viewingAssignment ? students.filter((s) => s.grade === viewingAssignment.className) : [];
+  const handedIn = new Set(submissions.map((s) => s.studentId));
+  const missing = classPupils.filter((p) => !handedIn.has(p.id));
 
   return (
     <PortalLayout title="Assignments">
@@ -134,7 +144,12 @@ const TeacherAssignments = () => {
       {viewingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginBottom: '20px' }}>Submissions: {viewingAssignment?.title}</h3>
+            <h3 style={{ marginBottom: '6px' }}>Submissions: {viewingAssignment?.title}</h3>
+            {classPupils.length > 0 && (
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
+                {submissions.length} of {classPupils.length} pupils have handed in.
+              </p>
+            )}
             {submissions.length === 0 && <p style={{ color: 'var(--text-muted)' }}>No submissions yet.</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {submissions.map((s) => (
@@ -159,6 +174,16 @@ const TeacherAssignments = () => {
                 </div>
               ))}
             </div>
+            {missing.length > 0 && (
+              <div style={{ marginTop: '18px' }}>
+                <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Not handed in yet ({missing.length})</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {missing.map((p) => (
+                    <span key={p.id} style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '12px', background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', fontWeight: 600 }}>{p.name}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             <button className="btn btn-outline" style={{ width: '100%', marginTop: '20px' }} onClick={() => setViewingId(null)}>Close</button>
           </div>
         </div>

@@ -71,8 +71,8 @@ export const GUIDES: Guide[] = [
       { target: 'login-password', text: "Type your password. If you've forgotten it, the school office can help.", advance: 'next' },
       { target: 'login-submit', text: 'Now press Sign In to Portal.', advance: 'click' },
     ],
-    // Not /portal/set-password: people on a password the school gave them
-    // must choose their own before they're really in.
+    // Anyone landing in the portal is in. (/portal/set-password is only
+    // the optional "change my password" page now.)
     donePath: (p) => p.startsWith('/portal') && p !== '/portal/set-password',
     doneText: 'You are in! Tell me what you want to see, like assignments or results.',
   },

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { compressImageToTarget } from '../../lib/imageCompression';
 import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2, LogOut, KeyRound } from 'lucide-react';
 import { upperName } from '../../lib/names';
+import PushToggle from '../../components/portal/PushToggle';
 
 const MAX_RAW_BYTES = 15 * 1024 * 1024; // reject truly huge files outright
 const TARGET_UPLOAD_BYTES = 2 * 1024 * 1024; // compress anything above this instead of rejecting it
@@ -153,7 +154,9 @@ const Profile = () => {
             </div>
           </div>
 
-          <div style={{ marginTop: '50px', borderTop: '1px solid var(--glass-border)', paddingTop: '40px' }}>
+          <div style={{ marginTop: '30px' }}><PushToggle /></div>
+
+          <div style={{ marginTop: '30px', borderTop: '1px solid var(--glass-border)', paddingTop: '40px' }}>
             {!isEditing ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px' }}>
                 <div className="info-section">

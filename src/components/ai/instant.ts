@@ -1,5 +1,5 @@
 import type { Assignment, AssignmentSubmission, AcademicCalendar } from '../../context/AuthContext';
-import { FEE_SCHEDULES, feeTotals, naira } from '../../lib/feeSchedule';
+import { FEE_SCHEDULES, feeTotals, naira, SCHOOL_BANK } from '../../lib/feeSchedule';
 import { openingLine, pagesFor, type AiRole } from './catalog';
 import { guidesFor } from './guides';
 
@@ -54,9 +54,14 @@ const MISSION = 'Our mission: to create an enabling environment where children, 
 // the application fee and bank details are only for people signed in
 // to the portal. Visitors get this instead. The server says the same.
 export const MONEY_PRIVATE = 'For privacy, school fees and payment details are only shared inside the portal. Please log in to see them, or contact the school on WhatsApp 0706 497 0003.';
-export const MONEY_LOOKING = /₦|\bN\s?\d|\bnaira\b|\bkobo\b|\b\d{1,3}(,\d{3})+\b|\b\d{2,3}k\b|\bthousand\b|account (number|no)|\bbank\b|first bank|\b\d{10}\b/i;
+// Amounts are private; the school's own bank details are NOT (anyone who
+// wants to pay needs them), so they are taken out before looking for
+// anything money-like. Any other 10-digit number still counts.
+const AMOUNT_LOOKING = /₦|\bN\s?\d|\bnaira\b|\bkobo\b|\b\d{1,3}(,\d{3})+\b|\b\d{2,3}k\b|\bthousand\b|\b\d{10}\b/i;
+export const looksLikeMoney = (text: string) => AMOUNT_LOOKING.test(text.split(SCHOOL_BANK.accountNumber).join(' '));
+export const MONEY_LOOKING = { test: looksLikeMoney };
 const ASKS_ABOUT_MONEY = ['fee', 'fees', 'school fees', 'tuition', 'how much', 'price', 'prices', 'cost', 'costs', 'pay', 'paying',
-  'payment', 'payments', 'money', 'amount', 'charge', 'charges', 'bank', 'account number', 'account no', 'naira', 'uniform price',
+  'payment', 'payments', 'money', 'amount', 'charge', 'charges', 'naira', 'uniform price',
   'levy', 'levies', 'bill', 'bills', 'afford', 'expensive', 'cheap', 'discount', 'scholarship'];
 
 const CONTACT = 'You can call or WhatsApp the school on 0706 497 0003, or email citadelofhighflyersintlacademy@gmail.com.';
@@ -72,7 +77,8 @@ const ADDRESS = 'The school is at Rock Haven, opposite St. Murumba College, Jos,
 const PAGE_WORDS: Record<string, string[]> = {
   home: ['home', 'homepage', 'main page', 'website'],
   admissions: ['admission', 'admissions', 'apply', 'application', 'enrol', 'enroll'],
-  fees: ['fees', 'fee', 'school fees', 'price', 'prices', 'payment', 'financial'],
+  fees: ['fees', 'fee', 'school fees', 'price', 'prices', 'financial'],
+  bank_details: ['bank details', 'account number', 'account details', 'bank account', 'payment details', 'where to pay'],
   founders: ['founder', 'founders', 'management', 'proprietor', 'owner', 'owners'],
   gallery: ['gallery', 'photos', 'pictures', 'pics'],
   login: ['login', 'log in', 'sign in', 'signin', 'portal'],
@@ -122,6 +128,32 @@ function matchPage(q: string, role: AiRole): string | null {
   return null;
 }
 
+// ---- bank details -----------------------------------------------------
+// "What is the school account number?" / "where do I pay?" -- answered
+// for EVERYONE, visitors included, with the bank details page and no fee
+// amounts. This has to be checked before the fee and FAQ answers, or an
+// account-number question lands on the tuition sheet.
+
+const ASKS_BANK = ['bank', 'account number', 'account no', 'account num', 'account details', 'account name', 'bank details', 'bank account',
+  'acct', 'accounts', 'account', 'where do i pay', 'where to pay', 'where can i pay', 'how do i pay', 'how to pay', 'how can i pay',
+  'make payment', 'make a payment', 'make the payment', 'send money', 'pay into', 'bank transfer', 'transfer money', 'transfer the fees', 'where i go pay', 'how i go pay'];
+// Opening / logging into a portal account is not a bank question.
+const NOT_BANK = ['log in', 'login', 'sign in', 'signin', 'create', 'sign up', 'signup', 'register', 'forgot', 'password', 'my account', 'profile', 'receipt', 'receipts', 'upload'];
+
+export function bankAnswer(raw: string): InstantAnswer | null {
+  const q = norm(raw);
+  if (!q || q.split(' ').length > 14) return null;
+  if (!has(q, ...ASKS_BANK)) return null;
+  // "account" alone also means a portal account -- only count it next to payment words.
+  const onlyAccount = !has(q, ...ASKS_BANK.filter((w) => !['account', 'accounts'].includes(w)));
+  if (onlyAccount && !has(q, 'school', 'pay', 'payment', 'fees', 'fee', 'tuition', 'citadel', 'una', 'your', 'number', 'details')) return null;
+  if (has(q, ...NOT_BANK) && !has(q, 'bank', 'account number', 'account no', 'account details', 'bank details', 'pay', 'payment')) return null;
+  return {
+    text: `You can pay into ${SCHOOL_BANK.bank}, account name ${SCHOOL_BANK.accountName}, account number ${SCHOOL_BANK.accountNumber}. After paying, please send your receipt to WhatsApp ${SCHOOL_BANK.receiptWhatsApp}. I've opened the bank details page for you.`,
+    openPage: 'bank_details',
+  };
+}
+
 // ---- the matcher ------------------------------------------------------
 
 export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer | null {
@@ -165,7 +197,11 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
     return { text: `${VISION} ${MISSION}` };
   }
 
-  // Money: only for people signed in to the portal.
+  // Bank details are for everyone (no amounts on that page).
+  const bank = bankAnswer(raw);
+  if (bank) return bank;
+
+  // Fee amounts: only for people signed in to the portal.
   if (role === 'guest' && has(q, ...ASKS_ABOUT_MONEY)) return { text: MONEY_PRIVATE };
 
   // School facts.

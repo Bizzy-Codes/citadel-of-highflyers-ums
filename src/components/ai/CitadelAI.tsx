@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square } from 'lucide-react';
+import { Sparkles, X, Mic, Send, Volume2, VolumeX, RotateCcw, Loader2, Square, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { DATA_TOOLS_BY_ROLE, SUGGESTIONS, openingLine, pagesFor, type AiRole } from './catalog';
@@ -8,7 +8,7 @@ import { guidesFor, type Guide } from './guides';
 import GuideOverlay from './GuideOverlay';
 import { blobToBase64, canUseVoice, startVoice, type VoiceSession, type VoiceStatus } from './voice';
 import { prefetchVoices, speak, stopSpeaking, unlockAudio } from './speak';
-import { MONEY_LOOKING, MONEY_PRIVATE, NO_PASSWORDS, SECRET_LOOKING, instantAnswer } from './instant';
+import { MONEY_LOOKING, MONEY_PRIVATE, NO_PASSWORDS, SECRET_LOOKING, bankAnswer, instantAnswer } from './instant';
 import { loadFaqs, matchFaq, type FaqRow } from './faq';
 
 // Every question goes into the log admins see (words only, no name or
@@ -76,6 +76,10 @@ const CitadelAI = () => {
   const [voiceOn, setVoiceOn] = useState(false);
   const [guide, setGuide] = useState<{ g: Guide; step: number; waiting: boolean } | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
+  // When Citadel AI opens a page for someone, remember where they were so
+  // a "Back" button can take them straight back -- instead of the page's
+  // own Home link dropping them on the website's front page.
+  const [returnTo, setReturnTo] = useState<{ from: string; target: string } | null>(null);
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   useEffect(() => { loadFaqs().then(setFaqs).catch(() => {}); }, []);
   const listRef = useRef<HTMLDivElement>(null);
@@ -165,6 +169,8 @@ const CitadelAI = () => {
     if (name === 'open_page') {
       const page = pagesFor(role).find((p) => p.key === args.page);
       if (!page) return { result: { ok: false, error: `That page is not available for this visitor (role ${role}).` }, needsReply: true };
+      const here = location.pathname + location.search;
+      if (here !== page.path) setReturnTo({ from: here, target: page.path.split('?')[0] });
       navigate(page.path);
       return { result: { ok: true, opened: page.label }, needsReply: false, note: openingLine(page) };
     }
@@ -215,7 +221,7 @@ const CitadelAI = () => {
       return { result: { class: cls, timetable: (auth.timetables[cls] ?? []).slice(0, 60) }, needsReply: true };
     }
     return { result: { error: 'Unknown action' }, needsReply: true };
-  }, [role, navigate, startGuide, currentUser, auth]);
+  }, [role, navigate, startGuide, currentUser, auth, location.pathname, location.search]);
 
   // ---- talking to the server --------------------------------------
 
@@ -244,8 +250,11 @@ const CitadelAI = () => {
     // FAQ list (built-in + learned from real questions), then the
     // built-in handlers. They still go into the history so Gemini has
     // the context for follow-ups.
-    const fromFaq = matchFaq(q, role, faqs);
-    const instant = fromFaq ?? instantAnswer(q, {
+    // Bank-details questions come first, so they can never land on a
+    // fee answer from the list below.
+    const bank = bankAnswer(q);
+    const fromFaq = bank ? null : matchFaq(q, role, faqs);
+    const instant = bank ?? fromFaq ?? instantAnswer(q, {
       role, firstName: niceFirstName, today: isoToday(),
       assignments: auth.assignments, mySubmissions: auth.mySubmissions, academicCalendar: auth.academicCalendar,
     });
@@ -403,6 +412,13 @@ const CitadelAI = () => {
     ? `Hello ${niceFirstName}! I'm Citadel AI. What would you like to do?`
     : "Hello! I'm Citadel AI. Ask me anything about the school, or tap the mic and talk to me.";
 
+  // The "Back" button lives only on the page the AI opened.
+  const showReturn = !!returnTo && location.pathname === returnTo.target && !guide;
+  useEffect(() => {
+    // Moved on by themselves: forget where the AI sent them from.
+    if (returnTo && location.pathname !== returnTo.target) setReturnTo(null);
+  }, [location.pathname, returnTo]);
+
   // Never during a test: it would be a way to get help, and the camera
   // preview already owns that corner.
   if (/^\/portal\/tests\/[^/]+/.test(location.pathname)) return null;
@@ -411,6 +427,12 @@ const CitadelAI = () => {
     <>
       {guide && (
         <GuideOverlay guide={guide.g} step={guide.step} onNext={nextStep} onStop={() => { setGuide(null); stopSpeaking(); }} />
+      )}
+
+      {showReturn && returnTo && (
+        <button type="button" className="cai-return" onClick={() => { const to = returnTo.from; setReturnTo(null); navigate(to); }}>
+          <ArrowLeft size={16} aria-hidden="true" /> Back to where I was
+        </button>
       )}
 
       {guide && !open && (

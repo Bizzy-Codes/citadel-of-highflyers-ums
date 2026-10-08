@@ -5,15 +5,19 @@
 // admin names/emails/logins, keys, internal links or how the system is
 // built. Whatever is here, anyone can get the AI to repeat.
 //
-// Money is private too (the school's decision, 2026-09-28): fees,
-// uniform prices, the application fee and bank details go in
-// MONEY_FACTS, which index.ts only includes for someone the server has
-// confirmed is signed in to the portal. Visitors are told to log in or
-// contact the school.
+// Money AMOUNTS are private (the school's decision, 2026-09-28): fees,
+// uniform prices and the application fee go in MONEY_FACTS, which
+// index.ts only includes for someone the server has confirmed is signed
+// in to the portal. Visitors are told to log in or contact the school.
+// The school's BANK DETAILS are public (decided 2026-10-07: anyone who
+// wants to pay must be able to get them) and live in SCHOOL_FACTS.
 //
 // KEEP IN SYNC: MONEY_FACTS mirrors src/lib/feeSchedule.ts and the
 // application fee in src/pages/marketing/Admissions.tsx. After editing,
 // redeploy the function.
+
+// Also in src/lib/feeSchedule.ts (SCHOOL_BANK) -- keep in sync.
+export const SCHOOL_ACCOUNT_NUMBER = '2032386769';
 
 export const SCHOOL_FACTS = `
 SCHOOL
@@ -43,11 +47,16 @@ THE PORTAL (for pupils, parents, teachers and admins)
 - Pupils (or their parents) create an account themselves from the login page ("Create an Account", choose Pupil). No email check -- they can sign in straight away. The school then puts them in their class.
 - Brothers and sisters can all be registered with the same parent email.
 - Pupils sign in with their NAME or login ID (like "CH 001") and their password. The school gives each family their password privately. They can change it on their Profile page.
-- The first time someone logs in with a password the school gave them, the portal asks them to choose their own.
+- A password the school gave stays valid until the person chooses to change it on their Profile page.
 - Teachers register with "Create an Account" and choose Staff. An admin must approve them before they can use the portal.
 - Forgot password: use "Forgot Password?" on the login page, or ask the school office to reset it.
 - Inside the portal pupils can see assignments (and upload their work), tests, results and report cards, attendance, the school calendar, timetable, fees, messages and their profile.
 - Teachers take the daily attendance "Register", post assignments and tests, and enter report cards.
+
+BANK DETAILS (public -- anyone may be given these; they contain no fee amounts)
+- Bank: First Bank. Account name: Citadel of Highflyers Int'l Academy. Account number: 2032386769.
+- After paying, send the payment receipt to WhatsApp 07064970003. Portal pupils can also upload it on the portal's Fees page.
+- There is a page with these details (page key bank_details). When someone asks for the account number, bank, or where/how to pay, tell them the details in words AND call open_page with bank_details. Never open the fees page for this, and never mention any fee amount to someone who is not signed in.
 `;
 
 // Only for people signed in to the portal -- see the note at the top.
@@ -56,5 +65,4 @@ FEES AND PAYMENTS (portal users only -- never give these to a visitor who isn't 
 - Fees per term, Reception & Kindergarten classes: tuition N54,900 + registration/development N20,500. Uniforms: complete suit N21,500, sportswear N11,700, 2 T-shirts N12,600, cardigan N10,800.
 - Fees per term, Pre-Grade / Graders classes: tuition N56,700 + registration/development N20,500. Uniforms: complete suit N21,800, sportswear N11,700, 2 T-shirts N12,600, cardigan N11,500.
 - Admission application processing fee: N2,000.
-- Pay into: First Bank, account name Citadel of Highflyers Int'l Academy, account number 2032386769. Send the receipt to WhatsApp 07064970003, or upload it on the portal's Fees page.
 `;

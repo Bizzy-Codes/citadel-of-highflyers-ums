@@ -27,7 +27,7 @@ const SetPassword = () => {
 
   if (loading) return null;
   if (!currentUser) return <Navigate to="/login" replace />;
-  const required = !!currentUser.mustChangePassword;
+  const required = false; // never forced any more -- a password the school gave is kept until the person chooses to change it from Profile
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -49,6 +49,7 @@ const TestTaking = () => {
     if (!a) { setLoading(false); return; }
     setAttempt(a);
     if (a.status === 'in_progress') {
+      setFinalResult(null);
       const { questions: qs, error: loadError } = await getAttemptQuestions(attemptId);
       setQuestionsError(loadError);
       setQuestions(qs);
@@ -66,6 +67,19 @@ const TestTaking = () => {
   }, [attemptId]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // A teacher can reopen a terminated test (phone glitch, mistake). While
+  // the pupil is looking at the "terminated" screen, quietly check every
+  // few seconds and pick the test back up as soon as it is reopened.
+  useEffect(() => {
+    if (status !== 'terminated' || !attemptId) return;
+    const timer = setInterval(async () => {
+      const fresh = await getAttemptById(attemptId);
+      if (fresh && fresh.status === 'in_progress') loadAll();
+    }, 8000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, attemptId]);
 
   // Flush any pending autosave before submitting so the last answer
   // chosen isn't still sitting in a 500ms debounce when grading runs.
@@ -159,7 +173,7 @@ const TestTaking = () => {
       <div className="test-takeover test-takeover-terminated">
         <XCircle size={56} />
         <h2>Test Terminated</h2>
-        <p>Your test was ended after 3 warnings for leaving the test window. Your teacher has been notified. You cannot retake this test.</p>
+        <p>Your test was ended after 3 warnings for leaving the test window. Your teacher has been notified. If this was a mistake, ask your teacher to reopen it &mdash; this page will pick the test back up by itself.</p>
         <button className="btn btn-primary" onClick={() => navigate('/portal/tests')}>Back to My Tests</button>
       </div>
     );

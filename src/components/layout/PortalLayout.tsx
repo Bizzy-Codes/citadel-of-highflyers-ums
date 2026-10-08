@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import LoginPopups from '../portal/LoginPopups';
 import './PortalLayout.css';
 
 interface PortalLayoutProps {
@@ -35,7 +36,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout, notifications } = useAuth();
+  const { currentUser, logout, notifications, unreadMessageCount } = useAuth();
 
   // Simple role detection from path for demo purposes
   const isTeacher = currentUser?.role === 'teacher';
@@ -97,6 +98,9 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
+              {item.label === 'Messages' && unreadMessageCount > 0 && (
+                <span style={{ marginLeft: 'auto', minWidth: '20px', height: '20px', padding: '0 6px', borderRadius: '10px', background: 'var(--error)', color: '#fff', fontSize: '11px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{unreadMessageCount}</span>
+              )}
             </Link>
           ))}
         </nav>
@@ -109,6 +113,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
         </div>
       </aside>
 
+      <LoginPopups />
       <main className="portal-main">
         <header className="portal-header glass">
           <div className="header-left">
@@ -125,6 +130,12 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
             </div>
             
             <div className="header-actions">
+              <button className="icon-btn" onClick={() => navigate('/portal/messages', { state: { view: 'chats' } })} title={unreadMessageCount > 0 ? `${unreadMessageCount} new message${unreadMessageCount === 1 ? '' : 's'}` : 'Messages'} style={{ position: 'relative' }}>
+                <MessageSquare size={20} />
+                {unreadMessageCount > 0 && (
+                  <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '18px', height: '18px', padding: '0 4px', borderRadius: '9px', background: 'var(--error)', color: '#fff', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unreadMessageCount}</span>
+                )}
+              </button>
               <button className="icon-btn" onClick={() => navigate('/portal/messages', { state: { view: 'notifications' } })} title="Notifications">
                 <Bell size={20} />
                 {notifications.length > 0 && <span className="notification-dot"></span>}

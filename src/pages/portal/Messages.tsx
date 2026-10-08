@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type DirectMessage } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown, Search } from 'lucide-react';
+import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X } from 'lucide-react';
+import { compressImageToTarget } from '../../lib/imageCompression';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
+  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
   // The notifications table's RLS already lets teachers post ("staff
@@ -86,6 +87,41 @@ const Messages = () => {
 
   // WhatsApp State
   const [waMessage, setWaMessage] = useState('');
+  const [waImage, setWaImage] = useState<File | null>(null);
+  const waImageInputRef = useRef<HTMLInputElement>(null);
+  const noticeImageInputRef = useRef<HTMLInputElement>(null);
+  const [noticeImage, setNoticeImage] = useState<File | null>(null);
+  const [notifPopupDays, setNotifPopupDays] = useState(0);
+  const [posting, setPosting] = useState(false);
+
+  // A picture is shown as a preview before it is posted.
+  const [noticeImagePreview, setNoticeImagePreview] = useState<string | null>(null);
+  const [waImagePreview, setWaImagePreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!noticeImage) { setNoticeImagePreview(null); return; }
+    const url = URL.createObjectURL(noticeImage);
+    setNoticeImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [noticeImage]);
+  useEffect(() => {
+    if (!waImage) { setWaImagePreview(null); return; }
+    const url = URL.createObjectURL(waImage);
+    setWaImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [waImage]);
+
+  const pickImage = async (e: React.ChangeEvent<HTMLInputElement>, set: (f: File | null) => void) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Please choose an image (JPG or PNG).'); return; }
+    if (file.size > 15 * 1024 * 1024) { alert('That picture is too large -- please choose one under 15MB.'); return; }
+    let out = file;
+    if (file.size > 2 * 1024 * 1024) {
+      try { out = await compressImageToTarget(file, 2 * 1024 * 1024); } catch { /* use the original */ }
+    }
+    set(out);
+  };
   
   // Notification State
   const [notifTitle, setNotifTitle] = useState('');
@@ -93,20 +129,51 @@ const Messages = () => {
   const [notifType, setNotifType] = useState<'info' | 'warning' | 'success'>('info');
   const [notifAudience, setNotifAudience] = useState<'all' | 'students' | 'teachers'>('all');
 
-  const handleSendWhatsApp = () => {
-    if (!waMessage) return;
-    // Replace with actual group link if available, or just open WhatsApp with message
-    const url = `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
-    window.open(url, '_blank');
-    setWaMessage('');
+  const handleSendWhatsApp = async () => {
+    if (!waMessage.trim() && !waImage) return;
+    // On a phone, the share sheet can hand WhatsApp the picture AND the
+    // text together. On a computer that isn't possible, so the picture is
+    // put online and its link goes into the message (WhatsApp shows it
+    // as a preview).
+    if (waImage && typeof navigator.canShare === 'function' && navigator.canShare({ files: [waImage] })) {
+      try {
+        await navigator.share({ files: [waImage], text: waMessage });
+        setWaMessage(''); setWaImage(null);
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return; // closed the share sheet
+      }
+    }
+    let text = waMessage;
+    if (waImage) {
+      const { error, url: imgUrl } = await uploadAnnouncementImage(waImage);
+      if (error || !imgUrl) { alert('Could not upload the picture: ' + error); return; }
+      text = `${text}${text ? '\n\n' : ''}${imgUrl}`;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    setWaMessage(''); setWaImage(null);
   };
 
   const handlePostNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notifTitle || !notifMsg) return;
-    await addNotification({ title: notifTitle, message: notifMsg, type: notifType, audience: notifAudience });
+    setPosting(true);
+    let imageUrl: string | undefined;
+    if (noticeImage) {
+      const up = await uploadAnnouncementImage(noticeImage);
+      if (up.error || !up.url) { setPosting(false); alert('Could not upload the picture: ' + up.error); return; }
+      imageUrl = up.url;
+    }
+    const { error } = await addNotification({
+      title: notifTitle, message: notifMsg, type: notifType, audience: notifAudience,
+      imageUrl, popupDays: notifPopupDays,
+    });
+    setPosting(false);
+    if (error) { alert('The announcement could not be posted: ' + error); return; }
     setNotifTitle('');
     setNotifMsg('');
+    setNoticeImage(null);
+    setNotifPopupDays(0);
     alert(
       notifAudience === 'all' ? 'Announcement posted to everyone.'
       : notifAudience === 'students' ? 'Announcement posted to all pupils.'
@@ -174,6 +241,36 @@ const Messages = () => {
                       onChange={(e) => setNotifMsg(e.target.value)}
                       style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
                      />
+                     <input ref={noticeImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => pickImage(e, setNoticeImage)} />
+                     {noticeImagePreview ? (
+                       <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+                         <img src={noticeImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
+                         <button type="button" onClick={() => setNoticeImage(null)} title="Remove picture" style={{ position: 'absolute', top: '6px', right: '6px', width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+                       </div>
+                     ) : (
+                       <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start' }} onClick={() => noticeImageInputRef.current?.click()}>
+                         <ImagePlus size={18} /> Attach a picture
+                       </button>
+                     )}
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '13px' }}>
+                       <label htmlFor="notif-popup-days" style={{ fontWeight: 700 }}>Pop up at login:</label>
+                       <select
+                         id="notif-popup-days"
+                         value={notifPopupDays}
+                         onChange={(e) => setNotifPopupDays(Number(e.target.value))}
+                         style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                       >
+                         <option value={0}>No pop-up (notice list only)</option>
+                         <option value={1}>For 1 day</option>
+                         <option value={2}>For 2 days</option>
+                         <option value={3}>For 3 days</option>
+                         <option value={5}>For 5 days</option>
+                         <option value={7}>For 7 days</option>
+                         <option value={14}>For 14 days</option>
+                         <option value={30}>For 30 days</option>
+                       </select>
+                       <span style={{ color: 'var(--text-muted)' }}>Everyone it is for sees it each time they log in during this period.</span>
+                     </div>
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                           <select
@@ -195,8 +292,8 @@ const Messages = () => {
                              <option value="success">Success (Green)</option>
                           </select>
                         </div>
-                        <button type="submit" className="btn btn-primary">
-                           <Send size={18} /> Post Announcement
+                        <button type="submit" className="btn btn-primary" disabled={posting}>
+                           <Send size={18} /> {posting ? 'Posting...' : 'Post Announcement'}
                         </button>
                      </div>
                   </form>
@@ -209,7 +306,12 @@ const Messages = () => {
                            <h4 style={{ fontWeight: '800' }}>{n.title}</h4>
                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(n.date).toLocaleDateString()}</span>
                         </div>
-                        <p style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: '1.6' }}>{n.message}</p>
+                        {n.imageUrl && (
+                          <a href={n.imageUrl} target="_blank" rel="noreferrer">
+                            <img src={n.imageUrl} alt="" loading="lazy" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '12px', marginBottom: '10px', display: 'block' }} />
+                          </a>
+                        )}
+                        <p style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{n.message}</p>
                      </div>
                    ))}
                    {notifications.length === 0 && (
@@ -237,6 +339,18 @@ const Messages = () => {
                   style={{ width: '100%', padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', minHeight: '200px', fontSize: '16px', resize: 'none' }}
                 />
                 
+                <input ref={waImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => pickImage(e, setWaImage)} />
+                {waImagePreview ? (
+                  <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+                    <img src={waImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
+                    <button type="button" onClick={() => setWaImage(null)} title="Remove picture" style={{ position: 'absolute', top: '6px', right: '6px', width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+                  </div>
+                ) : (
+                  <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start' }} onClick={() => waImageInputRef.current?.click()}>
+                    <ImagePlus size={18} /> Attach a picture
+                  </button>
+                )}
+
                 <button 
                   onClick={handleSendWhatsApp}
                   className="btn btn-primary lg" 

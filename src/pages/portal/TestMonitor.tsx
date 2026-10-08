@@ -6,7 +6,7 @@ import {
   type TestAttempt, type TestAnswerForGrading, type ExamViolation,
   type AttemptProgress, type TestSnapshot,
 } from '../../context/AuthContext';
-import { ArrowLeft, RefreshCw, AlertTriangle, FileText, Camera, VideoOff, Sparkles, Radio } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertTriangle, FileText, Camera, VideoOff, Sparkles, Radio, RotateCcw, Play } from 'lucide-react';
 import { useTestVideoWall, type WallState } from '../../hooks/useTestVideoWall';
 import './Tests.css';
 
@@ -45,7 +45,7 @@ const TestMonitor = () => {
   const {
     tests, getAttemptsForTest, subscribeToTestAttempts, getViolationsForTest, subscribeToTestViolations,
     sweepExpiredAttempts, getAnswersForAttempt, gradeEssayAnswer,
-    getAttemptProgress, subscribeToTestSnapshots,
+    getAttemptProgress, subscribeToTestSnapshots, reopenTestAttempt,
   } = useAuth();
   const test = tests.find((t) => t.id === testId);
 
@@ -118,6 +118,20 @@ const TestMonitor = () => {
     await sweepExpiredAttempts(testId);
     setAttempts(await getAttemptsForTest(testId));
     setSweeping(false);
+  };
+
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const handleReopen = async (attempt: TestAttempt, mode: 'resume' | 'restart') => {
+    const name = attempt.studentName ?? 'this pupil';
+    const question = mode === 'resume'
+      ? `Let ${name} continue from where they stopped?\n\nTheir answers are kept, their warnings are cleared, and they get the time they had left.`
+      : `Start ${name}'s test again from the beginning?\n\nTheir answers so far will be erased and the clock starts fresh.`;
+    if (!window.confirm(question)) return;
+    setReopeningId(attempt.id);
+    const { error } = await reopenTestAttempt(attempt.id, mode);
+    setReopeningId(null);
+    if (error) { alert('Could not reopen the test: ' + error); return; }
+    if (testId) setAttempts(await getAttemptsForTest(testId));
   };
 
   const openGrading = async (attempt: TestAttempt) => {
@@ -266,7 +280,15 @@ const TestMonitor = () => {
                         <td style={{ padding: '10px' }}>{a.violationCount > 0 ? <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{a.violationCount}/3</span> : '—'}</td>
                         <td style={{ padding: '10px' }}>{a.score != null ? `${a.score}/${a.maxScore}` : '—'}</td>
                         <td style={{ padding: '10px' }}>
-                          {a.status !== 'in_progress' && <button className="btn btn-outline sm" onClick={() => openGrading(a)}><FileText size={14} /> Grade</button>}
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {a.status !== 'in_progress' && <button className="btn btn-outline sm" onClick={() => openGrading(a)}><FileText size={14} /> Grade</button>}
+                            {(a.status === 'terminated' || a.status === 'expired') && (
+                              <>
+                                <button className="btn btn-primary sm" disabled={reopeningId === a.id} onClick={() => handleReopen(a, 'resume')} title="Let them carry on from where they stopped"><Play size={14} /> Resume</button>
+                                <button className="btn btn-outline sm" disabled={reopeningId === a.id} onClick={() => handleReopen(a, 'restart')} title="Wipe their answers and start from question 1"><RotateCcw size={14} /> Restart</button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt, type AttendanceRecord } from '../../context/AuthContext';
 import AttendanceSummaryCard from '../../components/portal/AttendanceSummaryCard';
 import { summarizeAttendance } from '../../lib/attendance';
-import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer, AlertTriangle, DownloadCloud, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Save, KeyRound, Trash2, UserCheck, Receipt, Loader2, Wand2, Eye, EyeOff, Printer, AlertTriangle, DownloadCloud, MessageCircle, Camera } from 'lucide-react';
+import { compressImageToTarget } from '../../lib/imageCompression';
 import StudentRecordSheet from '../../components/portal/StudentRecordSheet';
 import ContactParentDialog from '../../components/portal/ContactParentDialog';
 import { buildLoginDetailsMessage } from '../../lib/outreach';
@@ -36,7 +37,7 @@ const AdminUserDetail = () => {
   const {
     students, staff, updateUser, adminSetPassword, deleteUser, approveTeacher,
     getAllPaymentReceipts, getPaymentReceiptUrl, getStudentAttendance, academicCalendar,
-    importAdmissionDetails,
+    importAdmissionDetails, adminUploadAvatar, adminRemoveAvatar,
   } = useAuth();
 
   const user = [...students, ...staff].find((u) => u.id === userId);
@@ -56,6 +57,32 @@ const AdminUserDetail = () => {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [sendingLogin, setSendingLogin] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+    if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); return; }
+    if (file.size > 15 * 1024 * 1024) { alert('Image is too large -- please choose one under 15MB.'); return; }
+    setSavingPhoto(true);
+    let upload = file;
+    if (file.size > 2 * 1024 * 1024) {
+      try { upload = await compressImageToTarget(file, 2 * 1024 * 1024); } catch { /* upload the original */ }
+    }
+    const { error } = await adminUploadAvatar(user.id, upload);
+    setSavingPhoto(false);
+    if (error) alert('Could not save the photo: ' + error);
+  };
+
+  const handlePhotoRemove = async () => {
+    if (!user || !window.confirm(`Remove ${user.name}'s photo?`)) return;
+    setSavingPhoto(true);
+    const { error } = await adminRemoveAvatar(user.id);
+    setSavingPhoto(false);
+    if (error) alert('Could not remove the photo: ' + error);
+  };
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -275,6 +302,7 @@ const AdminUserDetail = () => {
 
         <div className="card glass" style={{ padding: '32px', borderRadius: '32px' }}>
           <div style={{ display: 'flex', gap: '28px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', width: '110px', height: '110px', flexShrink: 0 }}>
             <div style={{
               width: '110px', height: '110px', borderRadius: '50%', flexShrink: 0,
               background: user.avatarUrl ? undefined : 'linear-gradient(135deg, var(--primary), var(--secondary))',
@@ -282,6 +310,33 @@ const AdminUserDetail = () => {
               fontSize: '36px', fontWeight: 800, border: '4px solid white', boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
             }}>
               {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : getInitials(user.name)}
+              {savingPhoto && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Loader2 size={24} className="animate-spin" />
+                </div>
+              )}
+            </div>
+              <input ref={photoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoChange} />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={savingPhoto}
+                title={user.avatarUrl ? 'Change photo' : 'Upload photo'}
+                style={{ position: 'absolute', bottom: '0', right: '0', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: 'white', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <Camera size={16} />
+              </button>
+              {user.avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handlePhotoRemove}
+                  disabled={savingPhoto}
+                  title="Remove photo"
+                  style={{ position: 'absolute', top: '0', right: '0', width: '28px', height: '28px', borderRadius: '50%', background: 'var(--error)', color: 'white', border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
             </div>
             <div style={{ flex: 1 }}>
               <h1 style={{ fontSize: '28px', fontWeight: 900, marginBottom: '4px' }}>{user.name}</h1>

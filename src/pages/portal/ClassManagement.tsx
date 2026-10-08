@@ -199,7 +199,7 @@ const ClassManagement = () => {
     // these subjects until a teacher fills them in on the Report Cards
     // page. Term/session come from the Academic Calendar.
     const rows = extracted.map((item) => ({ subject: item.subject, ca1: 0, ca2: 0, exam: item.score }));
-    const { error } = await saveSubjectResults(selectedStudent.id, reportCardTerm, reportCardSession, rows);
+    const { error } = await saveSubjectResults(selectedStudent.id, reportCardTerm, reportCardSession, rows, { skipLimits: true });
     if (error) { alert('Failed to save scanned results: ' + error); return; }
 
     setIsAIProcessing(false);
