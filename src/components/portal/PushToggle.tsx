@@ -41,7 +41,7 @@ const PushToggle = ({ compact = false }: { compact?: boolean }) => {
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           {state === 'blocked'
             ? 'They are blocked for this site. Allow notifications in your browser or phone settings, then come back.'
-            : 'We will remind you if a private message has waited for 2 days — even when the website is closed.'}
+            : 'We will tell you about new messages, assignments, tests and notices — even when the website is closed.'}
         </div>
         {message && <div style={{ fontSize: '12px', color: 'var(--error)', marginTop: '4px' }}>{message}</div>}
       </div>

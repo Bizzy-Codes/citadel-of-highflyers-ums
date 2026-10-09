@@ -196,11 +196,9 @@ const CitadelAI = () => {
     }
     if (name === 'get_my_assignments') {
       const list = auth.assignments.slice(0, 25).map((a) => {
-        const sub = auth.mySubmissions[a.id];
         return {
           title: a.title, subject: a.subject, class: a.className,
           due: a.dueDate ?? 'no due date', postedOn: a.createdAt?.slice(0, 10),
-          ...(role === 'student' ? { submitted: !!sub, grade: sub?.grade ?? null } : {}),
         };
       });
       return { result: { today, count: auth.assignments.length, assignments: list }, needsReply: true };

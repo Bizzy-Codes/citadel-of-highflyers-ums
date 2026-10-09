@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, type AttemptQuestion, type TestAttempt } from '../../context/AuthContext';
+import AnswerSheet from '../../components/portal/AnswerSheet';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useAntiCheat } from '../../hooks/useAntiCheat';
 import TestCameraBroadcaster from '../../components/portal/TestCameraBroadcaster';
@@ -345,12 +346,11 @@ const TestTaking = () => {
                 ))}
               </div>
             ) : (
-              <textarea
-                rows={6}
-                placeholder="Type your answer here..."
+              <AnswerSheet
+                mode={q.answerMode}
+                lineCount={q.lineCount}
                 value={answers[q.questionId]?.essayText ?? ''}
-                onChange={(e) => handleAnswerChange(q.questionId, { essayText: e.target.value })}
-                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'vertical', fontSize: '16px' }}
+                onChange={(text) => handleAnswerChange(q.questionId, { essayText: text })}
               />
             )}
 

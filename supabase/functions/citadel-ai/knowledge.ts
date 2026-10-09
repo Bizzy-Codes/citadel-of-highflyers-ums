@@ -46,11 +46,11 @@ ADMISSION (new families)
 THE PORTAL (for pupils, parents, teachers and admins)
 - Pupils (or their parents) create an account themselves from the login page ("Create an Account", choose Pupil). No email check -- they can sign in straight away. The school then puts them in their class.
 - Brothers and sisters can all be registered with the same parent email.
-- Pupils sign in with their NAME or login ID (like "CH 001") and their password. The school gives each family their password privately. They can change it on their Profile page.
-- A password the school gave stays valid until the person chooses to change it on their Profile page.
+- Pupils sign in with their NAME or login ID (like "CH 001") and their password. The school gives each family their password privately.
+- Pupils and teachers cannot change or reset their own password. Only the school admin can change a password, so anyone who forgets theirs must contact the school office.
 - Teachers register with "Create an Account" and choose Staff. An admin must approve them before they can use the portal.
-- Forgot password: use "Forgot Password?" on the login page, or ask the school office to reset it.
-- Inside the portal pupils can see assignments (and upload their work), tests, results and report cards, attendance, the school calendar, timetable, fees, messages and their profile.
+- Forgot password: contact the school office -- the admin gives a new password.
+- Inside the portal pupils can see assignments (they read the questions and write answers in their notebook; some assignments have a typed answer sheet), tests, results and report cards, attendance, the school calendar, timetable, fees, messages and their profile.
 - Teachers take the daily attendance "Register", post assignments and tests, and enter report cards.
 
 BANK DETAILS (public -- anyone may be given these; they contain no fee amounts)

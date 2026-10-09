@@ -1,6 +1,13 @@
-// Phone / browser push notifications (patch_39).
+// Phone / browser push notifications (patch_39 + patch_40).
 //
-// Called every 30 minutes by pg_cron with { remind_unread: true, token }.
+// Two callers, both authenticated with the push_token in ai_settings:
+//  * pg_cron every 30 minutes: { remind_unread: true, token }
+//  * database triggers the moment something happens (patch_40):
+//      { event: direct_message | class_message | assignment | test | notification, id, token }
+//    The function works out who should hear about it and pushes to each
+//    of their phones/browsers, whether or not the website is open.
+//
+// Unread reminder (cron):
 // It finds private messages that have gone unread for 2 days, pushes a
 // reminder to the recipient's phone/browser (whether or not the website
 // is open), and stamps the message so it is only reminded once.
@@ -85,16 +92,97 @@ async function remindUnread() {
   return json({ ok: true, reminded: byRecipient.size, pushes });
 }
 
+const snippet = (s: string | null | undefined, n = 120) => {
+  const t = (s ?? '').replace(/s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n - 1) + '…' : t;
+};
+
+// Push one message to a set of people.
+async function notifyUsers(userIds: string[], payload: Record<string, unknown>) {
+  const ids = [...new Set(userIds)];
+  let pushes = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: subs } = await db.from('push_subscriptions')
+      .select('id, endpoint, p256dh, auth').in('user_id', ids.slice(i, i + 200));
+    if (subs?.length) pushes += await pushTo(subs as SubRow[], payload);
+  }
+  return json({ ok: true, people: ids.length, pushes });
+}
+
+async function idsWhere(role: string, column?: string, value?: string): Promise<string[]> {
+  let q = db.from('profiles').select('id').eq('role', role);
+  if (column && value) q = q.eq(column, value);
+  const { data } = await q.limit(5000);
+  return (data ?? []).map((r: { id: string }) => r.id);
+}
+
+async function handleEvent(event: string, id: string) {
+  if (event === 'direct_message') {
+    const { data: m } = await db.from('direct_messages').select('sender_id, recipient_id, content').eq('id', id).maybeSingle();
+    if (!m) return json({ error: 'Not found' }, 404);
+    const { data: s } = await db.from('profiles').select('name, role').eq('id', m.sender_id).maybeSingle();
+    const from = s?.role === 'admin' ? 'the school admin' : (s?.name ?? 'someone');
+    return notifyUsers([m.recipient_id], {
+      title: 'New message', body: `From ${from}: ${snippet(m.content)}`,
+      url: `${SITE}/portal/messages`, tag: `dm-${m.sender_id}`,
+    });
+  }
+  if (event === 'class_message') {
+    const { data: m } = await db.from('class_messages').select('class_name, sender_id, sender_name, content').eq('id', id).maybeSingle();
+    if (!m) return json({ error: 'Not found' }, 404);
+    const people = [
+      ...await idsWhere('student', 'grade', m.class_name),
+      ...await idsWhere('teacher', 'assigned_class', m.class_name),
+    ].filter((u) => u !== m.sender_id);
+    return notifyUsers(people, {
+      title: `New message in ${m.class_name} group`, body: `${m.sender_name ?? 'Someone'}: ${snippet(m.content)}`,
+      url: `${SITE}/portal/messages`, tag: `group-${m.class_name}`,
+    });
+  }
+  if (event === 'assignment') {
+    const { data: a } = await db.from('assignments').select('class_name, subject, title').eq('id', id).maybeSingle();
+    if (!a) return json({ error: 'Not found' }, 404);
+    return notifyUsers(await idsWhere('student', 'grade', a.class_name), {
+      title: 'You have a new assignment', body: `${a.subject}: ${a.title}`,
+      url: `${SITE}/portal/assignments`, tag: `assignment-${id}`,
+    });
+  }
+  if (event === 'test') {
+    const { data: t } = await db.from('tests').select('class_name, subject, title').eq('id', id).maybeSingle();
+    if (!t) return json({ error: 'Not found' }, 404);
+    return notifyUsers(await idsWhere('student', 'grade', t.class_name), {
+      title: 'A test is open for you', body: `${t.subject}: ${t.title}`,
+      url: `${SITE}/portal/tests`, tag: `test-${id}`,
+    });
+  }
+  if (event === 'notification') {
+    const { data: n } = await db.from('notifications').select('title, message, audience, recipient_id').eq('id', id).maybeSingle();
+    if (!n) return json({ error: 'Not found' }, 404);
+    let people: string[] = [];
+    if (n.recipient_id) people = [n.recipient_id];
+    else if (n.audience === 'students') people = await idsWhere('student');
+    else if (n.audience === 'teachers') people = await idsWhere('teacher');
+    else if (n.audience === 'admins') people = await idsWhere('admin');
+    else people = [...await idsWhere('student'), ...await idsWhere('teacher'), ...await idsWhere('admin')];
+    return notifyUsers(people, {
+      title: n.title || 'Citadel of Highflyers', body: snippet(n.message),
+      url: `${SITE}/portal/messages`, tag: `notice-${id}`,
+    });
+  }
+  return json({ error: 'Unknown event' }, 400);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return json({ error: 'VAPID keys are not set' }, 500);
 
-  let body: { remind_unread?: boolean; token?: string };
+  let body: { remind_unread?: boolean; token?: string; event?: string; id?: string };
   try { body = await req.json(); } catch { return json({ error: 'Bad request' }, 400); }
 
   const { data: row } = await db.from('ai_settings').select('value').eq('key', 'push_token').maybeSingle();
   if (!row || !body.token || body.token !== row.value) return json({ error: 'Not allowed' }, 403);
 
+  if (body.event && body.id) return await handleEvent(body.event, body.id);
   if (body.remind_unread) return await remindUnread();
   return json({ error: 'Nothing to do' }, 400);
 });

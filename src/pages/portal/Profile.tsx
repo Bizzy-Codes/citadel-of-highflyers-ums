@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToTarget } from '../../lib/imageCompression';
-import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2, LogOut, KeyRound } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, MapPin, Calendar, Save, Edit3, X, Camera, Trash2, Loader2, LogOut } from 'lucide-react';
 import { upperName } from '../../lib/names';
 import PushToggle from '../../components/portal/PushToggle';
 
@@ -139,9 +139,6 @@ const Profile = () => {
                   <button onClick={() => setIsEditing(!isEditing)} className={`btn ${isEditing ? 'btn-outline' : 'btn-primary'}`}>
                     {isEditing ? <><X size={18} /> Cancel</> : <><Edit3 size={18} /> Edit Profile</>}
                   </button>
-                  <Link to="/portal/set-password" className="btn btn-outline">
-                    <KeyRound size={18} /> Change Password
-                  </Link>
                   <button onClick={handleLogout} className="btn btn-outline" style={{ color: 'var(--error)', borderColor: 'var(--error)' }}>
                     <LogOut size={18} /> Logout
                   </button>

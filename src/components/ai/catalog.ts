@@ -33,7 +33,7 @@ export const PAGES: AiPage[] = [
   { key: 'login', label: 'Portal log in page', path: '/login', roles: GUEST },
   { key: 'sign_up', label: 'Create a portal account (sign up / register a pupil)', path: '/login?register=student', roles: GUEST },
   { key: 'staff_sign_up', label: 'Create a staff (teacher) account', path: '/login?register=staff', roles: GUEST },
-  { key: 'forgot_password', label: 'Forgot password / reset password', path: '/forgot-password', roles: GUEST },
+  { key: 'forgot_password', label: 'Forgot password (explains that the admin changes passwords)', path: '/forgot-password', roles: GUEST },
 
   // Portal -- pupils
   { key: 'dashboard', label: 'My portal dashboard', path: '/portal', roles: PUPIL },
@@ -99,7 +99,7 @@ const SPOKEN_OPENING: Record<string, string> = {
   login: 'Opening the log in page.',
   sign_up: 'Opening the sign-up page.',
   staff_sign_up: 'Opening the staff sign-up page.',
-  forgot_password: 'Opening the password reset page.',
+  forgot_password: 'Opening the page that explains how to get a new password.',
   teacher_assignments: 'Opening your assignments page.',
   teacher_tests: 'Opening your tests page.',
   report_cards: 'Opening report cards.',

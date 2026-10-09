@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type NewAssignmentInput, type AssignmentSubmission } from '../../context/AuthContext';
-import { FileText, Plus, Trash2, Users, Download, Paperclip } from 'lucide-react';
+import { useAuth, type NewAssignmentInput, type NewAssignmentQuestionInput, type AssignmentSubmission, type AssignmentQuestion, type AssignmentAnswerRow } from '../../context/AuthContext';
+import { FileText, Plus, Trash2, Users, Download, Paperclip, Lock, RotateCcw, X } from 'lucide-react';
 import './Tests.css';
 import DateWheelInput from '../../components/common/DateWheelInput';
 
 const emptyInput: NewAssignmentInput = { subject: '', title: '', description: '', dueDate: '' };
 
 const TeacherAssignments = () => {
-  const { currentUser, students, assignments, createAssignment, deleteAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
+  const { currentUser, students, assignments, createAssignment, deleteAssignment, setAssignmentOpen, getAssignmentQuestions, getAnswersForAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
+  const [newQuestions, setNewQuestions] = useState<NewAssignmentQuestionInput[]>([]);
+  const [viewQuestions, setViewQuestions] = useState<AssignmentQuestion[]>([]);
+  const [viewAnswers, setViewAnswers] = useState<AssignmentAnswerRow[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [input, setInput] = useState<NewAssignmentInput>(emptyInput);
   const [file, setFile] = useState<File | null>(null);
@@ -21,13 +25,24 @@ const TeacherAssignments = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await createAssignment(input, file);
+    const { error } = await createAssignment({ ...input, questions: newQuestions }, file);
     setSaving(false);
     if (error) { alert('Failed to create assignment: ' + error); return; }
     setIsCreating(false);
     setInput(emptyInput);
+    setNewQuestions([]);
     setFile(null);
   };
+
+  const toggleOpen = async (id: string, open: boolean) => {
+    setBusyId(id);
+    const { error } = await setAssignmentOpen(id, open);
+    setBusyId(null);
+    if (error) alert('Could not update the assignment: ' + error);
+  };
+
+  const updateNewQuestion = (i: number, patch: Partial<NewAssignmentQuestionInput>) =>
+    setNewQuestions(newQuestions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This removes all pupil submissions too.`)) return;
@@ -36,7 +51,13 @@ const TeacherAssignments = () => {
 
   const openSubmissions = async (assignmentId: string) => {
     setViewingId(assignmentId);
-    const subs = await getSubmissionsForAssignment(assignmentId);
+    setViewQuestions([]);
+    setViewAnswers([]);
+    const [subs, qs, ans] = await Promise.all([
+      getSubmissionsForAssignment(assignmentId), getAssignmentQuestions(assignmentId), getAnswersForAssignment(assignmentId),
+    ]);
+    setViewQuestions(qs);
+    setViewAnswers(ans);
     setSubmissions(subs);
     const d: Record<string, { grade: string; feedback: string }> = {};
     subs.forEach((s) => { d[s.id] = { grade: s.grade ?? '', feedback: s.feedback ?? '' }; });
@@ -75,7 +96,7 @@ const TeacherAssignments = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ marginBottom: '4px' }}>Assignments {currentUser?.assignedClass ? `— ${currentUser.assignedClass}` : ''}</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with an optional brief, then review and grade pupil submissions.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with questions. Pupils read them and write in their notebooks, or type in an answer box you open for them.</p>
           </div>
           <button data-ai="assign-new" className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> New Assignment</button>
         </div>
@@ -90,13 +111,19 @@ const TeacherAssignments = () => {
           {assignments.map((a) => (
             <div key={a.id} className="test-row">
               <div style={{ flex: 1, minWidth: '200px' }}>
-                <strong>{a.title}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <strong>{a.title}</strong>
+                  {!a.isOpen && <span className="test-status-badge test-status-closed">closed</span>}
+                </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   {a.subject} {a.dueDate ? `· Due ${new Date(a.dueDate).toLocaleDateString()}` : ''} {a.attachmentName ? `· 📎 ${a.attachmentName}` : ''}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-outline sm" onClick={() => openSubmissions(a.id)}><Users size={16} /> Submissions</button>
+                <button className="btn btn-outline sm" onClick={() => openSubmissions(a.id)}><Users size={16} /> Answers</button>
+                {a.isOpen
+                  ? <button className="btn btn-outline sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, false)} title="Hide it from pupils. Nothing is deleted."><Lock size={16} /> Close</button>
+                  : <button className="btn btn-primary sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, true)} title="Show it to pupils again and notify them."><RotateCcw size={16} /> Republish</button>}
                 <button className="icon-btn" title="Delete" onClick={() => handleDelete(a.id, a.title)}><Trash2 size={18} /></button>
               </div>
             </div>
@@ -106,7 +133,7 @@ const TeacherAssignments = () => {
 
       {isCreating && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '90%', maxWidth: '440px' }}>
+          <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '24px' }}>New Assignment</h3>
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
@@ -129,11 +156,45 @@ const TeacherAssignments = () => {
                 <div data-ai="assign-due"><DateWheelInput value={input.dueDate} onChange={(v) => setInput({ ...input, dueDate: v })} title="Due date" /></div>
               </div>
               <div className="input-group">
+                <label>Questions (optional)</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {newQuestions.map((q, i) => (
+                    <div key={i} className="grading-answer-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <strong>Question {i + 1}</strong>
+                        <button type="button" className="icon-btn sm" title="Remove question" onClick={() => setNewQuestions(newQuestions.filter((_, idx) => idx !== i))}><X size={14} /></button>
+                      </div>
+                      <textarea rows={2} required value={q.prompt} placeholder="Type the question..." onChange={(e) => updateNewQuestion(i, { prompt: e.target.value })}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }} />
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '8px' }}>
+                        <button type="button" className={`btn sm ${q.answerMode === 'none' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'none' })}>Notebook only</button>
+                        <button type="button" className={`btn sm ${q.answerMode === 'box' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'box' })}>Answer box</button>
+                        <button type="button" className={`btn sm ${q.answerMode === 'lines' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'lines' })}>Lines i, ii, iii</button>
+                        {q.answerMode === 'lines' && (
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                            Lines
+                            <input type="number" min={1} max={30} value={q.lineCount} onChange={(e) => updateNewQuestion(i, { lineCount: Math.min(30, Math.max(1, Number(e.target.value) || 1)) })}
+                              style={{ width: '64px', padding: '6px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="btn btn-outline sm" style={{ marginTop: '8px' }}
+                  onClick={() => setNewQuestions([...newQuestions, { prompt: '', answerMode: 'none', lineCount: 5 }])}>
+                  <Plus size={14} /> Add a question
+                </button>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                  "Notebook only": pupils copy it into their notebook. "Answer box" or "Lines": they type the answer on the portal and you read it.
+                </p>
+              </div>
+              <div className="input-group">
                 <label>Attach a brief (optional)</label>
                 <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsCreating(false); setFile(null); }}>Cancel</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsCreating(false); setFile(null); setNewQuestions([]); }}>Cancel</button>
                 <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? 'Posting...' : 'Post Assignment'}</button>
               </div>
             </form>
@@ -150,7 +211,38 @@ const TeacherAssignments = () => {
                 {submissions.length} of {classPupils.length} pupils have handed in.
               </p>
             )}
-            {submissions.length === 0 && <p style={{ color: 'var(--text-muted)' }}>No submissions yet.</p>}
+            {viewQuestions.some((q) => q.answerMode !== 'none') && (() => {
+              const typedQs = viewQuestions.filter((q) => q.answerMode !== 'none');
+              const byStudent = new Map<string, AssignmentAnswerRow[]>();
+              viewAnswers.forEach((r) => byStudent.set(r.studentId, [...(byStudent.get(r.studentId) ?? []), r]));
+              return (
+                <div style={{ marginBottom: '18px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Typed answers ({byStudent.size} of {classPupils.length || byStudent.size} pupils have started)</h4>
+                  {byStudent.size === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Nobody has typed an answer yet.</p>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {[...byStudent.entries()].map(([sid, rows]) => (
+                      <div key={sid} className="grading-answer-card">
+                        <strong>{rows[0].studentName ?? sid}</strong>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>{rows[0].studentDisplayId}</span>
+                        {typedQs.map((q) => {
+                          const qi = viewQuestions.findIndex((x) => x.id === q.id) + 1;
+                          const row = rows.find((r) => r.questionId === q.id);
+                          return (
+                            <div key={q.id} style={{ marginTop: '8px' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Q{qi}. {q.prompt}</div>
+                              <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', background: 'var(--bg-light)', padding: '8px', borderRadius: '8px', marginTop: '2px' }}>
+                                {row?.answerText?.trim() ? row.answerText : '(no answer)'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {submissions.length === 0 && viewQuestions.every((q) => q.answerMode === 'none') && <p style={{ color: 'var(--text-muted)' }}>Nothing handed in on the portal for this one.</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {submissions.map((s) => (
                 <div key={s.id} className="grading-answer-card">

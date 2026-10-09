@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
 import type { CalendarTable } from '../lib/calendarExtract';
-import { siblingLoginEmail, isEmailTakenError } from '../lib/accounts';
+import { siblingLoginEmail, isEmailTakenError, CLASSES } from '../lib/accounts';
 
 // supabase-js's functions.invoke() only ever surfaces a generic
 // "Edge Function returned a non-2xx status code" on error -- the
@@ -179,6 +179,47 @@ export interface Assignment {
   attachmentName?: string;
   createdBy: string;
   createdAt: string;
+  // False once the teacher has closed it; it vanishes for pupils until
+  // re-published. Nothing is ever lost by closing.
+  isOpen: boolean;
+}
+
+// How a question is answered: none = pupil writes it in their notebook,
+// box = open typing box, lines = numbered i, ii, iii ... lines.
+export type AnswerMode = 'none' | 'box' | 'lines';
+
+export interface AssignmentQuestion {
+  id: string;
+  assignmentId: string;
+  orderIndex: number;
+  prompt: string;
+  answerMode: AnswerMode;
+  lineCount: number;
+}
+
+export interface NewAssignmentQuestionInput {
+  prompt: string;
+  answerMode: AnswerMode;
+  lineCount: number;
+}
+
+export interface AssignmentAnswerRow {
+  questionId: string;
+  studentId: string;
+  studentName?: string;
+  studentDisplayId?: string;
+  answerText: string;
+  updatedAt: string;
+}
+
+export interface ClassMessage {
+  id: string;
+  className: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  createdAt: string;
 }
 
 export interface NewAssignmentInput {
@@ -186,6 +227,7 @@ export interface NewAssignmentInput {
   title: string;
   description?: string;
   dueDate?: string;
+  questions?: NewAssignmentQuestionInput[];
 }
 
 export interface AssignmentSubmission {
@@ -253,6 +295,9 @@ export interface TestQuestion {
   correctOption?: string;
   modelAnswer?: string;
   keywords?: { phrase: string; points: number }[];
+  // Essay answer sheet: 'box' or numbered 'lines' (i, ii, iii ...).
+  answerMode: 'box' | 'lines';
+  lineCount: number;
 }
 
 // The single shape both a hand-typed question and a future
@@ -266,6 +311,8 @@ export interface NewTestQuestionInput {
   correctOption?: string;
   modelAnswer?: string;
   keywords?: { phrase: string; points: number }[];
+  answerMode?: 'box' | 'lines';
+  lineCount?: number;
 }
 
 // Student-side: sanitized shape from the get_attempt_questions RPC --
@@ -279,6 +326,8 @@ export interface AttemptQuestion {
   options?: TestQuestionOption[];
   selectedOption?: string;
   essayText?: string;
+  answerMode: 'box' | 'lines';
+  lineCount: number;
 }
 
 export interface Test {
@@ -526,6 +575,16 @@ interface AuthContextType {
   mySubmissions: Record<string, AssignmentSubmission>;
   createAssignment: (input: NewAssignmentInput, file: File | null) => Promise<{ error: string | null }>;
   deleteAssignment: (id: string) => Promise<void>;
+  setAssignmentOpen: (id: string, open: boolean) => Promise<{ error: string | null }>;
+  getAssignmentQuestions: (assignmentId: string) => Promise<AssignmentQuestion[]>;
+  getMyAnswers: (assignmentId: string) => Promise<Record<string, string>>;
+  saveMyAnswer: (assignmentId: string, questionId: string, text: string) => Promise<{ error: string | null }>;
+  getAnswersForAssignment: (assignmentId: string) => Promise<AssignmentAnswerRow[]>;
+  getClassMessages: (className: string) => Promise<ClassMessage[]>;
+  sendClassMessage: (className: string, content: string) => Promise<{ error: string | null }>;
+  subscribeToClassMessages: (className: string, onMessage: (message: ClassMessage) => void) => () => void;
+  markClassChatRead: (className: string) => Promise<void>;
+  classChatNames: string[];
   submitAssignment: (assignmentId: string, file: File) => Promise<{ error: string | null }>;
   getSubmissionsForAssignment: (assignmentId: string) => Promise<AssignmentSubmission[]>;
   gradeSubmission: (submissionId: string, grade: string, feedback: string) => Promise<{ error: string | null }>;
@@ -656,6 +715,7 @@ const mapAssignmentRow = (row: any): Assignment => ({
   attachmentName: row.attachment_name ?? undefined,
   createdBy: row.created_by,
   createdAt: row.created_at,
+  isOpen: row.is_open !== false,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -685,6 +745,8 @@ const mapTestQuestionRow = (row: any): TestQuestion => ({
   correctOption: row.correct_option ?? undefined,
   modelAnswer: row.model_answer ?? undefined,
   keywords: row.keywords ?? undefined,
+  answerMode: row.answer_mode === 'lines' ? 'lines' : 'box',
+  lineCount: Number(row.line_count ?? 5),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -697,6 +759,8 @@ const mapAttemptQuestionRow = (row: any): AttemptQuestion => ({
   options: row.options ?? undefined,
   selectedOption: row.selected_option ?? undefined,
   essayText: row.essay_text ?? undefined,
+  answerMode: row.answer_mode === 'lines' ? 'lines' : 'box',
+  lineCount: Number(row.line_count ?? 5),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -858,6 +922,27 @@ const mapViolationRow = (row: any): ExamViolation => ({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapClassMessageRow = (row: any): ClassMessage => ({
+  id: row.id,
+  className: row.class_name,
+  senderId: row.sender_id,
+  senderName: row.sender_name ?? 'Someone',
+  senderRole: row.sender_role ?? 'student',
+  content: row.content,
+  createdAt: row.created_at,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapAssignmentQuestionRow = (row: any): AssignmentQuestion => ({
+  id: row.id,
+  assignmentId: row.assignment_id,
+  orderIndex: row.order_index,
+  prompt: row.prompt,
+  answerMode: row.answer_mode,
+  lineCount: Number(row.line_count ?? 5),
+});
+
 const mapMessageRow = (row: any): DirectMessage => ({
   id: row.id,
   senderId: row.sender_id,
@@ -1633,6 +1718,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }).select().single();
     if (insertError || !inserted) return { error: insertError?.message ?? 'Failed to create assignment' };
 
+    const qs = (input.questions ?? []).filter((q) => q.prompt.trim());
+    if (qs.length > 0) {
+      const { error: qError } = await supabase.from('assignment_questions').insert(
+        qs.map((q, i) => ({
+          assignment_id: inserted.id, order_index: i, prompt: q.prompt.trim(),
+          answer_mode: q.answerMode, line_count: q.lineCount,
+        })),
+      );
+      if (qError) { await refreshAssignments(); return { error: `Assignment posted, but the questions could not be saved: ${qError.message}` }; }
+    }
+
     if (file) {
       const path = `${inserted.id}/brief/${file.name}`;
       const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
@@ -1686,6 +1782,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await refreshMySubmissions();
     return { error: null };
+  };
+
+  // Closing hides it from pupils; re-publishing brings it back (and
+  // notifies them again). Questions and answers are kept either way.
+  const setAssignmentOpen = async (id: string, open: boolean) => {
+    const { error } = await supabase.from('assignments').update({ is_open: open }).eq('id', id);
+    if (error) return { error: error.message };
+    await refreshAssignments();
+    return { error: null };
+  };
+
+  const getAssignmentQuestions = async (assignmentId: string): Promise<AssignmentQuestion[]> => {
+    const { data, error } = await supabase.from('assignment_questions').select('*').eq('assignment_id', assignmentId).order('order_index');
+    if (error) { console.error('getAssignmentQuestions failed', error); return []; }
+    return (data ?? []).map(mapAssignmentQuestionRow);
+  };
+
+  const getMyAnswers = async (assignmentId: string): Promise<Record<string, string>> => {
+    if (!session?.user.id) return {};
+    const { data, error } = await supabase.from('assignment_answers').select('question_id, answer_text')
+      .eq('assignment_id', assignmentId).eq('student_id', session.user.id);
+    if (error) { console.error('getMyAnswers failed', error); return {}; }
+    return Object.fromEntries((data ?? []).map((r) => [r.question_id as string, r.answer_text as string]));
+  };
+
+  const saveMyAnswer = async (assignmentId: string, questionId: string, text: string) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const { error } = await supabase.from('assignment_answers').upsert({
+      assignment_id: assignmentId, question_id: questionId, student_id: session.user.id,
+      answer_text: text, updated_at: new Date().toISOString(),
+    }, { onConflict: 'question_id,student_id' });
+    return { error: error?.message ?? null };
+  };
+
+  const getAnswersForAssignment = async (assignmentId: string): Promise<AssignmentAnswerRow[]> => {
+    const { data, error } = await supabase.from('assignment_answers')
+      .select('question_id, student_id, answer_text, updated_at, profiles(name, display_id)')
+      .eq('assignment_id', assignmentId);
+    if (error) { console.error('getAnswersForAssignment failed', error); return []; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({
+      questionId: r.question_id, studentId: r.student_id,
+      studentName: r.profiles?.name ?? undefined, studentDisplayId: r.profiles?.display_id ?? undefined,
+      answerText: r.answer_text, updatedAt: r.updated_at,
+    }));
   };
 
   const getSubmissionsForAssignment = async (assignmentId: string): Promise<AssignmentSubmission[]> => {
@@ -1764,14 +1905,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Unread private messages: drives the login pop-up, the header badge
   // and the Messages menu badge. Refreshed live when a message arrives.
+  const unreadClass = currentUser?.role === 'student' ? currentUser.grade : currentUser?.role === 'teacher' ? currentUser.assignedClass : undefined;
   const refreshUnreadMessages = useCallback(async () => {
     const uid = session?.user.id;
     if (!uid) { setUnreadMessageCount(0); return; }
     const { count, error } = await supabase.from('direct_messages')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_id', uid).is('read_at', null);
-    if (!error) setUnreadMessageCount(count ?? 0);
-  }, [session?.user.id]);
+    let total = error ? null : (count ?? 0);
+    // Plus new posts in the pupil's / teacher's own class group.
+    const myClass = unreadClass;
+    if (total !== null && myClass) {
+      const { data: read } = await supabase.from('class_chat_reads').select('last_read_at')
+        .eq('user_id', uid).eq('class_name', myClass).maybeSingle();
+      let q = supabase.from('class_messages').select('id', { count: 'exact', head: true })
+        .eq('class_name', myClass).neq('sender_id', uid);
+      if (read?.last_read_at) q = q.gt('created_at', read.last_read_at);
+      const { count: groupCount, error: groupError } = await q;
+      if (!groupError) total += groupCount ?? 0;
+    }
+    if (total !== null) setUnreadMessageCount(total);
+  }, [session?.user.id, unreadClass]);
 
   useEffect(() => {
     const uid = session?.user.id;
@@ -1780,6 +1934,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const channel = supabase
       .channel(`unread-dm-${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages', filter: `recipient_id=eq.${uid}` }, () => { refreshUnreadMessages(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'class_messages' }, () => { refreshUnreadMessages(); })
       .subscribe();
     const poll = setInterval(refreshUnreadMessages, 60_000);
     return () => { clearTimeout(first); clearInterval(poll); supabase.removeChannel(channel); };
@@ -1795,12 +1950,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser.role === 'admin') {
       return [...students, ...staff].filter(u => u.id !== currentUser.id);
     }
-    if (currentUser.role === 'teacher') {
-      return [...students, ...staff.filter(u => u.role === 'admin')];
-    }
-    // student
-    return staff.filter(u => u.role === 'teacher' || u.role === 'admin');
+    // Teachers and pupils can only ever chat privately with an admin
+    // (enforced by the database too, patch_40). Everything else goes to
+    // the class group.
+    return staff.filter(u => u.role === 'admin');
   })();
+
+  // Class group chats this person can see: their own class, or (admin) all.
+  const classChatNames: string[] = (() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return [...CLASSES];
+    if (currentUser.role === 'student') return currentUser.grade ? [currentUser.grade] : [];
+    if (currentUser.role === 'teacher') return currentUser.assignedClass ? [currentUser.assignedClass] : [];
+    return [];
+  })();
+
+  const getClassMessages = async (className: string): Promise<ClassMessage[]> => {
+    const { data, error } = await supabase.from('class_messages').select('*')
+      .eq('class_name', className).order('created_at', { ascending: true }).limit(500);
+    if (error) { console.error('getClassMessages failed', error); return []; }
+    return (data ?? []).map(mapClassMessageRow);
+  };
+
+  const sendClassMessage = async (className: string, content: string) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const text = content.trim();
+    if (!text) return { error: 'Message cannot be empty' };
+    const { error } = await supabase.from('class_messages').insert({ class_name: className, sender_id: session.user.id, content: text });
+    return { error: error?.message ?? null };
+  };
+
+  const subscribeToClassMessages = (className: string, onMessage: (message: ClassMessage) => void) => {
+    const channel = supabase
+      .channel(`class-chat-${className}-${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'class_messages', filter: `class_name=eq.${className}` }, (payload) => {
+        onMessage(mapClassMessageRow(payload.new));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  };
+
+  const markClassChatRead = async (className: string) => {
+    if (!session?.user.id) return;
+    await supabase.from('class_chat_reads').upsert(
+      { user_id: session.user.id, class_name: className, last_read_at: new Date().toISOString() },
+      { onConflict: 'user_id,class_name' },
+    );
+    refreshUnreadMessages();
+  };
 
   const getConversation = async (otherUserId: string): Promise<DirectMessage[]> => {
     if (!session?.user.id) return [];
@@ -1937,6 +2134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       correct_option: input.correctOption ?? null,
       model_answer: input.modelAnswer ?? null,
       keywords: input.keywords ?? null,
+      answer_mode: input.answerMode ?? 'box',
+      line_count: input.lineCount ?? 5,
     };
     if (input.id) {
       const { error } = await supabase.from('test_questions').update(row).eq('id', input.id);
@@ -2503,6 +2702,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subjectsByClass, updateSubjects, timetables, updateTimetable,
       notifications, addNotification, uploadAnnouncementImage, unreadMessageCount, refreshUnreadMessages, exportData,
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
+      setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
+      getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
       uploadChatAttachment, getChatAttachmentUrl,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type NewTestInput } from '../../context/AuthContext';
-import { ClipboardList, Plus, Pencil, Radio, Trash2, Send, Lock } from 'lucide-react';
+import { ClipboardList, Plus, Pencil, Radio, Trash2, Send, Lock, RotateCcw } from 'lucide-react';
 import './Tests.css';
 
 const emptyInput = { subject: '', title: '', instructions: '' };
@@ -90,6 +90,9 @@ const TeacherTests = () => {
                 )}
                 {t.status === 'published' && (
                   <button className="btn btn-outline sm" disabled={busyId === t.id} onClick={() => handleClose(t.id)}><Lock size={16} /> Close</button>
+                )}
+                {t.status === 'closed' && (
+                  <button className="btn btn-primary sm" disabled={busyId === t.id} onClick={() => handlePublish(t.id)} title="Open this test again, e.g. for a pupil who was ill. Pupils who have not taken it can start it."><RotateCcw size={16} /> Republish</button>
                 )}
                 <button className="icon-btn" title="Delete" disabled={busyId === t.id} onClick={() => handleDelete(t.id, t.title)}><Trash2 size={18} /></button>
               </div>

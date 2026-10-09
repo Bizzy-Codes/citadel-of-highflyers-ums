@@ -21,7 +21,7 @@ import './Dashboard.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, assignments, mySubmissions, academicCalendar, getMyAttendance, markWelcomeSeen } = useAuth();
+  const { currentUser, assignments, academicCalendar, getMyAttendance, markWelcomeSeen } = useAuth();
   const results = currentUser?.results ?? [];
 
   // The welcome letter greets a pupil the first time they ever sign in,
@@ -53,7 +53,7 @@ const Dashboard = () => {
     ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
     : null;
 
-  const pendingAssignments = assignments.filter((a) => !mySubmissions[a.id]);
+  const pendingAssignments = assignments.filter((a) => !a.dueDate || a.dueDate >= new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }));
 
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   useEffect(() => {
@@ -206,7 +206,6 @@ const Dashboard = () => {
                       <p className="activity-title">{as.title}</p>
                       <span className="activity-time">
                         {as.subject} {as.dueDate ? `| Due: ${new Date(as.dueDate).toLocaleDateString()}` : ''}
-                        {mySubmissions[as.id] ? ' | Submitted' : ''}
                       </span>
                     </div>
                   </div>

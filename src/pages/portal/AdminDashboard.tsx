@@ -10,7 +10,6 @@ import {
   PlusCircle,
   Search,
   Edit2,
-  Key,
   CheckCircle,
   Clock,
   Calendar,
@@ -25,7 +24,7 @@ const PAGE_SIZE = 10;
 
 const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { students, staff, createUser, updateUser, requestPasswordReset, exportData } = useAuth();
+  const { students, staff, createUser, updateUser, exportData } = useAuth();
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
   const [page, setPage] = useState(1);
   const recordsRef = useRef<HTMLElement | null>(null);
@@ -94,17 +93,6 @@ const AdminDashboard = () => {
   const toggleStatus = async (student: User) => {
     const { error } = await updateUser(student.id, { status: student.status === 'Active' ? 'Inactive' : 'Active' });
     if (error) alert('Failed to change status: ' + error);
-  };
-
-  const resetPassword = async (student: User) => {
-    if (!student.email) {
-      alert("This pupil has no email on file, so a reset link can't be sent.");
-      return;
-    }
-    if (!window.confirm(`Send a password reset link to ${student.name} (${student.email})?`)) return;
-    const { error } = await requestPasswordReset(student.email);
-    if (error) alert("Failed to send reset email: " + error);
-    else alert("Password reset link sent to " + student.email);
   };
 
   return (
@@ -196,7 +184,6 @@ const AdminDashboard = () => {
                         <td style={{ padding: '16px 20px', borderRadius: '0 12px 12px 0', textAlign: 'right' }}>
                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                               <button onClick={() => setEditingStudent(student)} className="icon-btn" title="Edit Pupil" style={{ color: 'var(--primary)' }}><Edit2 size={16} /></button>
-                              <button onClick={() => resetPassword(student)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
                            </div>
                         </td>
                      </tr>

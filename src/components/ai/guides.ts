@@ -71,22 +71,8 @@ export const GUIDES: Guide[] = [
       { target: 'login-password', text: "Type your password. If you've forgotten it, the school office can help.", advance: 'next' },
       { target: 'login-submit', text: 'Now press Sign In to Portal.', advance: 'click' },
     ],
-    // Anyone landing in the portal is in. (/portal/set-password is only
-    // the optional "change my password" page now.)
-    donePath: (p) => p.startsWith('/portal') && p !== '/portal/set-password',
+    donePath: (p) => p.startsWith('/portal'),
     doneText: 'You are in! Tell me what you want to see, like assignments or results.',
-  },
-  {
-    key: 'forgot_password',
-    label: 'Reset a forgotten password',
-    roles: ['guest'],
-    path: '/forgot-password',
-    steps: [
-      { target: 'forgot-email', text: 'Type the email you used for the account.', advance: 'next' },
-      { target: 'forgot-submit', text: 'Press Send Verification Code.', advance: 'click' },
-    ],
-    doneSelector: '[data-ai="forgot-otp"]',
-    doneText: 'Check your email for a 6-digit code (look in spam too) and type it in the box. If it does not come, the school office can reset your password.',
   },
   {
     key: 'apply_admission',
@@ -105,16 +91,6 @@ export const GUIDES: Guide[] = [
     doneText: 'Your application has been sent! The last step is the processing fee. Choose how you will pay on this page.',
   },
   {
-    key: 'submit_assignment',
-    label: 'Submit (upload) work for an assignment',
-    roles: ['student'],
-    path: '/portal/assignments',
-    steps: [
-      { target: 'assignment-submit', text: 'Press Submit Work, then choose a photo or file of your work.', advance: 'click' },
-    ],
-    doneText: 'Once the upload finishes, it will say Submitted. Well done!',
-  },
-  {
     key: 'post_assignment',
     label: 'Post a new assignment for my class (teacher)',
     roles: ['teacher'],
@@ -126,7 +102,7 @@ export const GUIDES: Guide[] = [
       { target: 'assign-due', text: 'Choose a due date if there is one.', advance: 'next' },
       { target: 'assign-post', text: 'Press Post Assignment. Your pupils will see it straight away.', advance: 'click' },
     ],
-    doneText: 'Posted! Your pupils can now see it and upload their work.',
+    doneText: 'Posted! Your pupils can now see it and will get a notification.',
   },
 ];
 

@@ -8,8 +8,6 @@ import BankDetails from './pages/marketing/BankDetails'
 import Gallery from './pages/marketing/Gallery'
 import Login from './pages/portal/Login'
 import ForgotPassword from './pages/portal/ForgotPassword'
-import ResetPassword from './pages/portal/ResetPassword'
-import SetPassword from './pages/portal/SetPassword'
 import PendingApproval from './pages/portal/PendingApproval'
 import Dashboard from './pages/portal/Dashboard'
 import Profile from './pages/portal/Profile'
@@ -73,10 +71,9 @@ function App() {
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        {/* Deliberately not behind ProtectedRoute: it's where ProtectedRoute
-            sends people who must choose their own password first. */}
-        <Route path="/portal/set-password" element={<SetPassword />} />
+        {/* Passwords are changed by the admin only -- old links land on the explanation page. */}
+        <Route path="/reset-password" element={<Navigate to="/forgot-password" replace />} />
+        <Route path="/portal/set-password" element={<Navigate to="/portal" replace />} />
 
         <Route path="/portal/pending" element={
           <ProtectedRoute allowedRoles={['teacher_pending']}><PendingApproval /></ProtectedRoute>

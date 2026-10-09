@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type DirectMessage } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X } from 'lucide-react';
+import { useAuth, type DirectMessage, type ClassMessage } from '../../context/AuthContext';
+import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X } from 'lucide-react';
 import { compressImageToTarget } from '../../lib/imageCompression';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl } = useAuth();
+  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
   // The notifications table's RLS already lets teachers post ("staff
@@ -14,8 +14,51 @@ const Messages = () => {
   // hidden from them, which left the teacher dashboard's "New
   // Announcement" button with nowhere useful to go.
   const canPostAnnouncements = isAdmin || currentUser?.role === 'teacher';
-  const forcedView = (location.state as { view?: 'chats' | 'notifications' | 'whatsapp' } | null)?.view;
-  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp'>(forcedView ?? (isAdmin ? 'whatsapp' : 'notifications'));
+  const forcedView = (location.state as { view?: 'chats' | 'notifications' | 'whatsapp' | 'group' } | null)?.view;
+  // Pupils and teachers only have a private chat with the admin; the
+  // header's "messages" button takes them to their class group first.
+  const startView = forcedView === 'chats' && !isAdmin && classChatNames.length > 0 ? 'group' : forcedView;
+  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp' | 'group'>(startView ?? (isAdmin ? 'whatsapp' : 'notifications'));
+
+  // Class group chat state
+  const [groupClass, setGroupClass] = useState<string>(classChatNames[0] ?? '');
+  const [groupMessages, setGroupMessages] = useState<ClassMessage[]>([]);
+  const [groupDraft, setGroupDraft] = useState('');
+  const [groupLoading, setGroupLoading] = useState(false);
+  const groupEndRef = useRef<HTMLDivElement>(null);
+  const hasGroup = classChatNames.length > 0;
+  const activeGroup = classChatNames.includes(groupClass) ? groupClass : (classChatNames[0] ?? '');
+
+  useEffect(() => {
+    if (activeView !== 'group' || !activeGroup) return;
+    let cancelled = false;
+    setGroupLoading(true);
+    getClassMessages(activeGroup).then((msgs) => {
+      if (cancelled) return;
+      setGroupMessages(msgs);
+      setGroupLoading(false);
+      markClassChatRead(activeGroup);
+    });
+    const unsubscribe = subscribeToClassMessages(activeGroup, (msg) => {
+      setGroupMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      markClassChatRead(activeGroup);
+    });
+    return () => { cancelled = true; unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, activeGroup]);
+
+  useEffect(() => {
+    groupEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [groupMessages]);
+
+  const handleSendGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeGroup || !groupDraft.trim()) return;
+    const draft = groupDraft;
+    setGroupDraft('');
+    const { error } = await sendClassMessage(activeGroup, draft);
+    if (error) { alert('Failed to send message: ' + error); setGroupDraft(draft); }
+  };
 
   // Private Chats state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -205,12 +248,22 @@ const Messages = () => {
              </button>
            )}
 
+           {hasGroup && (
+             <button
+              onClick={() => setActiveView('group')}
+              className={`btn ${activeView === 'group' ? 'btn-primary' : 'btn-outline'}`}
+              style={{ justifyContent: 'flex-start' }}
+             >
+               <Users size={18} /> {isAdmin ? 'Class Groups' : `${activeGroup} Group`}
+             </button>
+           )}
+
            <button
             onClick={() => setActiveView('chats')}
             className={`btn ${activeView === 'chats' ? 'btn-primary' : 'btn-outline'}`}
             style={{ justifyContent: 'flex-start' }}
            >
-             <User size={18} /> Private Chats
+             <User size={18} /> {isAdmin ? 'Private Chats' : 'Message the Admin'}
            </button>
         </div>
 
@@ -361,6 +414,66 @@ const Messages = () => {
              </div>
            )}
 
+           {activeView === 'group' && hasGroup && (
+             <div className="chats-thread" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '480px' }}>
+                <div className="chats-thread-header">
+                   <div className="chats-contact-avatar"><Users size={18} /></div>
+                   <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '700', fontSize: '15px' }}>{activeGroup} Group</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Everyone in {activeGroup} can see what is posted here.</div>
+                   </div>
+                   {isAdmin && (
+                     <select value={activeGroup} onChange={(e) => setGroupClass(e.target.value)}
+                       style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}>
+                       {classChatNames.map((c) => <option key={c} value={c}>{c}</option>)}
+                     </select>
+                   )}
+                </div>
+
+                <div className="chats-thread-messages">
+                   {groupLoading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading messages...</p>}
+                   {!groupLoading && groupMessages.length === 0 && (
+                     <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No messages yet. Say hello to the class!</p>
+                   )}
+                   {groupMessages.map((msg) => {
+                     const mine = msg.senderId === currentUser?.id;
+                     const staffSender = msg.senderRole === 'teacher' || msg.senderRole === 'admin';
+                     return (
+                       <div key={msg.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+                          <div className="chats-bubble" style={{
+                            background: mine ? 'var(--primary)' : 'var(--bg-surface)',
+                            color: mine ? '#fff' : 'var(--text-main)',
+                            border: mine ? 'none' : '1px solid var(--glass-border)',
+                          }}>
+                             {!mine && (
+                               <div style={{ fontSize: '11px', fontWeight: 800, marginBottom: '2px', color: staffSender ? 'var(--primary)' : 'var(--text-muted)' }}>
+                                 {msg.senderName}{msg.senderRole === 'teacher' ? ' (Teacher)' : msg.senderRole === 'admin' ? ' (Admin)' : ''}
+                               </div>
+                             )}
+                             <p style={{ fontSize: '14px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                             <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
+                                {new Date(msg.createdAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                             </span>
+                          </div>
+                       </div>
+                     );
+                   })}
+                   <div ref={groupEndRef} />
+                </div>
+
+                <form onSubmit={handleSendGroup} className="chats-thread-input">
+                   <input
+                     type="text"
+                     placeholder={`Message ${activeGroup} group...`}
+                     value={groupDraft}
+                     onChange={(e) => setGroupDraft(e.target.value)}
+                     style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
+                   />
+                   <button type="submit" className="btn btn-primary" disabled={!groupDraft.trim()}><Send size={18} /></button>
+                </form>
+             </div>
+           )}
+
            {activeView === 'chats' && (
              <div className="chats-panel">
                 {/* Contact list */}
@@ -380,7 +493,7 @@ const Messages = () => {
                    {messageContacts.length === 0 && (
                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                         <User size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
-                        <p style={{ fontSize: '13px' }}>No contacts available yet.</p>
+                        <p style={{ fontSize: '13px' }}>{isAdmin ? 'No contacts available yet.' : 'The school admin is not available to message yet.'}</p>
                      </div>
                    )}
                    {messageContacts.length > 0 && filteredContacts.length === 0 && (

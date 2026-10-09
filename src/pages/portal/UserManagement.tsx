@@ -12,7 +12,6 @@ import {
   UserPlus,
   Save,
   X,
-  Key,
   ExternalLink,
   FileSpreadsheet,
   ChevronLeft,
@@ -25,7 +24,7 @@ const PAGE_SIZE = 10;
 
 const UserManagement = () => {
   const navigate = useNavigate();
-  const { students, staff, updateUser, deleteUser, approveTeacher, createUser, subjectsByClass, updateSubjects, requestPasswordReset } = useAuth();
+  const { students, staff, updateUser, deleteUser, approveTeacher, createUser, subjectsByClass, updateSubjects } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'teachers' | 'students' | 'subjects'>('teachers');
   const [page, setPage] = useState(1);
@@ -77,17 +76,6 @@ const UserManagement = () => {
   const handleApproveTeacher = async (id: string) => {
     await approveTeacher(id);
     alert("Teacher approved. They now have portal access.");
-  };
-
-  const handleResetPassword = async (user: User) => {
-    if (!user.email) {
-      alert("This user has no email on file, so a reset link can't be sent.");
-      return;
-    }
-    if (!window.confirm(`Send a password reset link to ${user.name} (${user.email})?`)) return;
-    const { error } = await requestPasswordReset(user.email);
-    if (error) alert("Failed to send reset email: " + error);
-    else alert("Password reset link sent to " + user.email);
   };
 
   const openAddUser = () => {
@@ -222,7 +210,6 @@ const UserManagement = () => {
                                    <button onClick={() => handleApproveTeacher(user.id)} className="icon-btn" title="Approve Teacher" style={{ color: 'var(--success)' }}><UserPlus size={16} /></button>
                                  )}
                                  <button onClick={() => navigate(`/portal/admin/users/${user.id}`)} className="icon-btn" title="View Full Profile"><ExternalLink size={16} /></button>
-                                 <button onClick={() => handleResetPassword(user)} className="icon-btn" title="Send Password Reset Email" style={{ color: 'var(--warning)' }}><Key size={16} /></button>
                                  <button onClick={() => setEditingUser(user)} className="icon-btn" title="Quick Edit"><Edit2 size={16} /></button>
                                  <button onClick={() => handleDeleteUser(user.id)} className="icon-btn" title="Delete" style={{ color: 'var(--error)' }}><Trash2 size={16} /></button>
                               </div>

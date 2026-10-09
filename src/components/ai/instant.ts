@@ -65,7 +65,7 @@ const ASKS_ABOUT_MONEY = ['fee', 'fees', 'school fees', 'tuition', 'how much', '
   'levy', 'levies', 'bill', 'bills', 'afford', 'expensive', 'cheap', 'discount', 'scholarship'];
 
 const CONTACT = 'You can call or WhatsApp the school on 0706 497 0003, or email citadelofhighflyersintlacademy@gmail.com.';
-export const NO_PASSWORDS = "For everyone's safety I can't share passwords. If you've forgotten yours, press Forgot Password on the log in page, or ask the school office.";
+export const NO_PASSWORDS = "For everyone's safety I can't share passwords. If you've forgotten yours, ask the school office -- only the admin can change passwords.";
 const STAFF_ONLY = "Admin and staff access is only for school staff, so I can't help with that. If you work at the school, please speak to the school office.";
 
 // Anything that looks like a password being given out. Checked on every
@@ -234,8 +234,8 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
   if (role === 'guest' && has(q, 'log in', 'login', 'sign in', 'signin') && !has(q, 'forgot', 'reset')) {
     return { text: "Let's log you in. Follow the purple box.", startGuide: 'log_in' };
   }
-  if (role === 'guest' && has(q, 'forgot', 'reset', 'lost') && has(q, 'password', 'pin', 'login')) {
-    return { text: "Let's reset your password. Follow the purple box.", startGuide: 'forgot_password' };
+  if (has(q, 'forgot', 'forget', 'reset', 'lost', 'change') && has(q, 'password', 'pin')) {
+    return { text: "Passwords are changed by the school admin only. Please contact the school office and they will give you a new one." };
   }
   if (role === 'guest' && has(q, 'apply', 'admission', 'admissions') && !has(q, 'how much', 'fee', 'fees', 'when')) {
     return { text: "Let's fill the admission form together. Follow the purple box.", startGuide: 'apply_admission' };
@@ -243,13 +243,13 @@ export function instantAnswer(raw: string, ctx: InstantContext): InstantAnswer |
   if (role === 'teacher' && has(q, 'post', 'give', 'set', 'create', 'add', 'new') && has(q, 'assignment', 'assignments', 'homework')) {
     return { text: "Let's post it together. Follow the purple box.", startGuide: 'post_assignment' };
   }
-  if (role === 'student' && has(q, 'submit', 'upload', 'send', 'turn in') && has(q, 'assignment', 'homework', 'work')) {
-    return { text: "Let's submit your work. Follow the purple box.", startGuide: 'submit_assignment' };
+  if (role === 'student' && has(q, 'submit', 'upload', 'turn in') && has(q, 'assignment', 'homework', 'work')) {
+    return { text: "You don't need to upload anything. Open your assignment, read the questions and write the answers in your notebook (or type them in the answer box if your teacher opened one).", openPage: 'assignments' };
   }
 
   // A pupil's own assignments, answered from what the portal already loaded.
   if (role === 'student' && has(q, 'assignment', 'assignments', 'homework', 'home work')) {
-    const todo = ctx.assignments.filter((a) => !ctx.mySubmissions[a.id] && (!a.dueDate || a.dueDate >= ctx.today));
+    const todo = ctx.assignments.filter((a) => (!a.dueDate || a.dueDate >= ctx.today));
     const list = todo.slice(0, 3).map((a) => `${a.subject}: ${a.title}${a.dueDate ? ` (due ${shortDate(a.dueDate)})` : ''}`).join('; ');
     const text = todo.length === 0
       ? "Good news, you don't have any assignment to do right now. I've opened your assignments page."

@@ -80,7 +80,7 @@ $$;
 
 -- ------------------------------------------------------------
 -- 2. Login lookup returns the auth (login) address
--- ------------------------------------------------------------
+-- -----------------------------------------------------
 -- Same matching rules as patch_24; only what it returns changes. It
 -- finds the profile, then reads that account's own address from
 -- auth.users.

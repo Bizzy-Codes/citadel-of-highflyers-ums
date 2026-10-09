@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type TestQuestion, type TestQuestionOption } from '../../context/AuthContext';
-import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import './Tests.css';
 
 // points are kept as raw text, not numbers -- a number-typed value
@@ -19,6 +19,8 @@ interface QuestionFormState {
   correctOption: string;
   modelAnswer: string;
   keywords: { phrase: string; points: string }[];
+  answerMode: 'box' | 'lines';
+  lineCount: string;
 }
 
 const nextOptionKey = (options: TestQuestionOption[]) => String.fromCharCode(65 + options.length);
@@ -34,6 +36,8 @@ const blankForm: QuestionFormState = {
   correctOption: '',
   modelAnswer: '',
   keywords: [],
+  answerMode: 'box',
+  lineCount: '5',
 };
 
 const TestEditor = () => {
@@ -74,6 +78,8 @@ const TestEditor = () => {
       correctOption: q.correctOption ?? (q.options?.[0]?.key ?? 'A'),
       modelAnswer: q.modelAnswer ?? '',
       keywords: (q.keywords ?? []).map((k) => ({ phrase: k.phrase, points: String(k.points) })),
+      answerMode: q.answerMode,
+      lineCount: String(q.lineCount),
     });
     setShowForm(true);
   };
@@ -95,6 +101,8 @@ const TestEditor = () => {
       correctOption: form.type === 'objective' ? form.correctOption : undefined,
       modelAnswer: form.type === 'essay' ? (form.modelAnswer || undefined) : undefined,
       keywords: form.type === 'essay' ? form.keywords.map((k) => ({ phrase: k.phrase, points: Number(k.points) || 0 })) : undefined,
+      answerMode: form.answerMode,
+      lineCount: Math.min(30, Math.max(1, Math.round(Number(form.lineCount) || 5))),
     });
     setSaving(false);
     if (error) { alert('Failed to save question: ' + error); return; }
@@ -163,6 +171,9 @@ const TestEditor = () => {
               )}
               {test.status === 'published' && (
                 <button className="btn btn-outline sm" onClick={() => closeTest(test.id)}><Lock size={16} /> Close</button>
+              )}
+              {test.status === 'closed' && (
+                <button className="btn btn-primary sm" onClick={() => publishTest(test.id)} title="Open this test again, e.g. for a pupil who was ill. Pupils who have not taken it can start it."><RotateCcw size={16} /> Republish</button>
               )}
             </div>
           </div>
@@ -308,6 +319,25 @@ const TestEditor = () => {
 
               {form.type === 'essay' && (
                 <>
+                  <div className="input-group">
+                    <label>Answer sheet for the pupil</label>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button type="button" className={`btn sm ${form.answerMode === 'box' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setForm({ ...form, answerMode: 'box' })}>Open box (type freely)</button>
+                      <button type="button" className={`btn sm ${form.answerMode === 'lines' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setForm({ ...form, answerMode: 'lines' })}>Numbered lines (i, ii, iii)</button>
+                      {form.answerMode === 'lines' && (
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+                          How many lines
+                          <input type="number" min={1} max={30} value={form.lineCount} onChange={(e) => setForm({ ...form, lineCount: e.target.value })}
+                            style={{ width: '70px', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                        </label>
+                      )}
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                      {form.answerMode === 'box'
+                        ? 'The pupil gets one big box to type their answer or essay.'
+                        : `The pupil gets ${Number(form.lineCount) || 5} lines numbered i, ii, iii... one point per line.`}
+                    </p>
+                  </div>
                   <div className="input-group">
                     <label>Model Answer (optional, for future AI grading — never shown to pupils)</label>
                     <textarea rows={2} value={form.modelAnswer} onChange={(e) => setForm({ ...form, modelAnswer: e.target.value })}

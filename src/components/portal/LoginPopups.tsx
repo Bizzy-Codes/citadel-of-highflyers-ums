@@ -58,7 +58,7 @@ const LoginPopups = () => {
             <MessageSquare size={26} color="var(--primary)" />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 800 }}>
-                {unread === 1 ? 'You have a new private message' : `You have ${unread} new private messages`}
+                {unread === 1 ? 'You have a new message' : `You have ${unread} new messages`}
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Open your messages to read and reply.</div>
             </div>
