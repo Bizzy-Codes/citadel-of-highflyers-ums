@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type DirectMessage, type ClassMessage } from '../../context/AuthContext';
+import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow } from '../../context/AuthContext';
 import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X } from 'lucide-react';
 import { compressImageToTarget } from '../../lib/imageCompression';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead } = useAuth();
+  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
   // The notifications table's RLS already lets teachers post ("staff
@@ -14,10 +14,16 @@ const Messages = () => {
   // hidden from them, which left the teacher dashboard's "New
   // Announcement" button with nowhere useful to go.
   const canPostAnnouncements = isAdmin || currentUser?.role === 'teacher';
-  const forcedView = (location.state as { view?: 'chats' | 'notifications' | 'whatsapp' | 'group' } | null)?.view;
+  // Where we were sent: from a link / notification (?chat=<id> or ?group=1)
+  // or from a click inside the app (router state). Either way we open the
+  // exact chat the message is in.
+  const navState = location.state as { view?: 'chats' | 'notifications' | 'whatsapp' | 'group'; contactId?: string } | null;
+  const query = new URLSearchParams(location.search);
+  const linkedContactId = navState?.contactId ?? query.get('chat') ?? undefined;
+  const forcedView = navState?.view ?? (query.get('chat') ? 'chats' : query.get('group') ? 'group' : undefined);
   // Pupils and teachers only have a private chat with the admin; the
   // header's "messages" button takes them to their class group first.
-  const startView = forcedView === 'chats' && !isAdmin && classChatNames.length > 0 ? 'group' : forcedView;
+  const startView = forcedView === 'chats' && !linkedContactId && !isAdmin && classChatNames.length > 0 ? 'group' : forcedView;
   const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp' | 'group'>(startView ?? (isAdmin ? 'whatsapp' : 'notifications'));
 
   // Class group chat state
@@ -26,6 +32,8 @@ const Messages = () => {
   const [groupDraft, setGroupDraft] = useState('');
   const [groupLoading, setGroupLoading] = useState(false);
   const groupEndRef = useRef<HTMLDivElement>(null);
+  const [groupSeen, setGroupSeen] = useState<ClassSeenRow[]>([]);
+  const [seenOpenId, setSeenOpenId] = useState<string | null>(null);
   const hasGroup = classChatNames.length > 0;
   const activeGroup = classChatNames.includes(groupClass) ? groupClass : (classChatNames[0] ?? '');
 
@@ -51,6 +59,17 @@ const Messages = () => {
     groupEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [groupMessages]);
 
+  // Who has seen the group chat (read receipts). Refreshed while it is open.
+  useEffect(() => {
+    if (activeView !== 'group' || !activeGroup) return;
+    let cancelled = false;
+    const load = () => getClassSeen(activeGroup).then((rows) => { if (!cancelled) setGroupSeen(rows); });
+    load();
+    const timer = setInterval(load, 10_000);
+    return () => { cancelled = true; clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, activeGroup, groupMessages.length]);
+
   const handleSendGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeGroup || !groupDraft.trim()) return;
@@ -61,7 +80,7 @@ const Messages = () => {
   };
 
   // Private Chats state
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(linkedContactId ?? null);
   const [conversation, setConversation] = useState<DirectMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [contactSearch, setContactSearch] = useState('');
@@ -81,8 +100,9 @@ const Messages = () => {
       markConversationRead(selectedContactId);
     });
     const unsubscribe = subscribeToDirectMessages(selectedContactId, (msg) => {
-      setConversation((prev) => [...prev, msg]);
-      if (msg.senderId === selectedContactId) markConversationRead(selectedContactId);
+      // New message, or an existing one changing (it has now been read).
+      setConversation((prev) => (prev.some((m) => m.id === msg.id) ? prev.map((m) => (m.id === msg.id ? msg : m)) : [...prev, msg]));
+      if (msg.senderId === selectedContactId && !msg.readAt) markConversationRead(selectedContactId);
     });
     return () => { cancelled = true; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -454,6 +474,18 @@ const Messages = () => {
                              <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
                                 {new Date(msg.createdAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                              </span>
+                             {mine && (() => {
+                               const seenBy = groupSeen.filter((r) => r.userId !== currentUser?.id && new Date(r.lastReadAt).getTime() >= new Date(msg.createdAt).getTime());
+                               return (
+                                 <button type="button" onClick={() => setSeenOpenId(seenOpenId === msg.id ? null : msg.id)}
+                                   style={{ background: 'none', border: 'none', padding: 0, marginTop: '2px', color: 'inherit', opacity: 0.85, fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}>
+                                   {seenBy.length > 0 ? `✓✓ Seen by ${seenBy.length}` : '✓ Sent'}
+                                   {seenOpenId === msg.id && seenBy.length > 0 && (
+                                     <span style={{ display: 'block', marginTop: '2px' }}>{seenBy.map((r) => r.userName).join(', ')}</span>
+                                   )}
+                                 </button>
+                               );
+                             })()}
                           </div>
                        </div>
                      );
@@ -574,6 +606,7 @@ const Messages = () => {
                                     )}
                                     <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                       {mine && (msg.readAt ? '  ✓✓ Seen' : '  ✓ Sent')}
                                     </span>
                                  </div>
                               </div>

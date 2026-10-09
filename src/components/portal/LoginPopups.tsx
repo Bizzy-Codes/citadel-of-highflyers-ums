@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Bell, X } from 'lucide-react';
 import { useAuth, type Notification } from '../../context/AuthContext';
+import { messageNav } from '../../lib/messageNav';
 import PushToggle from './PushToggle';
-import { currentPushState } from '../../lib/push';
+import { syncPushForLogin } from '../../lib/push';
 
 // What a person sees right after logging in: any announcement the office
 // has set to pop up (for the number of days it chose), and a reminder if
@@ -13,7 +14,7 @@ import { currentPushState } from '../../lib/push';
 const SHOWN_KEY = 'citadel:loginPopupsShown';
 
 const LoginPopups = () => {
-  const { currentUser, notifications, unreadMessageCount } = useAuth();
+  const { currentUser, notifications, unreadMessageCount, unreadTarget } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState<Notification[]>([]);
@@ -35,7 +36,10 @@ const LoginPopups = () => {
       // login until they do (browsers only allow the permission prompt after
       // a tap, so this pop-up carries the button). 'blocked' / unsupported /
       // not-configured are left alone.
-      const pushState = await currentPushState();
+      // A phone that already allowed notifications is simply (re)registered
+      // for this account -- no question asked. Only a phone that has not
+      // allowed them yet gets the prompt.
+      const pushState = await syncPushForLogin();
       const needsPush = pushState === 'off';
       setAskPush(needsPush);
       const now = Date.now();
@@ -71,7 +75,7 @@ const LoginPopups = () => {
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Open your messages to read and reply.</div>
             </div>
-            <button className="btn btn-primary sm" onClick={() => { close(); navigate('/portal/messages', { state: { view: 'chats' } }); }}>
+            <button className="btn btn-primary sm" onClick={() => { close(); navigate('/portal/messages', { state: messageNav(unreadTarget) }); }}>
               View
             </button>
           </div>
@@ -95,7 +99,7 @@ const LoginPopups = () => {
           </div>
         ))}
 
-        <div style={{ marginBottom: '16px' }}><PushToggle compact /></div>
+        {askPush && <div style={{ marginBottom: '16px' }}><PushToggle compact promptOnly /></div>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
           <button className="btn btn-outline" onClick={close}>Close</button>

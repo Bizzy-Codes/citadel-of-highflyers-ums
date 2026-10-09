@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type NewAssignmentInput, type NewAssignmentQuestionInput, type AssignmentSubmission, type AssignmentQuestion, type AssignmentAnswerRow } from '../../context/AuthContext';
-import { FileText, Plus, Trash2, Users, Download, Paperclip, Lock, RotateCcw, X } from 'lucide-react';
+import { useAuth, type NewAssignmentInput, type EditAssignmentQuestionInput, type AssignmentSubmission, type AssignmentQuestion, type AssignmentAnswerRow, type AssignmentView } from '../../context/AuthContext';
+import { FileText, Plus, Trash2, Users, Download, Paperclip, Lock, RotateCcw, X, Pencil, Eye, CheckCheck } from 'lucide-react';
 import './Tests.css';
 import DateWheelInput from '../../components/common/DateWheelInput';
 
 const emptyInput: NewAssignmentInput = { subject: '', title: '', description: '', dueDate: '' };
 
 const TeacherAssignments = () => {
-  const { currentUser, students, assignments, createAssignment, deleteAssignment, setAssignmentOpen, getAssignmentQuestions, getAnswersForAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
-  const [newQuestions, setNewQuestions] = useState<NewAssignmentQuestionInput[]>([]);
+  const { currentUser, students, assignments, createAssignment, updateAssignment, getAssignmentViews, getAssignmentViewCounts, deleteAssignment, setAssignmentOpen, getAssignmentQuestions, getAnswersForAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
+  const [newQuestions, setNewQuestions] = useState<EditAssignmentQuestionInput[]>([]);
+  // Editing an already-posted assignment (null = creating a new one).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // "View" window: the assignment as pupils see it, plus who has opened it.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailQuestions, setDetailQuestions] = useState<AssignmentQuestion[]>([]);
+  const [detailViews, setDetailViews] = useState<AssignmentView[]>([]);
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  useEffect(() => { getAssignmentViewCounts().then(setViewCounts); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [assignments.length]);
   const [viewQuestions, setViewQuestions] = useState<AssignmentQuestion[]>([]);
   const [viewAnswers, setViewAnswers] = useState<AssignmentAnswerRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -25,13 +33,40 @@ const TeacherAssignments = () => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await createAssignment({ ...input, questions: newQuestions }, file);
+    const { error } = editingId
+      ? await updateAssignment(editingId, { subject: input.subject, title: input.title, description: input.description, dueDate: input.dueDate }, newQuestions, file)
+      : await createAssignment({ ...input, questions: newQuestions }, file);
     setSaving(false);
-    if (error) { alert('Failed to create assignment: ' + error); return; }
+    if (error) { alert((editingId ? 'Failed to save changes: ' : 'Failed to create assignment: ') + error); return; }
     setIsCreating(false);
+    setEditingId(null);
     setInput(emptyInput);
     setNewQuestions([]);
     setFile(null);
+  };
+
+  const startEdit = async (id: string) => {
+    const a = assignments.find((x) => x.id === id);
+    if (!a) return;
+    setInput({ subject: a.subject, title: a.title, description: a.description ?? '', dueDate: a.dueDate ?? '' });
+    setFile(null);
+    setEditingId(id);
+    const qs = await getAssignmentQuestions(id);
+    setNewQuestions(qs.map((q) => ({ id: q.id, prompt: q.prompt, answerMode: q.answerMode, lineCount: q.lineCount })));
+    setDetailId(null);
+    setIsCreating(true);
+  };
+
+  const closeForm = () => { setIsCreating(false); setEditingId(null); setInput(emptyInput); setFile(null); setNewQuestions([]); };
+
+  const openDetail = async (id: string) => {
+    setDetailId(id);
+    setDetailQuestions([]);
+    setDetailViews([]);
+    const [qs, views] = await Promise.all([getAssignmentQuestions(id), getAssignmentViews(id)]);
+    setDetailQuestions(qs);
+    setDetailViews(views);
+    setViewCounts((prev) => ({ ...prev, [id]: views.length }));
   };
 
   const toggleOpen = async (id: string, open: boolean) => {
@@ -41,7 +76,7 @@ const TeacherAssignments = () => {
     if (error) alert('Could not update the assignment: ' + error);
   };
 
-  const updateNewQuestion = (i: number, patch: Partial<NewAssignmentQuestionInput>) =>
+  const updateNewQuestion = (i: number, patch: Partial<EditAssignmentQuestionInput>) =>
     setNewQuestions(newQuestions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
 
   const handleDelete = async (id: string, title: string) => {
@@ -117,9 +152,12 @@ const TeacherAssignments = () => {
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   {a.subject} {a.dueDate ? `· Due ${new Date(a.dueDate).toLocaleDateString()}` : ''} {a.attachmentName ? `· 📎 ${a.attachmentName}` : ''}
+                  {' '}· 👁 Opened by {viewCounts[a.id] ?? 0} of {students.filter((s) => s.grade === a.className).length || '—'}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-outline sm" onClick={() => openDetail(a.id)}><Eye size={16} /> View</button>
+                <button className="btn btn-outline sm" onClick={() => startEdit(a.id)}><Pencil size={16} /> Edit</button>
                 <button className="btn btn-outline sm" onClick={() => openSubmissions(a.id)}><Users size={16} /> Answers</button>
                 {a.isOpen
                   ? <button className="btn btn-outline sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, false)} title="Hide it from pupils. Nothing is deleted."><Lock size={16} /> Close</button>
@@ -134,7 +172,7 @@ const TeacherAssignments = () => {
       {isCreating && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginBottom: '24px' }}>New Assignment</h3>
+            <h3 style={{ marginBottom: '24px' }}>{editingId ? 'Edit Assignment' : 'New Assignment'}</h3>
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
                 <label>Title</label>
@@ -194,13 +232,77 @@ const TeacherAssignments = () => {
                 <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsCreating(false); setFile(null); setNewQuestions([]); }}>Cancel</button>
-                <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? 'Posting...' : 'Post Assignment'}</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={closeForm}>Cancel</button>
+                <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? (editingId ? 'Saving...' : 'Posting...') : (editingId ? 'Save changes' : 'Post Assignment')}</button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {detailId && (() => {
+        const a = assignments.find((x) => x.id === detailId);
+        if (!a) return null;
+        const pupils = students.filter((s) => s.grade === a.className);
+        const openedIds = new Set(detailViews.map((v) => v.studentId));
+        const notOpened = pupils.filter((p) => !openedIds.has(p.id));
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h3>{a.title}</h3>
+                {!a.isOpen && <span className="test-status-badge test-status-closed">closed</span>}
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 14px' }}>
+                {a.subject} {a.dueDate ? `· Due ${new Date(a.dueDate).toLocaleDateString()}` : '· No due date'}
+              </p>
+              {a.description && <p style={{ fontSize: '14px', whiteSpace: 'pre-wrap', marginBottom: '12px' }}>{a.description}</p>}
+              {a.attachmentPath && (
+                <button className="btn btn-outline sm" style={{ marginBottom: '12px' }} onClick={() => handleDownload(a.attachmentPath!)}>
+                  <Download size={14} /> {a.attachmentName ?? 'Download brief'}
+                </button>
+              )}
+              {detailQuestions.map((q, i) => (
+                <div key={q.id} className="grading-answer-card" style={{ marginBottom: '10px' }}>
+                  <strong style={{ color: 'var(--primary)' }}>Question {i + 1}</strong>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                    {q.answerMode === 'none' ? 'notebook only' : q.answerMode === 'box' ? 'answer box' : `${q.lineCount} lines (i, ii, iii)`}
+                  </span>
+                  <p style={{ marginTop: '4px', whiteSpace: 'pre-wrap', fontSize: '14px' }}>{q.prompt}</p>
+                </div>
+              ))}
+
+              <h4 style={{ fontSize: '14px', margin: '16px 0 8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCheck size={16} color="var(--success)" /> Opened by {detailViews.length} of {pupils.length} pupils
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {detailViews.map((v) => (
+                  <div key={v.studentId} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '13px' }}>
+                    <span>✓✓ {v.studentName ?? v.studentId}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{new Date(v.firstViewedAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                ))}
+              </div>
+              {notOpened.length > 0 && (
+                <div style={{ marginTop: '12px' }}>
+                  <h4 style={{ fontSize: '13px', marginBottom: '6px' }}>Not opened yet ({notOpened.length})</h4>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {notOpened.map((p) => (
+                      <span key={p.id} style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '12px', background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', fontWeight: 600 }}>{p.name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <button className="btn btn-primary" onClick={() => startEdit(a.id)}><Pencil size={16} /> Edit</button>
+                <button className="btn btn-outline" onClick={() => { setDetailId(null); openSubmissions(a.id); }}><Users size={16} /> See answers</button>
+                <button className="btn btn-outline" style={{ marginLeft: 'auto' }} onClick={() => setDetailId(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {viewingId && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>

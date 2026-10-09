@@ -124,7 +124,7 @@ async function handleEvent(event: string, id: string) {
     const from = s?.role === 'admin' ? 'the school admin' : (s?.name ?? 'someone');
     return notifyUsers([m.recipient_id], {
       title: 'New message', body: `From ${from}: ${snippet(m.content)}`,
-      url: `${SITE}/portal/messages`, tag: `dm-${m.sender_id}`,
+      url: `${SITE}/portal/messages?chat=${m.sender_id}`, tag: `dm-${m.sender_id}`,
     });
   }
   if (event === 'class_message') {
@@ -136,7 +136,7 @@ async function handleEvent(event: string, id: string) {
     ].filter((u) => u !== m.sender_id);
     return notifyUsers(people, {
       title: `New message in ${m.class_name} group`, body: `${m.sender_name ?? 'Someone'}: ${snippet(m.content)}`,
-      url: `${SITE}/portal/messages`, tag: `group-${m.class_name}`,
+      url: `${SITE}/portal/messages?group=1`, tag: `group-${m.class_name}`,
     });
   }
   if (event === 'assignment') {

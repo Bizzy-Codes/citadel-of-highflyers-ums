@@ -36,7 +36,7 @@ export async function currentPushState(): Promise<PushState> {
   }
 }
 
-export async function enablePush(userId: string): Promise<{ error: string | null }> {
+export async function enablePush(): Promise<{ error: string | null }> {
   if (!pushSupported()) return { error: 'This browser cannot show notifications. On an iPhone, first use Share > Add to Home Screen, then open the app from there.' };
   if (!pushConfigured()) return { error: 'Notifications are not set up on the server yet.' };
   const permission = await Notification.requestPermission();
@@ -49,19 +49,58 @@ export async function enablePush(userId: string): Promise<{ error: string | null
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
-    const json = sub.toJSON();
-    const { error } = await supabase.from('push_subscriptions').upsert({
-      user_id: userId,
-      endpoint: sub.endpoint,
-      p256dh: json.keys?.p256dh ?? '',
-      auth: json.keys?.auth ?? '',
-      user_agent: navigator.userAgent.slice(0, 200),
-    }, { onConflict: 'endpoint' });
-    if (error) return { error: error.message };
+    const { error } = await registerSubscription(sub);
+    if (error) return { error };
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Could not turn notifications on.' };
   }
+}
+
+// Hands this phone/browser to whoever is logged in now. A phone belongs to
+// one account at a time; patch_41's register_push takes it over from the
+// previous account.
+async function registerSubscription(sub: PushSubscription): Promise<{ error: string | null }> {
+  const json = sub.toJSON();
+  const { error } = await supabase.rpc('register_push', {
+    p_endpoint: sub.endpoint,
+    p_p256dh: json.keys?.p256dh ?? '',
+    p_auth: json.keys?.auth ?? '',
+    p_user_agent: navigator.userAgent.slice(0, 200),
+  });
+  return { error: error?.message ?? null };
+}
+
+// Called after every login. If this phone already allowed notifications
+// (for any account) no question is needed: just make sure it is registered
+// for the account that is logged in now. Returns the state afterwards.
+export async function syncPushForLogin(): Promise<PushState> {
+  const state = await currentPushState();
+  if (state === 'unsupported' || state === 'not-configured' || state === 'blocked') return state;
+  if (Notification.permission !== 'granted') return 'off';
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription() ?? await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+    const { error } = await registerSubscription(sub);
+    return error ? 'off' : 'on';
+  } catch {
+    return 'off';
+  }
+}
+
+// On logout this phone stops receiving that account's notifications (the
+// browser permission stays, so the next login re-registers silently).
+export async function unlinkPushFromThisPhone(): Promise<void> {
+  try {
+    if (!pushSupported()) return;
+    const reg = await navigator.serviceWorker.getRegistration('/sw.js') ?? await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+  } catch { /* best effort */ }
 }
 
 export async function disablePush(): Promise<{ error: string | null }> {

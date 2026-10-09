@@ -24,6 +24,7 @@ import {
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LoginPopups from '../portal/LoginPopups';
+import { messageNav } from '../../lib/messageNav';
 import './PortalLayout.css';
 
 interface PortalLayoutProps {
@@ -36,7 +37,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout, notifications, unreadMessageCount } = useAuth();
+  const { currentUser, logout, notifications, unreadMessageCount, unreadTarget } = useAuth();
 
   // Simple role detection from path for demo purposes
   const isTeacher = currentUser?.role === 'teacher';
@@ -93,6 +94,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
             <Link 
               key={`${item.path}-${idx}`} 
               to={item.path} 
+              state={item.label === 'Messages' && unreadMessageCount > 0 ? messageNav(unreadTarget) : undefined}
               className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
               onClick={() => setIsMobileOpen(false)}
             >
@@ -130,7 +132,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
             </div>
             
             <div className="header-actions">
-              <button className="icon-btn" onClick={() => navigate('/portal/messages', { state: { view: 'chats' } })} title={unreadMessageCount > 0 ? `${unreadMessageCount} new message${unreadMessageCount === 1 ? '' : 's'}` : 'Messages'} style={{ position: 'relative' }}>
+              <button className="icon-btn" onClick={() => navigate('/portal/messages', { state: messageNav(unreadTarget) })} title={unreadMessageCount > 0 ? `${unreadMessageCount} new message${unreadMessageCount === 1 ? '' : 's'}` : 'Messages'} style={{ position: 'relative' }}>
                 <MessageSquare size={20} />
                 {unreadMessageCount > 0 && (
                   <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '18px', height: '18px', padding: '0 4px', borderRadius: '9px', background: 'var(--error)', color: '#fff', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unreadMessageCount}</span>

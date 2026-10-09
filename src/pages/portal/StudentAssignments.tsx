@@ -15,7 +15,7 @@ type SaveState = 'saving' | 'saved' | 'error';
 // notebook); if the teacher opened an answer sheet for a question, they
 // type the answer there and it saves by itself. Nothing is uploaded.
 const AssignmentCard = ({ a, today, open, onToggle }: { a: Assignment; today: string; open: boolean; onToggle: () => void }) => {
-  const { getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAssignmentFileUrl } = useAuth();
+  const { getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAssignmentFileUrl, recordAssignmentView } = useAuth();
   const [questions, setQuestions] = useState<AssignmentQuestion[] | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<Record<string, SaveState>>({});
@@ -31,6 +31,12 @@ const AssignmentCard = ({ a, today, open, onToggle }: { a: Assignment; today: st
       setAnswers(mine);
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Read receipt: the teacher can see the pupil has opened this.
+  useEffect(() => {
+    if (open) recordAssignmentView(a.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 

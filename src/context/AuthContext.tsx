@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabaseClient';
 import { gradeFromScore } from '../lib/grading';
 import type { CalendarTable } from '../lib/calendarExtract';
 import { siblingLoginEmail, isEmailTakenError, CLASSES } from '../lib/accounts';
+import { unlinkPushFromThisPhone } from '../lib/push';
+import type { UnreadTarget } from '../lib/messageNav';
 
 // supabase-js's functions.invoke() only ever surfaces a generic
 // "Edge Function returned a non-2xx status code" on error -- the
@@ -210,6 +212,26 @@ export interface AssignmentAnswerRow {
   studentDisplayId?: string;
   answerText: string;
   updatedAt: string;
+}
+
+export interface AssignmentView {
+  studentId: string;
+  studentName?: string;
+  studentDisplayId?: string;
+  firstViewedAt: string;
+}
+
+export interface ClassSeenRow {
+  userId: string;
+  userName: string;
+  lastReadAt: string;
+}
+
+export interface EditAssignmentQuestionInput {
+  id?: string;
+  prompt: string;
+  answerMode: AnswerMode;
+  lineCount: number;
 }
 
 export interface ClassMessage {
@@ -576,6 +598,12 @@ interface AuthContextType {
   createAssignment: (input: NewAssignmentInput, file: File | null) => Promise<{ error: string | null }>;
   deleteAssignment: (id: string) => Promise<void>;
   setAssignmentOpen: (id: string, open: boolean) => Promise<{ error: string | null }>;
+  updateAssignment: (id: string, input: { subject: string; title: string; description?: string; dueDate?: string }, questions: EditAssignmentQuestionInput[], file: File | null) => Promise<{ error: string | null }>;
+  recordAssignmentView: (assignmentId: string) => Promise<void>;
+  getAssignmentViews: (assignmentId: string) => Promise<AssignmentView[]>;
+  getAssignmentViewCounts: () => Promise<Record<string, number>>;
+  getClassSeen: (className: string) => Promise<ClassSeenRow[]>;
+  unreadTarget: UnreadTarget;
   getAssignmentQuestions: (assignmentId: string) => Promise<AssignmentQuestion[]>;
   getMyAnswers: (assignmentId: string) => Promise<Record<string, string>>;
   saveMyAnswer: (assignmentId: string, questionId: string, text: string) => Promise<{ error: string | null }>;
@@ -922,6 +950,15 @@ const mapViolationRow = (row: any): ExamViolation => ({
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// One account per name (patch_41). The database refuses a duplicate too;
+// this just lets the forms say so clearly first.
+const DUPLICATE_NAME_MESSAGE = 'An account with this exact name already exists in the system, so a second one cannot be created. If this is you or your child, please log in with the existing account or contact the school office.';
+const isDuplicateNameError = (message: string) => /DUPLICATE_NAME|Database error (saving|creating) new user/i.test(message);
+const nameAlreadyUsed = async (name: string): Promise<boolean> => {
+  const { data, error } = await supabase.rpc('name_exists', { p_name: name });
+  return !error && data === true;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapClassMessageRow = (row: any): ClassMessage => ({
   id: row.id,
@@ -977,6 +1014,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [timetables, setTimetables] = useState<Record<string, TimetableEntry[]>>({});
   const [rawNotifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [unreadTarget, setUnreadTarget] = useState<UnreadTarget>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
   const [tests, setTests] = useState<Test[]>([]);
@@ -1119,6 +1157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try { sessionStorage.removeItem('citadel:loginPopupsShown'); } catch { /* storage blocked */ }
+    // This phone stops getting this account's notifications until the next login.
+    await unlinkPushFromThisPhone();
     await supabase.auth.signOut();
   };
 
@@ -1149,11 +1189,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: loginEmail, password,
       options: { data: { name, role: 'student', grade, contact_email: email } },
     });
+    if (await nameAlreadyUsed(name)) return { error: DUPLICATE_NAME_MESSAGE };
     let { data, error } = await signUp(email);
     for (let attempt = 0; attempt < 3 && error && isEmailTakenError(error.message); attempt++) {
       ({ data, error } = await signUp(siblingLoginEmail(email)));
     }
-    if (error) return { error: error.message };
+    if (error) return { error: isDuplicateNameError(error.message) ? DUPLICATE_NAME_MESSAGE : error.message };
 
     const newId = data.user?.id;
     if (newId && details) {
@@ -1195,10 +1236,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const registerStaff = async (name: string, email: string, password: string) => {
     // Always lands as 'teacher_pending' -- an admin must approve before
     // it becomes a real 'teacher' account. See approveTeacher().
+    if (await nameAlreadyUsed(name)) return { error: DUPLICATE_NAME_MESSAGE };
     const { error } = await supabase.auth.signUp({
       email, password,
       options: { data: { name, role: 'teacher' } },
     });
+    if (error && isDuplicateNameError(error.message)) return { error: DUPLICATE_NAME_MESSAGE };
     return { error: error?.message ?? null };
   };
 
@@ -1239,6 +1282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // but only for a transient server/network failure, never for a
     // real answer like "this email is already registered", which would
     // just fail again identically.
+    if (await nameAlreadyUsed(name)) return { error: DUPLICATE_NAME_MESSAGE };
     let data, error;
     for (let attempt = 0; attempt < 2; attempt++) {
       ({ data, error } = await supabase.functions.invoke('admin-create-user', {
@@ -1829,6 +1873,87 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  // Teacher edits an assignment after posting (e.g. a new due date). Questions
+  // with an id are updated, new ones added, and any not listed any more are
+  // removed (along with pupils' answers to them).
+  const updateAssignment = async (
+    id: string,
+    input: { subject: string; title: string; description?: string; dueDate?: string },
+    questions: EditAssignmentQuestionInput[],
+    file: File | null,
+  ) => {
+    const patch: Record<string, unknown> = {
+      subject: input.subject, title: input.title,
+      description: input.description || null, due_date: input.dueDate || null,
+    };
+    if (file) {
+      const path = `${id}/brief/${file.name}`;
+      const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
+      if (uploadError) return { error: `The attachment failed to upload: ${uploadError.message}` };
+      patch.attachment_path = path;
+      patch.attachment_name = file.name;
+    }
+    const { error } = await supabase.from('assignments').update(patch).eq('id', id);
+    if (error) return { error: error.message };
+
+    const { data: existing, error: loadError } = await supabase.from('assignment_questions').select('id').eq('assignment_id', id);
+    if (loadError) return { error: loadError.message };
+    const keep = questions.filter((q) => q.prompt.trim());
+    const keepIds = new Set(keep.filter((q) => q.id).map((q) => q.id as string));
+    const removeIds = (existing ?? []).map((r) => r.id as string).filter((qid) => !keepIds.has(qid));
+    if (removeIds.length > 0) {
+      const { error: delError } = await supabase.from('assignment_questions').delete().in('id', removeIds);
+      if (delError) return { error: delError.message };
+    }
+    for (let i = 0; i < keep.length; i++) {
+      const q = keep[i];
+      const row = { assignment_id: id, order_index: i, prompt: q.prompt.trim(), answer_mode: q.answerMode, line_count: q.lineCount };
+      const { error: qError } = q.id
+        ? await supabase.from('assignment_questions').update(row).eq('id', q.id)
+        : await supabase.from('assignment_questions').insert(row);
+      if (qError) return { error: qError.message };
+    }
+    await refreshAssignments();
+    return { error: null };
+  };
+
+  // Read receipt: stamped the first time a pupil opens an assignment.
+  const recordAssignmentView = async (assignmentId: string) => {
+    if (!session?.user.id) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('assignment_views').upsert(
+      { assignment_id: assignmentId, student_id: session.user.id, last_viewed_at: now },
+      { onConflict: 'assignment_id,student_id', ignoreDuplicates: false },
+    );
+    if (error) console.error('recordAssignmentView failed', error);
+  };
+
+  const getAssignmentViews = async (assignmentId: string): Promise<AssignmentView[]> => {
+    const { data, error } = await supabase.from('assignment_views')
+      .select('student_id, first_viewed_at, profiles(name, display_id)').eq('assignment_id', assignmentId);
+    if (error) { console.error('getAssignmentViews failed', error); return []; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({
+      studentId: r.student_id, firstViewedAt: r.first_viewed_at,
+      studentName: r.profiles?.name ?? undefined, studentDisplayId: r.profiles?.display_id ?? undefined,
+    }));
+  };
+
+  const getAssignmentViewCounts = async (): Promise<Record<string, number>> => {
+    const { data, error } = await supabase.from('assignment_views').select('assignment_id');
+    if (error) { console.error('getAssignmentViewCounts failed', error); return {}; }
+    const counts: Record<string, number> = {};
+    (data ?? []).forEach((r) => { counts[r.assignment_id as string] = (counts[r.assignment_id as string] ?? 0) + 1; });
+    return counts;
+  };
+
+  const getClassSeen = async (className: string): Promise<ClassSeenRow[]> => {
+    const { data, error } = await supabase.rpc('class_message_seen', { p_class: className });
+    if (error) { console.error('getClassSeen failed', error); return []; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((r: any) => ({ userId: r.user_id, userName: r.user_name, lastReadAt: r.last_read_at }));
+  };
+
   const getSubmissionsForAssignment = async (assignmentId: string): Promise<AssignmentSubmission[]> => {
     const { data, error } = await supabase
       .from('assignment_submissions')
@@ -1908,11 +2033,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const unreadClass = currentUser?.role === 'student' ? currentUser.grade : currentUser?.role === 'teacher' ? currentUser.assignedClass : undefined;
   const refreshUnreadMessages = useCallback(async () => {
     const uid = session?.user.id;
-    if (!uid) { setUnreadMessageCount(0); return; }
+    if (!uid) { setUnreadMessageCount(0); setUnreadTarget(null); return; }
     const { count, error } = await supabase.from('direct_messages')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_id', uid).is('read_at', null);
     let total = error ? null : (count ?? 0);
+    let target: UnreadTarget = null;
+    if (total && total > 0) {
+      const { data: latest } = await supabase.from('direct_messages').select('sender_id')
+        .eq('recipient_id', uid).is('read_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (latest?.sender_id) target = { kind: 'dm', senderId: latest.sender_id as string };
+    }
     // Plus new posts in the pupil's / teacher's own class group.
     const myClass = unreadClass;
     if (total !== null && myClass) {
@@ -1922,9 +2053,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('class_name', myClass).neq('sender_id', uid);
       if (read?.last_read_at) q = q.gt('created_at', read.last_read_at);
       const { count: groupCount, error: groupError } = await q;
-      if (!groupError) total += groupCount ?? 0;
+      if (!groupError) {
+        total += groupCount ?? 0;
+        if (!target && (groupCount ?? 0) > 0) target = { kind: 'group' };
+      }
     }
-    if (total !== null) setUnreadMessageCount(total);
+    if (total !== null) { setUnreadMessageCount(total); setUnreadTarget(target); }
   }, [session?.user.id, unreadClass]);
 
   useEffect(() => {
@@ -2056,7 +2190,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userId = session.user.id;
     const channel = supabase
       .channel(`dm-${[userId, otherUserId].sort().join('-')}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload) => {
+      // INSERT = a new message; UPDATE = e.g. the other person has now read
+      // it (the "seen" tick), so the callback must replace by id.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages' }, (payload) => {
+        if (payload.eventType === 'DELETE') return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const row = payload.new as any;
         const isThisConversation =
@@ -2703,6 +2840,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       notifications, addNotification, uploadAnnouncementImage, unreadMessageCount, refreshUnreadMessages, exportData,
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
+      updateAssignment, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
       getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,

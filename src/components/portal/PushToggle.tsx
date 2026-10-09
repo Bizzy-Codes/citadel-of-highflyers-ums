@@ -6,7 +6,7 @@ import { currentPushState, disablePush, enablePush, type PushState } from '../..
 // "Send notifications to this phone" switch. Used on the Profile page
 // and offered once after login. Renders nothing if the browser can't do
 // push or the school hasn't set the keys up yet.
-const PushToggle = ({ compact = false }: { compact?: boolean }) => {
+const PushToggle = ({ compact = false, promptOnly = false }: { compact?: boolean; promptOnly?: boolean }) => {
   const { currentUser } = useAuth();
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,7 @@ const PushToggle = ({ compact = false }: { compact?: boolean }) => {
 
   const turnOn = async () => {
     setBusy(true); setMessage('');
-    const { error } = await enablePush(currentUser.id);
+    const { error } = await enablePush();
     setState(await currentPushState());
     setBusy(false);
     if (error) setMessage(error);
@@ -30,6 +30,16 @@ const PushToggle = ({ compact = false }: { compact?: boolean }) => {
     setBusy(false);
     if (error) setMessage(error);
   };
+
+  // In the login pop-up it only ever offers "Turn on"; once on, it just
+  // confirms -- no option to switch off (that lives on the Profile page).
+  if (promptOnly && state === 'on') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '16px', background: 'var(--accent)', fontWeight: 700, fontSize: '14px' }}>
+        <BellRing size={20} color="var(--success)" /> Notifications are on. You will be told about new messages, assignments and tests.
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: compact ? '12px' : '16px', borderRadius: '16px', background: 'var(--accent)' }}>
