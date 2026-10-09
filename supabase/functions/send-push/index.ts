@@ -93,7 +93,7 @@ async function remindUnread() {
 }
 
 const snippet = (s: string | null | undefined, n = 120) => {
-  const t = (s ?? '').replace(/s+/g, ' ').trim();
+  const t = (s ?? '').replace(/\s+/g, ' ').trim();
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
 };
 
