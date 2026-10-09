@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MessageSquare, Bell, X } from 'lucide-react';
 import { useAuth, type Notification } from '../../context/AuthContext';
 import PushToggle from './PushToggle';
+import { currentPushState } from '../../lib/push';
 
 // What a person sees right after logging in: any announcement the office
 // has set to pop up (for the number of days it chose), and a reminder if
@@ -18,6 +19,7 @@ const LoginPopups = () => {
   const [notices, setNotices] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [decided, setDecided] = useState(false);
+  const [askPush, setAskPush] = useState(false);
 
   const uid = currentUser?.id;
 
@@ -28,13 +30,20 @@ const LoginPopups = () => {
     if (shown) { setDecided(true); return; }
     // Wait a moment for notifications and the unread count to load --
     // they arrive just after the profile does.
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      // Anyone who hasn't switched phone notifications on is asked at every
+      // login until they do (browsers only allow the permission prompt after
+      // a tap, so this pop-up carries the button). 'blocked' / unsupported /
+      // not-configured are left alone.
+      const pushState = await currentPushState();
+      const needsPush = pushState === 'off';
+      setAskPush(needsPush);
       const now = Date.now();
       const active = notifications.filter((n) => n.popupUntil && new Date(n.popupUntil).getTime() > now);
       setNotices(active);
       setUnread(unreadMessageCount);
       setDecided(true);
-      if (active.length > 0 || unreadMessageCount > 0) {
+      if (active.length > 0 || unreadMessageCount > 0 || needsPush) {
         setOpen(true);
         try { sessionStorage.setItem(SHOWN_KEY, uid); } catch { /* storage blocked */ }
       }
@@ -65,6 +74,13 @@ const LoginPopups = () => {
             <button className="btn btn-primary sm" onClick={() => { close(); navigate('/portal/messages', { state: { view: 'chats' } }); }}>
               View
             </button>
+          </div>
+        )}
+
+        {askPush && unread === 0 && notices.length === 0 && (
+          <div style={{ marginBottom: '14px', paddingRight: '40px' }}>
+            <h3 style={{ fontWeight: 800, fontSize: '17px', marginBottom: '6px' }}>Don't miss anything</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Turn on notifications and we will tell you about new messages, assignments, tests and notices, even when the website is closed.</p>
           </div>
         )}
 
