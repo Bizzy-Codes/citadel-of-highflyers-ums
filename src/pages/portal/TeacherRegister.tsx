@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceStatus } from '../../context/AuthContext';
-import { Save, Loader2, Info, MessageSquarePlus, CalendarDays } from 'lucide-react';
+import { Save, Loader2, Info, MessageSquarePlus, CalendarDays, ArrowLeft } from 'lucide-react';
 import { STATUS_META, computeTermWeeks, computeWeeksInMonth, monthOptions, todayIso, formatShort } from '../../lib/attendance';
 
 // Click cycles a cell through the same states a paper register uses,
@@ -24,7 +25,12 @@ const TeacherRegister = () => {
     currentUser, students, academicCalendar,
     getClassAttendanceForRange, markClassAttendanceBulk, getClassAttendanceNotes, upsertAttendanceNote,
   } = useAuth();
-  const className = currentUser?.assignedClass;
+  // Teachers mark their own class. The admin reaches this same register for
+  // any class (/portal/admin/attendance/:className) to cover a teacher who
+  // has no data or internet.
+  const params = useParams();
+  const isAdmin = currentUser?.role === 'admin';
+  const className = isAdmin ? params.className : currentUser?.assignedClass;
 
   // The "jump to month" picker was removed -- the Week dropdown already
   // covers navigation. The month key is still derived (from today) as
@@ -195,6 +201,14 @@ const TeacherRegister = () => {
   return (
     <PortalLayout title={`Attendance Register: ${className}`}>
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {isAdmin && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <Link to="/portal/admin/attendance" className="back-link" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '14px' }}>
+              <ArrowLeft size={16} /> Back to all classes
+            </Link>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>You are marking {className}'s register as the admin.</span>
+          </div>
+        )}
         <div className="card glass" style={{ padding: '24px', borderRadius: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>

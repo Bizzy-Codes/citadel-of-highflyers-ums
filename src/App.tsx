@@ -176,6 +176,9 @@ function App() {
         <Route path="/portal/admin/attendance" element={
           <ProtectedRoute allowedRoles={['admin']}><AdminAttendance /></ProtectedRoute>
         } />
+        <Route path="/portal/admin/attendance/:className" element={
+          <ProtectedRoute allowedRoles={['admin']}><TeacherRegister /></ProtectedRoute>
+        } />
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

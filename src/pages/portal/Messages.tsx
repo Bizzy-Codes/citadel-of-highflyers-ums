@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X } from 'lucide-react';
+import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow, type BlockedTerm } from '../../context/AuthContext';
+import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X, Pin, PinOff, Trash2, ShieldAlert } from 'lucide-react';
 import { compressImageToTarget } from '../../lib/imageCompression';
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen } = useAuth();
+  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen, deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
   // The notifications table's RLS already lets teachers post ("staff
@@ -47,7 +47,9 @@ const Messages = () => {
       setGroupLoading(false);
       markClassChatRead(activeGroup);
     });
-    const unsubscribe = subscribeToClassMessages(activeGroup, (msg) => {
+    const unsubscribe = subscribeToClassMessages(activeGroup, (msg, change) => {
+      if (change === 'DELETE') { setGroupMessages((prev) => prev.filter((m) => m.id !== msg.id)); return; }
+      if (change === 'UPDATE') { setGroupMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m))); return; }
       setGroupMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       markClassChatRead(activeGroup);
     });
@@ -69,6 +71,39 @@ const Messages = () => {
     return () => { cancelled = true; clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, activeGroup, groupMessages.length]);
+
+  // Teachers (their own class) and the admin can pin and delete.
+  const isStaff = isAdmin || currentUser?.role === 'teacher';
+  const pinnedMessages = groupMessages.filter((m) => m.pinnedAt).sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''));
+
+  const handlePin = async (msg: ClassMessage) => {
+    const { error } = await pinClassMessage(msg.id, !msg.pinnedAt);
+    if (error) alert('Could not change the pin: ' + error);
+  };
+
+  const handleDeleteGroupMessage = async (msg: ClassMessage) => {
+    if (!confirm(`Delete this message from ${msg.senderName}? Everyone in the class will no longer see it.`)) return;
+    const { error } = await deleteClassMessage(msg.id);
+    if (error) alert('Could not delete the message: ' + error);
+  };
+
+  // Admin: edit the list of words and emojis pupils are not allowed to send.
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [blockedList, setBlockedList] = useState<BlockedTerm[]>([]);
+  const [newTerm, setNewTerm] = useState('');
+  const openBlocked = async () => { setShowBlocked(true); setBlockedList(await getBlockedTerms()); };
+  const handleAddTerm = async () => {
+    const isEmoji = /\P{ASCII}/u.test(newTerm);
+    const { error } = await addBlockedTerm(newTerm, isEmoji ? 'emoji' : 'word');
+    if (error) { alert(error); return; }
+    setNewTerm('');
+    setBlockedList(await getBlockedTerms());
+  };
+  const handleRemoveTerm = async (term: string) => {
+    const { error } = await removeBlockedTerm(term);
+    if (error) { alert(error); return; }
+    setBlockedList(await getBlockedTerms());
+  };
 
   const handleSendGroup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -448,7 +483,27 @@ const Messages = () => {
                        {classChatNames.map((c) => <option key={c} value={c}>{c}</option>)}
                      </select>
                    )}
+                   {isAdmin && (
+                     <button type="button" className="btn btn-outline sm" onClick={openBlocked} title="Words and emojis pupils cannot send"><ShieldAlert size={16} /> Blocked words</button>
+                   )}
                 </div>
+
+                {pinnedMessages.length > 0 && (
+                  <div style={{ padding: '8px 14px', background: 'var(--accent)', borderBottom: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {pinnedMessages.map((m) => (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px' }}>
+                        <Pin size={14} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong style={{ color: 'var(--primary)' }}>{m.senderName}: </strong>
+                          <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.content}</span>
+                        </div>
+                        {isStaff && (
+                          <button type="button" className="icon-btn sm" title="Unpin" onClick={() => handlePin(m)}><PinOff size={14} /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="chats-thread-messages">
                    {groupLoading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading messages...</p>}
@@ -471,8 +526,21 @@ const Messages = () => {
                                </div>
                              )}
                              <p style={{ fontSize: '14px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-                             <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
+                             <span style={{ fontSize: '10px', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                {msg.pinnedAt && <Pin size={10} />}
                                 {new Date(msg.createdAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                {isStaff && (
+                                  <>
+                                    <button type="button" onClick={() => handlePin(msg)} title={msg.pinnedAt ? 'Unpin' : 'Pin to the top of the chat'}
+                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}>
+                                      {msg.pinnedAt ? <PinOff size={12} /> : <Pin size={12} />}
+                                    </button>
+                                    <button type="button" onClick={() => handleDeleteGroupMessage(msg)} title="Delete this message"
+                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}>
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
+                                )}
                              </span>
                              {mine && (() => {
                                const seenBy = groupSeen.filter((r) => r.userId !== currentUser?.id && new Date(r.lastReadAt).getTime() >= new Date(msg.createdAt).getTime());
@@ -503,6 +571,32 @@ const Messages = () => {
                    />
                    <button type="submit" className="btn btn-primary" disabled={!groupDraft.trim()}><Send size={18} /></button>
                 </form>
+             </div>
+           )}
+
+           {showBlocked && (
+             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+               <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '28px', borderRadius: '24px', width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
+                 <h3 style={{ marginBottom: '6px' }}>Blocked words and emojis</h3>
+                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>
+                   Pupils cannot send these in the class chat or to the admin. Teachers and admins are not restricted. A word is only blocked as a whole word ("mad" is blocked, "made" is not).
+                 </p>
+                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                   <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} placeholder="Type a word or paste an emoji"
+                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTerm(); } }}
+                     style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                   <button type="button" className="btn btn-primary sm" onClick={handleAddTerm} disabled={!newTerm.trim()}>Block it</button>
+                 </div>
+                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                   {blockedList.map((t) => (
+                     <span key={t.term} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '13px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', fontWeight: 600 }}>
+                       {t.term}
+                       <button type="button" onClick={() => handleRemoveTerm(t.term)} title="Allow it again" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}><X size={12} /></button>
+                     </span>
+                   ))}
+                 </div>
+                 <button className="btn btn-outline" style={{ width: '100%', marginTop: '18px' }} onClick={() => setShowBlocked(false)}>Done</button>
+               </div>
              </div>
            )}
 

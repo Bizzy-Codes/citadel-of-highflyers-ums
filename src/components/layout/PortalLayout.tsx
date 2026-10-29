@@ -57,7 +57,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'Payment Receipts', icon: <Receipt size={20} />, path: '/portal/admin/payments', show: isAdmin },
     { label: 'Admissions', icon: <UserPlus size={20} />, path: '/portal/admin/admissions', show: isAdmin },
     { label: 'Academic Calendar', icon: <CalendarRange size={20} />, path: '/portal/admin/calendar', show: isAdmin },
-    { label: 'Attendance Overview', icon: <CalendarCheck size={20} />, path: '/portal/admin/attendance', show: isAdmin },
+    { label: 'Attendance (all classes)', icon: <CalendarCheck size={20} />, path: '/portal/admin/attendance', show: isAdmin },
     { label: 'Citadel AI', icon: <Sparkles size={20} />, path: '/portal/admin/citadel-ai', show: isAdmin },
     { label: 'School Calendar', icon: <CalendarRange size={20} />, path: '/portal/calendar', show: !isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },

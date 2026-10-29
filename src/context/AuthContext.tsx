@@ -242,6 +242,12 @@ export interface ClassMessage {
   senderRole: string;
   content: string;
   createdAt: string;
+  pinnedAt?: string;
+}
+
+export interface BlockedTerm {
+  term: string;
+  kind: 'word' | 'emoji';
 }
 
 export interface NewAssignmentInput {
@@ -610,7 +616,12 @@ interface AuthContextType {
   getAnswersForAssignment: (assignmentId: string) => Promise<AssignmentAnswerRow[]>;
   getClassMessages: (className: string) => Promise<ClassMessage[]>;
   sendClassMessage: (className: string, content: string) => Promise<{ error: string | null }>;
-  subscribeToClassMessages: (className: string, onMessage: (message: ClassMessage) => void) => () => void;
+  subscribeToClassMessages: (className: string, onChange: (message: ClassMessage, change: 'INSERT' | 'UPDATE' | 'DELETE') => void) => () => void;
+  deleteClassMessage: (id: string) => Promise<{ error: string | null }>;
+  pinClassMessage: (id: string, pin: boolean) => Promise<{ error: string | null }>;
+  getBlockedTerms: () => Promise<BlockedTerm[]>;
+  addBlockedTerm: (term: string, kind: 'word' | 'emoji') => Promise<{ error: string | null }>;
+  removeBlockedTerm: (term: string) => Promise<{ error: string | null }>;
   markClassChatRead: (className: string) => Promise<void>;
   classChatNames: string[];
   submitAssignment: (assignmentId: string, file: File) => Promise<{ error: string | null }>;
@@ -968,7 +979,30 @@ const mapClassMessageRow = (row: any): ClassMessage => ({
   senderRole: row.sender_role ?? 'student',
   content: row.content,
   createdAt: row.created_at,
+  pinnedAt: row.pinned_at ?? undefined,
 });
+
+// Child-safe chat: pupils can't send blocked words or emojis (the database
+// enforces it; this checks first so the pupil gets a friendly message).
+let blockedTermsCache: { at: number; terms: BlockedTerm[] } | null = null;
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const findBlockedTerm = (text: string, terms: BlockedTerm[]): BlockedTerm | null => {
+  const clean = text.replace(/\s+/g, ' ');
+  for (const t of terms) {
+    if (t.kind === 'emoji' ? clean.includes(t.term) : new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(t.term)}($|[^\\p{L}\\p{N}])`, 'iu').test(clean)) return t;
+  }
+  return null;
+};
+const blockedMessage = (t: { term: string; kind: string }) =>
+  t.kind === 'emoji'
+    ? "That emoji isn't allowed in our school chat. Please choose a kind one."
+    : `The word "${t.term}" isn't allowed in our school chat. Please use kind words.`;
+const blockedFromError = (message: string): string | null => {
+  const m = message.match(/BLOCKED_CONTENT:(.+)/);
+  if (!m) return null;
+  const term = m[1].trim();
+  return blockedMessage({ term, kind: /^[\x00-\x7F]+$/.test(term) ? 'word' : 'emoji' });
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapAssignmentQuestionRow = (row: any): AssignmentQuestion => ({
@@ -2110,15 +2144,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!session?.user.id) return { error: 'Not signed in' };
     const text = content.trim();
     if (!text) return { error: 'Message cannot be empty' };
+    if (currentUser?.role === 'student') {
+      const hit = findBlockedTerm(text, await getBlockedTerms());
+      if (hit) return { error: blockedMessage(hit) };
+    }
     const { error } = await supabase.from('class_messages').insert({ class_name: className, sender_id: session.user.id, content: text });
+    return { error: error ? (blockedFromError(error.message) ?? error.message) : null };
+  };
+
+  const getBlockedTerms = async (): Promise<BlockedTerm[]> => {
+    if (blockedTermsCache && Date.now() - blockedTermsCache.at < 60_000) return blockedTermsCache.terms;
+    const { data, error } = await supabase.from('blocked_terms').select('term, kind').order('term');
+    if (error) { console.error('getBlockedTerms failed', error); return blockedTermsCache?.terms ?? []; }
+    blockedTermsCache = { at: Date.now(), terms: (data ?? []) as BlockedTerm[] };
+    return blockedTermsCache.terms;
+  };
+
+  const addBlockedTerm = async (term: string, kind: 'word' | 'emoji') => {
+    const clean = term.trim().toLowerCase();
+    if (!clean) return { error: 'Type a word or paste an emoji.' };
+    const { error } = await supabase.from('blocked_terms').upsert({ term: kind === 'emoji' ? term.trim() : clean, kind });
+    blockedTermsCache = null;
     return { error: error?.message ?? null };
   };
 
-  const subscribeToClassMessages = (className: string, onMessage: (message: ClassMessage) => void) => {
+  const removeBlockedTerm = async (term: string) => {
+    const { error } = await supabase.from('blocked_terms').delete().eq('term', term);
+    blockedTermsCache = null;
+    return { error: error?.message ?? null };
+  };
+
+  const deleteClassMessage = async (id: string) => {
+    const { error } = await supabase.from('class_messages').delete().eq('id', id);
+    return { error: error?.message ?? null };
+  };
+
+  const pinClassMessage = async (id: string, pin: boolean) => {
+    const { error } = await supabase.rpc('pin_class_message', { p_id: id, p_pin: pin });
+    return { error: error?.message ?? null };
+  };
+
+  // New posts, pin changes (UPDATE) and removed messages (DELETE). A delete
+  // event only carries the id, so it can't be filtered by class here; the
+  // caller just drops that id from its list.
+  const subscribeToClassMessages = (className: string, onChange: (message: ClassMessage, change: 'INSERT' | 'UPDATE' | 'DELETE') => void) => {
     const channel = supabase
       .channel(`class-chat-${className}-${Date.now()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'class_messages', filter: `class_name=eq.${className}` }, (payload) => {
-        onMessage(mapClassMessageRow(payload.new));
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'class_messages' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          onChange({ id: (payload.old as { id: string }).id } as ClassMessage, 'DELETE');
+          return;
+        }
+        const msg = mapClassMessageRow(payload.new);
+        if (msg.className === className) onChange(msg, payload.eventType as 'INSERT' | 'UPDATE');
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -2152,11 +2230,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // constraint.
     const trimmed = content.trim() || attachment?.name || '';
     if (!trimmed) return { error: 'Message cannot be empty' };
+    if (currentUser?.role === 'student') {
+      const hit = findBlockedTerm(trimmed, await getBlockedTerms());
+      if (hit) return { error: blockedMessage(hit) };
+    }
     const { error } = await supabase.from('direct_messages').insert({
       sender_id: session.user.id, recipient_id: recipientId, content: trimmed,
       attachment_path: attachment?.path ?? null, attachment_name: attachment?.name ?? null,
     });
-    return { error: error?.message ?? null };
+    return { error: error ? (blockedFromError(error.message) ?? error.message) : null };
   };
 
   const uploadChatAttachment = async (recipientId: string, file: File) => {
@@ -2842,6 +2924,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
       updateAssignment, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
       getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
+      deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,
       uploadChatAttachment, getChatAttachmentUrl,

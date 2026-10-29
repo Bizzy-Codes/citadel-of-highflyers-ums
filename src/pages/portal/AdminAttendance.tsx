@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type AttendanceStatus } from '../../context/AuthContext';
 import { ClipboardList } from 'lucide-react';
@@ -115,6 +116,9 @@ const AdminAttendance = () => {
                 ))}
               </select>
             </div>
+            <Link to={`/portal/admin/attendance/${encodeURIComponent(className)}`} className="btn btn-primary" style={{ textDecoration: 'none' }}>
+              Mark {className} register
+            </Link>
           </div>
           {week && !loading && (
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '18px' }}>
