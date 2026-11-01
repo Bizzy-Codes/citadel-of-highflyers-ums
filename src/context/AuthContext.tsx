@@ -197,12 +197,20 @@ export interface AssignmentQuestion {
   prompt: string;
   answerMode: AnswerMode;
   lineCount: number;
+  // 'written' (typed / notebook) or 'objective' (multiple choice).
+  type: 'written' | 'objective';
+  options?: TestQuestionOption[];
 }
 
 export interface NewAssignmentQuestionInput {
   prompt: string;
   answerMode: AnswerMode;
   lineCount: number;
+  type?: 'written' | 'objective';
+  options?: TestQuestionOption[];
+  // The teacher's answer key for a multiple-choice question. Stored apart
+  // from the question so pupils can never read it (patch_44).
+  correctOption?: string;
 }
 
 export interface AssignmentAnswerRow {
@@ -232,6 +240,9 @@ export interface EditAssignmentQuestionInput {
   prompt: string;
   answerMode: AnswerMode;
   lineCount: number;
+  type?: 'written' | 'objective';
+  options?: TestQuestionOption[];
+  correctOption?: string;
 }
 
 export interface ClassMessage {
@@ -256,6 +267,8 @@ export interface NewAssignmentInput {
   description?: string;
   dueDate?: string;
   questions?: NewAssignmentQuestionInput[];
+  // false = save as a draft: hidden from pupils, no notification, until published.
+  publish?: boolean;
 }
 
 export interface AssignmentSubmission {
@@ -615,7 +628,8 @@ interface AuthContextType {
   createAssignment: (input: NewAssignmentInput, file: File | null) => Promise<{ error: string | null }>;
   deleteAssignment: (id: string) => Promise<void>;
   setAssignmentOpen: (id: string, open: boolean) => Promise<{ error: string | null }>;
-  updateAssignment: (id: string, input: { subject: string; title: string; description?: string; dueDate?: string }, questions: EditAssignmentQuestionInput[], file: File | null) => Promise<{ error: string | null }>;
+  updateAssignment: (id: string, input: { subject: string; title: string; description?: string; dueDate?: string; publish?: boolean }, questions: EditAssignmentQuestionInput[], file: File | null) => Promise<{ error: string | null }>;
+  getAssignmentKeys: (assignmentId: string) => Promise<Record<string, string>>;
   recordAssignmentView: (assignmentId: string) => Promise<void>;
   getAssignmentViews: (assignmentId: string) => Promise<AssignmentView[]>;
   getAssignmentViewCounts: () => Promise<Record<string, number>>;
@@ -1033,6 +1047,8 @@ const mapAssignmentQuestionRow = (row: any): AssignmentQuestion => ({
   prompt: row.prompt,
   answerMode: row.answer_mode,
   lineCount: Number(row.line_count ?? 5),
+  type: row.qtype === 'objective' ? 'objective' : 'written',
+  options: row.options ?? undefined,
 });
 
 const mapMessageRow = (row: any): DirectMessage => ({
@@ -1824,6 +1840,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshTimetables();
   };
 
+  // Saves one question (new or existing) and its answer key if it is
+  // multiple choice. The key goes in its own teacher-only table.
+  const saveAssignmentQuestion = async (assignmentId: string, index: number, q: EditAssignmentQuestionInput): Promise<{ error: string | null }> => {
+    const objective = q.type === 'objective';
+    const row = {
+      assignment_id: assignmentId, order_index: index, prompt: q.prompt.trim(),
+      answer_mode: objective ? 'none' : q.answerMode, line_count: q.lineCount,
+      qtype: objective ? 'objective' : 'written',
+      options: objective ? (q.options ?? []) : null,
+    };
+    let questionId = q.id;
+    if (questionId) {
+      const { error } = await supabase.from('assignment_questions').update(row).eq('id', questionId);
+      if (error) return { error: error.message };
+    } else {
+      const { data, error } = await supabase.from('assignment_questions').insert(row).select('id').single();
+      if (error || !data) return { error: error?.message ?? 'Could not save the question' };
+      questionId = data.id as string;
+    }
+    if (objective && q.correctOption) {
+      const { error } = await supabase.from('assignment_question_keys').upsert({ question_id: questionId, correct_option: q.correctOption });
+      if (error) return { error: error.message };
+    } else {
+      await supabase.from('assignment_question_keys').delete().eq('question_id', questionId);
+    }
+    return { error: null };
+  };
+
+  const getAssignmentKeys = async (assignmentId: string): Promise<Record<string, string>> => {
+    const { data, error } = await supabase.from('assignment_question_keys')
+      .select('question_id, correct_option, assignment_questions!inner(assignment_id)')
+      .eq('assignment_questions.assignment_id', assignmentId);
+    if (error) { console.error('getAssignmentKeys failed', error); return {}; }
+    return Object.fromEntries((data ?? []).map((r) => [r.question_id as string, r.correct_option as string]));
+  };
+
   const createAssignment = async (input: NewAssignmentInput, file: File | null) => {
     if (!currentUser?.assignedClass) return { error: 'No class assigned to your account.' };
 
@@ -1834,18 +1886,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       description: input.description || null,
       due_date: input.dueDate || null,
       created_by: currentUser.id,
+      is_open: input.publish !== false,
     }).select().single();
     if (insertError || !inserted) return { error: insertError?.message ?? 'Failed to create assignment' };
 
     const qs = (input.questions ?? []).filter((q) => q.prompt.trim());
-    if (qs.length > 0) {
-      const { error: qError } = await supabase.from('assignment_questions').insert(
-        qs.map((q, i) => ({
-          assignment_id: inserted.id, order_index: i, prompt: q.prompt.trim(),
-          answer_mode: q.answerMode, line_count: q.lineCount,
-        })),
-      );
-      if (qError) { await refreshAssignments(); return { error: `Assignment posted, but the questions could not be saved: ${qError.message}` }; }
+    for (let i = 0; i < qs.length; i++) {
+      const { error: qError } = await saveAssignmentQuestion(inserted.id, i, qs[i]);
+      if (qError) { await refreshAssignments(); return { error: `Assignment saved, but a question could not be saved: ${qError}` }; }
     }
 
     if (file) {
@@ -1953,7 +2001,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // removed (along with pupils' answers to them).
   const updateAssignment = async (
     id: string,
-    input: { subject: string; title: string; description?: string; dueDate?: string },
+    input: { subject: string; title: string; description?: string; dueDate?: string; publish?: boolean },
     questions: EditAssignmentQuestionInput[],
     file: File | null,
   ) => {
@@ -1961,6 +2009,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subject: input.subject, title: input.title,
       description: input.description || null, due_date: input.dueDate || null,
     };
+    if (input.publish !== undefined) patch.is_open = input.publish;
     if (file) {
       const path = `${id}/brief/${file.name}`;
       const { error: uploadError } = await supabase.storage.from('assignment-files').upload(path, file, { upsert: true });
@@ -1981,12 +2030,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (delError) return { error: delError.message };
     }
     for (let i = 0; i < keep.length; i++) {
-      const q = keep[i];
-      const row = { assignment_id: id, order_index: i, prompt: q.prompt.trim(), answer_mode: q.answerMode, line_count: q.lineCount };
-      const { error: qError } = q.id
-        ? await supabase.from('assignment_questions').update(row).eq('id', q.id)
-        : await supabase.from('assignment_questions').insert(row);
-      if (qError) return { error: qError.message };
+      const { error: qError } = await saveAssignmentQuestion(id, i, keep[i]);
+      if (qError) return { error: qError };
     }
     await refreshAssignments();
     return { error: null };
@@ -3006,7 +3051,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       notifications, addNotification, uploadAnnouncementImage, unreadMessageCount, refreshUnreadMessages, exportData,
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
-      updateAssignment, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
+      updateAssignment, getAssignmentKeys, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
       getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
       deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,

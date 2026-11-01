@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type TestQuestion, type TestQuestionOption } from '../../context/AuthContext';
-import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { useAuth, type TestQuestion, type TestQuestionOption, type EditAssignmentQuestionInput } from '../../context/AuthContext';
+import { ArrowLeft, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Send, Lock, X, Eye, EyeOff, RotateCcw, Camera, Save } from 'lucide-react';
+import QuestionBuilder from '../../components/portal/QuestionBuilder';
+import QuestionImport from '../../components/portal/QuestionImport';
+import { useLocalDraft } from '../../lib/useLocalDraft';
+import { cleanQuestions, fromExtracted, validateQuestions } from '../../lib/questionDraft';
 import './Tests.css';
 
 // points are kept as raw text, not numbers -- a number-typed value
@@ -50,6 +54,12 @@ const TestEditor = () => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<QuestionFormState>(blankForm);
   const [saving, setSaving] = useState(false);
+  const [qRestored, setQRestored] = useState(false);
+  // "Import from a photo / PDF / Word file" review window.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importQs, setImportQs] = useState<EditAssignmentQuestionInput[]>([]);
+  const [importPoints, setImportPoints] = useState('1');
+  const [importing, setImporting] = useState(false);
   // Correct answers / rubric stay hidden until the teacher explicitly
   // reveals them, so the answer key isn't just sitting on screen.
   const [showAnswers, setShowAnswers] = useState(false);
@@ -66,7 +76,56 @@ const TestEditor = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId]);
 
-  const startNew = () => { setForm(blankForm); setShowForm(true); };
+  // The question being typed is kept on this device as it is typed, so a
+  // browser refresh does not wipe it. (Saved questions live on the server.)
+  const draftKey = testId ? `citadel:draft:testq:${testId}` : null;
+  const qDraft = useLocalDraft(draftKey, form, showForm && !form.id && !!(form.prompt.trim() || form.options.some((o) => o.text.trim())));
+
+  useEffect(() => {
+    if (!draftKey) return;
+    const saved = qDraft.load();
+    if (saved && (saved.prompt?.trim() || saved.options?.some((o) => o.text.trim()))) {
+      setForm(saved);
+      setShowForm(true);
+      setQRestored(true);
+    }
+    // Runs once when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  const startNew = () => {
+    const saved = qDraft.load();
+    if (saved && (saved.prompt?.trim() || saved.options?.some((o) => o.text.trim()))) { setForm(saved); setQRestored(true); }
+    else { setForm(blankForm); setQRestored(false); }
+    setShowForm(true);
+  };
+
+  const handleImportConfirm = async () => {
+    if (!testId) return;
+    const problem = validateQuestions(importQs);
+    if (problem) { alert(problem); return; }
+    const points = Number(importPoints) || 1;
+    setImporting(true);
+    let failed: string | null = null;
+    for (const q of cleanQuestions(importQs)) {
+      const objective = q.type === 'objective';
+      const { error } = await saveQuestion(testId, {
+        type: objective ? 'objective' : 'essay',
+        prompt: q.prompt.trim(),
+        points,
+        options: objective ? q.options : undefined,
+        correctOption: objective ? q.correctOption : undefined,
+        answerMode: q.answerMode === 'lines' ? 'lines' : 'box',
+        lineCount: q.lineCount,
+      });
+      if (error) { failed = error; break; }
+    }
+    setImporting(false);
+    await loadQuestions();
+    if (failed) { alert('Some questions could not be added: ' + failed); return; }
+    setImportOpen(false);
+    setImportQs([]);
+  };
 
   const startEdit = (q: TestQuestion) => {
     setForm({
@@ -106,6 +165,8 @@ const TestEditor = () => {
     });
     setSaving(false);
     if (error) { alert('Failed to save question: ' + error); return; }
+    if (!form.id) qDraft.clear();
+    setQRestored(false);
     setShowForm(false);
     await loadQuestions();
   };
@@ -189,6 +250,7 @@ const TestEditor = () => {
               <button className="btn btn-outline sm" type="button" onClick={() => setShowAnswers((v) => !v)} title="Toggle whether correct answers and rubric are visible on this page">
                 {showAnswers ? <><EyeOff size={16} /> Hide answer key</> : <><Eye size={16} /> Show answer key</>}
               </button>
+              <button className="btn btn-outline sm" onClick={() => { setImportQs([]); setImportOpen(true); }} title="Read the questions from a photo, PDF or Word file"><Camera size={16} /> Import from photo / file</button>
               <button className="btn btn-primary sm" onClick={startNew}><Plus size={16} /> Add Question</button>
             </div>
           </div>
@@ -251,6 +313,16 @@ const TestEditor = () => {
               <h3>{form.id ? 'Edit Question' : 'Add Question'}</h3>
               <button className="icon-btn" onClick={() => setShowForm(false)}><X size={18} /></button>
             </div>
+            {qRestored && !form.id && (
+              <p style={{ fontSize: '13px', padding: '10px 12px', borderRadius: '10px', background: 'var(--accent)', marginBottom: '14px' }}>
+                We kept the question you were typing. It is back here.
+              </p>
+            )}
+            {!form.id && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Save size={12} /> {qDraft.savedAt ? `Auto-saved on this device at ${qDraft.savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. A refresh will not lose it.` : 'What you type is kept on this device automatically.'}
+              </p>
+            )}
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
                 <label>Question Type</label>
@@ -369,10 +441,45 @@ const TestEditor = () => {
               )}
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setShowForm(false)}>Close</button>
+                {!form.id && (
+                  <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={qDraft.save} title="Keep what you have typed on this device">
+                    <Save size={16} /> Save draft
+                  </button>
+                )}
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? 'Saving...' : 'Save Question'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {importOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '28px', borderRadius: '24px', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3>Import questions from a photo or file</h3>
+              <button className="icon-btn" onClick={() => setImportOpen(false)} disabled={importing}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>
+              Take a clear photo of your questions, or choose a PDF or Word (.docx) file. The questions are read and turned into text pupils can answer on screen. Check every question and tick the correct answers before adding them to the test.
+            </p>
+            <QuestionImport label="Choose photo, PDF or Word file" onExtracted={(qs) => setImportQs((prev) => [...prev, ...qs.map(fromExtracted)])} />
+            {importQs.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <QuestionBuilder value={importQs} onChange={setImportQs} forTest />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Points for each question</label>
+                  <input type="number" min={0.5} step="0.5" value={importPoints} onChange={(e) => setImportPoints(e.target.value)}
+                    style={{ width: '90px', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setImportOpen(false)} disabled={importing}>Cancel</button>
+                  <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleImportConfirm} disabled={importing}>
+                    {importing ? 'Adding...' : `Add ${importQs.length} question${importQs.length === 1 ? '' : 's'} to this test`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -106,7 +106,27 @@ const AssignmentCard = ({ a, today, open, onToggle }: { a: Assignment; today: st
             <div key={q.id} className="grading-answer-card">
               <strong style={{ color: 'var(--primary)' }}>Question {i + 1}</strong>
               <p style={{ margin: '6px 0 10px', whiteSpace: 'pre-wrap', fontSize: '15px' }}>{q.prompt}</p>
-              {q.answerMode === 'none' ? (
+              {q.type === 'objective' ? (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {q.options?.map((opt) => {
+                      const picked = answers[q.id] === opt.key;
+                      return (
+                        <label key={opt.key} className="test-option-label" style={{ borderColor: picked ? 'var(--primary)' : undefined, background: picked ? 'var(--accent)' : undefined }}>
+                          <input type="radio" name={q.id} checked={picked} onChange={() => handleChange(q.id, opt.key)} />
+                          <span className="test-option-key">{opt.key}</span>
+                          <span className="test-option-text">{opt.text}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p style={{ fontSize: '12px', marginTop: '6px', minHeight: '16px', color: saveState[q.id] === 'error' ? 'var(--error)' : 'var(--text-muted)' }}>
+                    {saveState[q.id] === 'saving' && 'Saving...'}
+                    {saveState[q.id] === 'saved' && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--success)' }}><CheckCircle2 size={12} /> Saved</span>}
+                    {saveState[q.id] === 'error' && 'Not saved -- check your connection and choose again.'}
+                  </p>
+                </>
+              ) : q.answerMode === 'none' ? (
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <NotebookPen size={14} /> Copy this question into your notebook and write your answer there.
                 </p>

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLocalDraft } from '../../lib/useLocalDraft';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type NewTestInput } from '../../context/AuthContext';
-import { ClipboardList, Plus, Pencil, Radio, Trash2, Send, Lock, RotateCcw } from 'lucide-react';
+import { ClipboardList, Plus, Pencil, Radio, Trash2, Send, Lock, RotateCcw, Save } from 'lucide-react';
 import './Tests.css';
 
 const emptyInput = { subject: '', title: '', instructions: '' };
@@ -21,11 +22,36 @@ const TeacherTests = () => {
   const [durationText, setDurationText] = useState(DEFAULT_DURATION);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // What is typed in "Create Test" is kept on this device as it is typed, so
+  // a browser refresh does not wipe it.
+  const draftKey = currentUser ? `citadel:draft:test:${currentUser.id}` : null;
+  const draft = useLocalDraft(draftKey, { input, durationText }, isCreating && !!(input.title || input.subject || input.instructions));
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    if (!draftKey) return;
+    const saved = draft.load();
+    if (saved && (saved.input.title || saved.input.subject || saved.input.instructions)) {
+      setInput(saved.input); setDurationText(saved.durationText); setRestored(true); setIsCreating(true);
+    }
+    // Runs once when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  const startCreate = () => {
+    const saved = draft.load();
+    if (saved && (saved.input.title || saved.input.subject || saved.input.instructions)) {
+      setInput(saved.input); setDurationText(saved.durationText); setRestored(true);
+    }
+    setIsCreating(true);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: NewTestInput = { ...input, durationMinutes: Number(durationText) || 0 };
     const { error, testId } = await createTest(payload);
     if (error) { alert('Failed to create test: ' + error); return; }
+    draft.clear();
+    setRestored(false);
     setIsCreating(false);
     setInput(emptyInput);
     setDurationText(DEFAULT_DURATION);
@@ -61,7 +87,7 @@ const TeacherTests = () => {
             <h2 style={{ marginBottom: '4px' }}>Tests {currentUser?.assignedClass ? `— ${currentUser.assignedClass}` : ''}</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Create timed tests, publish them, and monitor attempts live.</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> Create Test</button>
+          <button className="btn btn-primary" onClick={startCreate}><Plus size={18} /> Create Test</button>
         </div>
 
         <div className="card glass" style={{ padding: '0' }}>
@@ -105,6 +131,11 @@ const TeacherTests = () => {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '90%', maxWidth: '440px' }}>
             <h3 style={{ marginBottom: '24px' }}>Create Test</h3>
+            {restored && (
+              <p style={{ fontSize: '13px', padding: '10px 12px', borderRadius: '10px', background: 'var(--accent)', marginBottom: '14px' }}>
+                We kept what you were typing. It is back here.
+              </p>
+            )}
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
                 <label>Title</label>
@@ -127,7 +158,8 @@ const TeacherTests = () => {
                   style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsCreating(false)}>Cancel</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsCreating(false)}>Close</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={draft.save} title="Keep what you have typed on this device"><Save size={16} /> Save draft</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Create &amp; Add Questions</button>
               </div>
             </form>

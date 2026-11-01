@@ -1,15 +1,20 @@
 import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type NewAssignmentInput, type EditAssignmentQuestionInput, type AssignmentSubmission, type AssignmentQuestion, type AssignmentAnswerRow, type AssignmentView } from '../../context/AuthContext';
-import { FileText, Plus, Trash2, Users, Download, Paperclip, Lock, RotateCcw, X, Pencil, Eye, CheckCheck } from 'lucide-react';
+import { FileText, Plus, Trash2, Users, Download, Paperclip, Lock, RotateCcw, Pencil, Eye, CheckCheck, Save } from 'lucide-react';
 import './Tests.css';
 import DateWheelInput from '../../components/common/DateWheelInput';
+import QuestionBuilder from '../../components/portal/QuestionBuilder';
+import { useLocalDraft } from '../../lib/useLocalDraft';
+import { cleanQuestions, validateQuestions } from '../../lib/questionDraft';
 
 const emptyInput: NewAssignmentInput = { subject: '', title: '', description: '', dueDate: '' };
 
 const TeacherAssignments = () => {
-  const { currentUser, students, assignments, createAssignment, updateAssignment, getAssignmentViews, getAssignmentViewCounts, deleteAssignment, setAssignmentOpen, getAssignmentQuestions, getAnswersForAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
+  const { currentUser, students, assignments, createAssignment, updateAssignment, getAssignmentKeys, getAssignmentViews, getAssignmentViewCounts, deleteAssignment, setAssignmentOpen, getAssignmentQuestions, getAnswersForAssignment, getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl } = useAuth();
   const [newQuestions, setNewQuestions] = useState<EditAssignmentQuestionInput[]>([]);
+  const [viewKeys, setViewKeys] = useState<Record<string, string>>({});
+  const [restored, setRestored] = useState(false);
   // Editing an already-posted assignment (null = creating a new one).
   const [editingId, setEditingId] = useState<string | null>(null);
   // "View" window: the assignment as pupils see it, plus who has opened it.
@@ -30,19 +35,59 @@ const TeacherAssignments = () => {
   const [submissions, setSubmissions] = useState<AssignmentSubmission[]>([]);
   const [drafts, setDrafts] = useState<Record<string, { grade: string; feedback: string }>>({});
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // What is typed in the form is kept on this device as it is typed, so a
+  // browser refresh or a trip to another tab never wipes it. Only a NEW
+  // assignment is restored this way; editing an existing one starts from
+  // what is saved on the server.
+  const draftKey = currentUser ? `citadel:draft:assignment:${currentUser.id}` : null;
+  const hasContent = !!(input.title || input.subject || input.description || newQuestions.length > 0);
+  const localDraft = useLocalDraft(draftKey, { input, questions: newQuestions }, isCreating && !editingId && hasContent);
+
+  useEffect(() => {
+    if (!draftKey || isCreating) return;
+    const saved = localDraft.load();
+    if (saved && (saved.input.title || saved.input.subject || saved.input.description || saved.questions.length > 0)) {
+      setInput(saved.input);
+      setNewQuestions(saved.questions);
+      setRestored(true);
+      setIsCreating(true);
+    }
+    // Runs once when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // mode 'draft': save on the server but keep it hidden from pupils (no
+  // notification). mode 'publish': pupils can see it and are notified.
+  const submit = async (mode: 'draft' | 'publish') => {
+    if (!input.title.trim() || !input.subject.trim()) { alert('Please type a title and a subject first.'); return; }
+    const nonEmpty = newQuestions.filter((q) => q.prompt.trim());
+    if (mode === 'publish') {
+      const problem = validateQuestions(newQuestions);
+      if (problem) { alert(problem); return; }
+    }
+    const questions = cleanQuestions(nonEmpty);
     setSaving(true);
-    const { error } = editingId
-      ? await updateAssignment(editingId, { subject: input.subject, title: input.title, description: input.description, dueDate: input.dueDate }, newQuestions, file)
-      : await createAssignment({ ...input, questions: newQuestions }, file);
+    let error: string | null;
+    if (editingId) {
+      const current = assignments.find((a) => a.id === editingId);
+      ({ error } = await updateAssignment(
+        editingId,
+        { subject: input.subject, title: input.title, description: input.description, dueDate: input.dueDate, publish: mode === 'publish' ? true : (current?.isOpen ? undefined : false) },
+        questions, file,
+      ));
+    } else {
+      ({ error } = await createAssignment({ ...input, questions, publish: mode === 'publish' }, file));
+    }
     setSaving(false);
-    if (error) { alert((editingId ? 'Failed to save changes: ' : 'Failed to create assignment: ') + error); return; }
+    if (error) { alert((editingId ? 'Failed to save changes: ' : 'Failed to save the assignment: ') + error); return; }
+    localDraft.clear();
+    setRestored(false);
     setIsCreating(false);
     setEditingId(null);
     setInput(emptyInput);
     setNewQuestions([]);
     setFile(null);
+    if (mode === 'draft') alert('Saved as a draft. Pupils cannot see it yet. Press Publish on it when you are ready.');
   };
 
   const startEdit = async (id: string) => {
@@ -51,13 +96,40 @@ const TeacherAssignments = () => {
     setInput({ subject: a.subject, title: a.title, description: a.description ?? '', dueDate: a.dueDate ?? '' });
     setFile(null);
     setEditingId(id);
-    const qs = await getAssignmentQuestions(id);
-    setNewQuestions(qs.map((q) => ({ id: q.id, prompt: q.prompt, answerMode: q.answerMode, lineCount: q.lineCount })));
+    const [qs, keys] = await Promise.all([getAssignmentQuestions(id), getAssignmentKeys(id)]);
+    setNewQuestions(qs.map((q) => ({
+      id: q.id, prompt: q.prompt, answerMode: q.answerMode, lineCount: q.lineCount,
+      type: q.type, options: q.options && q.options.length ? q.options : undefined, correctOption: keys[q.id] ?? '',
+    })));
     setDetailId(null);
+    setRestored(false);
     setIsCreating(true);
   };
 
-  const closeForm = () => { setIsCreating(false); setEditingId(null); setInput(emptyInput); setFile(null); setNewQuestions([]); };
+  // Closing the form keeps the typed draft on this device (so it can be
+  // picked up again); it is only deleted once saved or discarded on purpose.
+  const closeForm = () => {
+    setIsCreating(false); setEditingId(null); setRestored(false);
+    if (!editingId && !hasContent) localDraft.clear();
+    setInput(emptyInput); setFile(null); setNewQuestions([]);
+  };
+  // "New Assignment": picks up an earlier unsaved draft if there is one.
+  const startNew = () => {
+    const saved = localDraft.load();
+    if (saved && (saved.input.title || saved.input.subject || saved.input.description || saved.questions.length > 0)) {
+      setInput(saved.input);
+      setNewQuestions(saved.questions);
+      setRestored(true);
+    }
+    setIsCreating(true);
+  };
+
+  const discardDraft = () => {
+    if (!confirm('Throw away what you have typed?')) return;
+    localDraft.clear();
+    setRestored(false); setIsCreating(false); setEditingId(null);
+    setInput(emptyInput); setFile(null); setNewQuestions([]);
+  };
 
   const openDetail = async (id: string) => {
     setDetailId(id);
@@ -76,9 +148,6 @@ const TeacherAssignments = () => {
     if (error) alert('Could not update the assignment: ' + error);
   };
 
-  const updateNewQuestion = (i: number, patch: Partial<EditAssignmentQuestionInput>) =>
-    setNewQuestions(newQuestions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
-
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This removes all pupil submissions too.`)) return;
     await deleteAssignment(id);
@@ -88,9 +157,10 @@ const TeacherAssignments = () => {
     setViewingId(assignmentId);
     setViewQuestions([]);
     setViewAnswers([]);
-    const [subs, qs, ans] = await Promise.all([
-      getSubmissionsForAssignment(assignmentId), getAssignmentQuestions(assignmentId), getAnswersForAssignment(assignmentId),
+    const [subs, qs, ans, keys] = await Promise.all([
+      getSubmissionsForAssignment(assignmentId), getAssignmentQuestions(assignmentId), getAnswersForAssignment(assignmentId), getAssignmentKeys(assignmentId),
     ]);
+    setViewKeys(keys);
     setViewQuestions(qs);
     setViewAnswers(ans);
     setSubmissions(subs);
@@ -133,7 +203,7 @@ const TeacherAssignments = () => {
             <h2 style={{ marginBottom: '4px' }}>Assignments {currentUser?.assignedClass ? `— ${currentUser.assignedClass}` : ''}</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Post assignments with questions. Pupils read them and write in their notebooks, or type in an answer box you open for them.</p>
           </div>
-          <button data-ai="assign-new" className="btn btn-primary" onClick={() => setIsCreating(true)}><Plus size={18} /> New Assignment</button>
+          <button data-ai="assign-new" className="btn btn-primary" onClick={startNew}><Plus size={18} /> New Assignment</button>
         </div>
 
         <div className="card glass" style={{ padding: '0' }}>
@@ -148,7 +218,7 @@ const TeacherAssignments = () => {
               <div style={{ flex: 1, minWidth: '200px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <strong>{a.title}</strong>
-                  {!a.isOpen && <span className="test-status-badge test-status-closed">closed</span>}
+                  {!a.isOpen && <span className="test-status-badge test-status-closed">not published</span>}
                 </div>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   {a.subject} {a.dueDate ? `· Due ${new Date(a.dueDate).toLocaleDateString()}` : ''} {a.attachmentName ? `· 📎 ${a.attachmentName}` : ''}
@@ -161,7 +231,7 @@ const TeacherAssignments = () => {
                 <button className="btn btn-outline sm" onClick={() => openSubmissions(a.id)}><Users size={16} /> Answers</button>
                 {a.isOpen
                   ? <button className="btn btn-outline sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, false)} title="Hide it from pupils. Nothing is deleted."><Lock size={16} /> Close</button>
-                  : <button className="btn btn-primary sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, true)} title="Show it to pupils again and notify them."><RotateCcw size={16} /> Republish</button>}
+                  : <button className="btn btn-primary sm" disabled={busyId === a.id} onClick={() => toggleOpen(a.id, true)} title="Show it to pupils (again) and notify them."><RotateCcw size={16} /> Publish</button>}
                 <button className="icon-btn" title="Delete" onClick={() => handleDelete(a.id, a.title)}><Trash2 size={18} /></button>
               </div>
             </div>
@@ -173,7 +243,12 @@ const TeacherAssignments = () => {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '24px' }}>{editingId ? 'Edit Assignment' : 'New Assignment'}</h3>
-            <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {restored && (
+              <p style={{ fontSize: '13px', padding: '10px 12px', borderRadius: '10px', background: 'var(--accent)', marginBottom: '14px' }}>
+                We kept what you were typing. It is back here. <button type="button" onClick={discardDraft} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontWeight: 700 }}>Throw it away</button>
+              </p>
+            )}
+            <form onSubmit={(e) => { e.preventDefault(); void submit('publish'); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="input-group">
                 <label>Title</label>
                 <input data-ai="assign-title" type="text" required value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })}
@@ -195,45 +270,23 @@ const TeacherAssignments = () => {
               </div>
               <div className="input-group">
                 <label>Questions (optional)</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {newQuestions.map((q, i) => (
-                    <div key={i} className="grading-answer-card">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <strong>Question {i + 1}</strong>
-                        <button type="button" className="icon-btn sm" title="Remove question" onClick={() => setNewQuestions(newQuestions.filter((_, idx) => idx !== i))}><X size={14} /></button>
-                      </div>
-                      <textarea rows={2} required value={q.prompt} placeholder="Type the question..." onChange={(e) => updateNewQuestion(i, { prompt: e.target.value })}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }} />
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '8px' }}>
-                        <button type="button" className={`btn sm ${q.answerMode === 'none' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'none' })}>Notebook only</button>
-                        <button type="button" className={`btn sm ${q.answerMode === 'box' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'box' })}>Answer box</button>
-                        <button type="button" className={`btn sm ${q.answerMode === 'lines' ? 'btn-primary' : 'btn-outline'}`} onClick={() => updateNewQuestion(i, { answerMode: 'lines' })}>Lines i, ii, iii</button>
-                        {q.answerMode === 'lines' && (
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                            Lines
-                            <input type="number" min={1} max={30} value={q.lineCount} onChange={(e) => updateNewQuestion(i, { lineCount: Math.min(30, Math.max(1, Number(e.target.value) || 1)) })}
-                              style={{ width: '64px', padding: '6px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button type="button" className="btn btn-outline sm" style={{ marginTop: '8px' }}
-                  onClick={() => setNewQuestions([...newQuestions, { prompt: '', answerMode: 'none', lineCount: 5 }])}>
-                  <Plus size={14} /> Add a question
-                </button>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  "Notebook only": pupils copy it into their notebook. "Answer box" or "Lines": they type the answer on the portal and you read it.
-                </p>
+                <QuestionBuilder value={newQuestions} onChange={setNewQuestions} />
               </div>
               <div className="input-group">
                 <label>Attach a brief (optional)</label>
                 <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
               </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={closeForm}>Cancel</button>
-                <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>{saving ? (editingId ? 'Saving...' : 'Posting...') : (editingId ? 'Save changes' : 'Post Assignment')}</button>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Save size={12} /> {localDraft.savedAt && !editingId ? `Auto-saved on this device at ${localDraft.savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. A refresh will not lose it.` : 'What you type is kept on this device automatically.'}
+              </p>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={closeForm} disabled={saving}>Close</button>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => void submit('draft')} disabled={saving} title="Save it on the server without showing it to pupils">
+                  <Save size={16} /> Save draft
+                </button>
+                <button data-ai="assign-post" type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
+                  {saving ? 'Saving...' : (editingId && assignments.find((a) => a.id === editingId)?.isOpen ? 'Save changes' : 'Publish')}
+                </button>
               </div>
             </form>
           </div>
@@ -266,9 +319,14 @@ const TeacherAssignments = () => {
                 <div key={q.id} className="grading-answer-card" style={{ marginBottom: '10px' }}>
                   <strong style={{ color: 'var(--primary)' }}>Question {i + 1}</strong>
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                    {q.answerMode === 'none' ? 'notebook only' : q.answerMode === 'box' ? 'answer box' : `${q.lineCount} lines (i, ii, iii)`}
+                    {q.type === 'objective' ? 'multiple choice' : q.answerMode === 'none' ? 'notebook only' : q.answerMode === 'box' ? 'answer box' : `${q.lineCount} lines (i, ii, iii)`}
                   </span>
                   <p style={{ marginTop: '4px', whiteSpace: 'pre-wrap', fontSize: '14px' }}>{q.prompt}</p>
+                  {q.type === 'objective' && (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0 0', fontSize: '13px' }}>
+                      {q.options?.map((o) => <li key={o.key}>{o.key}. {o.text}</li>)}
+                    </ul>
+                  )}
                 </div>
               ))}
 
@@ -313,8 +371,8 @@ const TeacherAssignments = () => {
                 {submissions.length} of {classPupils.length} pupils have handed in.
               </p>
             )}
-            {viewQuestions.some((q) => q.answerMode !== 'none') && (() => {
-              const typedQs = viewQuestions.filter((q) => q.answerMode !== 'none');
+            {viewQuestions.some((q) => q.answerMode !== 'none' || q.type === 'objective') && (() => {
+              const typedQs = viewQuestions.filter((q) => q.answerMode !== 'none' || q.type === 'objective');
               const byStudent = new Map<string, AssignmentAnswerRow[]>();
               viewAnswers.forEach((r) => byStudent.set(r.studentId, [...(byStudent.get(r.studentId) ?? []), r]));
               return (
@@ -326,15 +384,30 @@ const TeacherAssignments = () => {
                       <div key={sid} className="grading-answer-card">
                         <strong>{rows[0].studentName ?? sid}</strong>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>{rows[0].studentDisplayId}</span>
+                        {(() => {
+                          const objective = typedQs.filter((q) => q.type === 'objective');
+                          if (objective.length === 0) return null;
+                          const right = objective.filter((q) => viewKeys[q.id] && rows.find((r) => r.questionId === q.id)?.answerText === viewKeys[q.id]).length;
+                          return <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary)', marginLeft: '8px' }}>Multiple choice: {right}/{objective.length} correct</span>;
+                        })()}
                         {typedQs.map((q) => {
                           const qi = viewQuestions.findIndex((x) => x.id === q.id) + 1;
                           const row = rows.find((r) => r.questionId === q.id);
+                          const chosen = row?.answerText?.trim() ?? '';
+                          const key = viewKeys[q.id];
+                          const optionText = q.type === 'objective' ? q.options?.find((o) => o.key === chosen)?.text : undefined;
                           return (
                             <div key={q.id} style={{ marginTop: '8px' }}>
                               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Q{qi}. {q.prompt}</div>
-                              <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', background: 'var(--bg-light)', padding: '8px', borderRadius: '8px', marginTop: '2px' }}>
-                                {row?.answerText?.trim() ? row.answerText : '(no answer)'}
-                              </p>
+                              {q.type === 'objective' ? (
+                                <p style={{ fontSize: '13px', padding: '8px', borderRadius: '8px', marginTop: '2px', background: !chosen ? 'var(--bg-light)' : key && chosen === key ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)' }}>
+                                  {chosen ? <>{chosen}. {optionText} {key ? (chosen === key ? '✓' : `✗ (correct: ${key})`) : ''}</> : '(no answer)'}
+                                </p>
+                              ) : (
+                                <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', background: 'var(--bg-light)', padding: '8px', borderRadius: '8px', marginTop: '2px' }}>
+                                  {chosen ? row?.answerText : '(no answer)'}
+                                </p>
+                              )}
                             </div>
                           );
                         })}
@@ -344,7 +417,7 @@ const TeacherAssignments = () => {
                 </div>
               );
             })()}
-            {submissions.length === 0 && viewQuestions.every((q) => q.answerMode === 'none') && <p style={{ color: 'var(--text-muted)' }}>Nothing handed in on the portal for this one.</p>}
+            {submissions.length === 0 && viewQuestions.every((q) => q.answerMode === 'none' && q.type !== 'objective') && <p style={{ color: 'var(--text-muted)' }}>Nothing handed in on the portal for this one.</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {submissions.map((s) => (
                 <div key={s.id} className="grading-answer-card">
