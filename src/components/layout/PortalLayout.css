@@ -141,6 +141,11 @@
 /* Main Area */
 .portal-main {
   flex: 1;
+  /* A flex item will not shrink below its content's natural width unless
+     told it may. Without this, one wide card made the WHOLE page (and the
+     fixed header, which follows it) wider than the phone screen -- the
+     "too wide, have to swipe sideways" problem. */
+  min-width: 0;
   margin-left: 280px;
   transition: margin 0.3s ease;
 }
@@ -170,10 +175,24 @@
   width: calc(100% - 80px);
 }
 
+/* A flex row (the menu button used to stack ABOVE the title on phones)
+   that is allowed to shrink: without min-width: 0 a long page title kept
+   the header wider than the screen, which made the whole page scroll
+   sideways. */
+.header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .header-left h2 {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-main);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-right {
@@ -300,8 +319,30 @@
     height: 70px;
   }
 
+  .portal-header {
+    gap: 8px;
+  }
+
+  .header-left {
+    flex: 1 1 auto;
+  }
+
+  .header-left h2 {
+    font-size: clamp(15px, 4.8vw, 19px);
+  }
+
   .header-right {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .header-actions {
     gap: 12px;
+  }
+
+  .user-avatar {
+    width: 36px;
+    height: 36px;
   }
 
   .user-info {
@@ -348,7 +389,8 @@
     background: var(--bg-light);
     border-radius: 8px;
     color: var(--primary);
-    margin-right: 15px;
+    margin-right: 10px;
+    flex-shrink: 0;
   }
 
   .search-bar-inline {

@@ -46,7 +46,7 @@ const TeacherDashboard = () => {
            </div>
         </section>
 
-        <section className="classes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        <section className="classes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '24px' }}>
            {classCounts.map((cls, i) => (
              <div
               key={i}
@@ -71,13 +71,13 @@ const TeacherDashboard = () => {
            )}
         </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '24px' }}>
            <section className="card glass">
               <div className="card-header">
                  <h3>Recent Result Uploads</h3>
                  <BookMarked size={20} />
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="resp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                  <thead>
                     <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--secondary)' }}>
                        <th style={{ padding: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>PUPIL NAME</th>

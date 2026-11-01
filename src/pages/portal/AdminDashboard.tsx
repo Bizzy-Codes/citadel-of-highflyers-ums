@@ -100,7 +100,7 @@ const AdminDashboard = () => {
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
         
         {/* Overview Stats */}
-        <section className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+        <section className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '20px' }}>
            {adminStats.map((stat, i) => (
              <div
                key={i}
@@ -152,7 +152,7 @@ const AdminDashboard = () => {
           </div>
 
           <div style={{ width: '100%', overflowX: 'auto' }}>
-             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+             <table className="resp-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                 <thead>
                    <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
                       <th style={{ padding: '12px 20px' }}>PUPIL NAME</th>
@@ -267,13 +267,13 @@ const AdminDashboard = () => {
         )}
 
         {/* Other Admin Controls */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '24px' }}>
            <section className="card glass" style={{ padding: '24px', borderRadius: '24px' }}>
               <div className="card-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
                  <h3>System & Configuration</h3>
                  <Settings size={20} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '16px' }}>
                  <div onClick={() => navigate('/portal/admin/users')} className="blend-bg hover-scale" style={{ padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid var(--glass-border)' }}>
                     <h4 style={{ fontSize: '14px', marginBottom: '4px' }}>Manage Staff</h4>
                     <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{staff.length} Total accounts</p>

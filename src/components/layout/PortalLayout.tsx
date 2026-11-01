@@ -24,6 +24,7 @@ import {
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LoginPopups from '../portal/LoginPopups';
+import { useTableLabels } from '../../hooks/useTableLabels';
 import { messageNav } from '../../lib/messageNav';
 import './PortalLayout.css';
 
@@ -36,6 +37,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
+  useTableLabels();
   const navigate = useNavigate();
   const { currentUser, logout, notifications, unreadMessageCount, unreadTarget, portalLocked } = useAuth();
 

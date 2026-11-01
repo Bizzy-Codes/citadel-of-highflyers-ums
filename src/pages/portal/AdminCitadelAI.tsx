@@ -187,7 +187,7 @@ const AdminCitadelAI = () => {
             <Database size={18} /> Storage used
           </h3>
           {stats ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: '12px' }}>
               {[
                 ['Questions logged', stats.questions],
                 ['FAQ answers', stats.faqs],

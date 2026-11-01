@@ -364,7 +364,7 @@ const AdminUserDetail = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '24px' }}>
           <div className="card glass" style={{ padding: '28px', borderRadius: '24px' }}>
             <h3 style={{ marginBottom: '20px' }}>Profile Details</h3>
 

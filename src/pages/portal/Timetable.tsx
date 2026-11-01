@@ -106,7 +106,7 @@ const Timetable = () => {
                 </button>
              </div>
            ) : (
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '20px' }}>
                 {days.map(day => (
                   <div key={day} className="day-column">
                      <h4 style={{ marginBottom: '16px', color: 'var(--primary)', fontWeight: '700', textAlign: 'center', borderBottom: '2px solid var(--accent)', paddingBottom: '8px' }}>{day}</h4>

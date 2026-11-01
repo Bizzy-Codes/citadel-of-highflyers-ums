@@ -249,7 +249,7 @@ const TestMonitor = () => {
               <button className="btn btn-outline sm" disabled={sweeping} onClick={handleSweep}><RefreshCw size={14} /> Sweep Expired</button>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="resp-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>
                     <th style={{ padding: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>PUPIL</th>

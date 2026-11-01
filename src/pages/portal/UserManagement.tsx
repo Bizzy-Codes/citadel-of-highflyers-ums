@@ -179,7 +179,7 @@ const UserManagement = () => {
            {/* Teachers / Students Table */}
            {(activeTab === 'teachers' || activeTab === 'students') && (
              <div style={{ width: '100%', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                <table className="resp-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                    <thead>
                       <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
                          <th style={{ padding: '12px 20px' }}>NAME</th>
@@ -250,7 +250,7 @@ const UserManagement = () => {
 
            {/* Subjects Section */}
            {activeTab === 'subjects' && (
-             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '20px' }}>
                 {classes.map((cls, i) => (
                   <div key={i} className="blend-bg" style={{ padding: '20px', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>

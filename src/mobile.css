@@ -1,0 +1,182 @@
+/* ==========================================================================
+   Phone layout (<= 640px wide). Loaded last, after every page stylesheet.
+
+   Why this file exists: the portal pages were designed with inline styles
+   sized for laptops (30-40px card padding, rows of buttons that never wrap,
+   300px-minimum grids). On a 320-414px phone that made content wider than the
+   screen, and the browser then showed a page you had to swipe sideways or
+   zoom out to see. The real fixes for the page *frame* live in
+   PortalLayout.css (min-width: 0 on the main column, a flex header); this
+   file compacts and wraps the page *content* for phones.
+
+   Everything is inside a max-width media query, so desktop (>= 969px) and
+   tablet layouts are untouched. Inline styles can only be beaten with
+   !important, which is why a few rules use it -- each one targets a specific
+   inline value, never "everything".
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  /* ---- page frame ---------------------------------------------------- */
+  .portal-content {
+    padding: 14px 12px 28px;
+  }
+
+  /* Pictures and embeds inside a page can never be wider than the screen. */
+  .portal-content img, .portal-content video, .portal-content canvas, .portal-content iframe { max-width: 100%; }
+
+  /* ---- buttons: wrap long labels, keep a comfortable touch target ------ */
+  .btn {
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
+    min-height: 42px;
+    max-width: 100%;
+  }
+  .btn.sm { padding: 8px 14px; min-height: 38px; }
+  .btn.lg { padding: 13px 22px; font-size: 16px; }
+  .icon-btn { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ---- forms: 16px stops iPhones zooming the page when a box is tapped - */
+  .portal-content input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  .portal-content select,
+  .portal-content textarea,
+  .login-container input,
+  .login-container select {
+    font-size: 16px !important;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* ---- rows of controls wrap instead of running off the screen --------- */
+  .portal-content [style*="display: flex"]:not([style*="column"]) {
+    flex-wrap: wrap;
+  }
+
+  /* ---- generous desktop padding on cards and modals -------------------- */
+  .portal-content [style*="padding: 24px;"],
+  .portal-content [style*="padding: 28px;"],
+  .portal-content [style*="padding: 30px;"],
+  .portal-content [style*="padding: 32px;"],
+  .portal-content [style*="padding: 40px;"],
+  .portal-content [style*="padding: clamp(20px, 5vw, 40px);"] {
+    padding: 16px !important;
+  }
+  .portal-content [style*="border-radius: 32px"],
+  .portal-content [style*="border-radius: 28px"],
+  .portal-content [style*="border-radius: 24px"] {
+    border-radius: 20px !important;
+  }
+  /* A full-screen dimmed overlay keeps a small gutter and scrolls itself. */
+  .portal-content [style*="position: fixed"][style*="inset: 0"] {
+    padding: 10px !important;
+    overflow-y: auto;
+    align-items: flex-start !important;
+  }
+
+  /* ---- grids that kept their desktop columns --------------------------- */
+  .portal-content [style*="repeat(3, 1fr)"],
+  .portal-content [style*="1fr 1fr 1fr 1fr auto"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .portal-content [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* A grid cell may shrink below its content instead of stretching the page. */
+  .portal-content [style*="display: grid"] > * { min-width: 0; }
+
+  /* ---- dashboard stat tiles: two across, compact, instead of one tall tile
+         per row (three tiles used to fill an entire phone screen) -------- */
+  .portal-content .stats-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .portal-content .stat-card { padding: 12px !important; }
+  .portal-content .stat-card-header { margin-bottom: 8px; gap: 6px; }
+  .portal-content .stat-icon { width: 34px; height: 34px; border-radius: 10px; }
+  .portal-content .stat-value { font-size: 20px; margin-bottom: 2px; }
+  .portal-content .stat-label { font-size: 12px; }
+  .portal-content .stat-trend { font-size: 10px; padding: 3px 6px; text-align: right; }
+
+  /* ---- data tables become stacked cards (tables marked "resp-table"; the
+         column titles come from data-label, set by useTableLabels). Wide
+         grids that must stay grids (score sheets, registers, report cards)
+         are NOT marked, and keep scrolling inside their card instead. ---- */
+  .portal-content table.resp-table,
+  .portal-content table.resp-table tbody {
+    display: block;
+    width: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+  .portal-content table.resp-table thead { display: none; }
+  .portal-content table.resp-table tr {
+    display: block;
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    background: var(--bg-surface) !important;
+  }
+  .portal-content table.resp-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    text-align: right !important;
+    white-space: normal;
+    min-width: 0;
+  }
+  .portal-content table.resp-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+  }
+  .portal-content table.resp-table td[data-label=""]::before,
+  .portal-content table.resp-table td[colspan]::before { display: none; }
+  /* The first cell (the pupil's / person's name) is the card's title. */
+  .portal-content table.resp-table td:first-child {
+    justify-content: flex-start;
+    text-align: left !important;
+    font-size: 15px;
+    padding-bottom: 8px !important;
+  }
+  .portal-content table.resp-table td:first-child::before { display: none; }
+  .portal-content table.resp-table td[colspan] { justify-content: center; text-align: center !important; }
+  .portal-content table.resp-table td:empty { display: none; }
+
+  /* ---- headings and long words ---------------------------------------- */
+  .portal-content h1 { font-size: clamp(20px, 6vw, 26px); overflow-wrap: anywhere; }
+  .portal-content h2 { font-size: clamp(18px, 5.4vw, 22px); overflow-wrap: anywhere; }
+  .portal-content h3 { overflow-wrap: anywhere; }
+  .portal-content p, .portal-content td, .portal-content th { overflow-wrap: anywhere; }
+
+  /* ---- Citadel AI button: inside the portal it becomes a small round
+         button, so it stops covering form buttons at the bottom-right of
+         a phone screen. (The chat panel itself already fits a phone.) ---- */
+  body:has(.portal-root) .cai-fab { padding: 12px; bottom: 14px; right: 12px; }
+  body:has(.portal-root) .cai-fab span { display: none; }
+}
+
+/* Very small phones (iPhone SE, Galaxy Fold cover screens, 320px). */
+@media (max-width: 360px) {
+  .portal-content { padding: 12px 10px 24px; }
+  .portal-header { padding: 0 10px; }
+  .header-actions { gap: 8px; }
+  .btn { padding-left: 14px; padding-right: 14px; }
+}
+
+/* Home hero on the narrowest phones: keep the floating badges inside the screen. */
+@media (max-width: 360px) {
+  .hero-image-frame { width: 236px; height: 300px; }
+  .education { left: -6px; }
+  .excellence { right: -6px; }
+  .character { right: 4px; }
+}

@@ -43,6 +43,7 @@ import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
 import CitadelAI from './components/ai/CitadelAI'
 import './index.css'
+import './mobile.css'
 
 // The "My Students" sidebar link has no class name to point at directly --
 // it means "whichever class I'm assigned to". Resolve that here rather

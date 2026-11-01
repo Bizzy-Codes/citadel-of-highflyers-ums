@@ -412,7 +412,7 @@ const TeacherRegister = () => {
                               <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 10px' }}>
                                 Daily notes for {student.name} - one box per school day.
                               </p>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: '10px' }}>
                                 {week.days.map(({ date, weekdayName, day }) => (
                                   <div key={date}>
                                     <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>

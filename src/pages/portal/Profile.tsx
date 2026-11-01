@@ -155,7 +155,7 @@ const Profile = () => {
 
           <div style={{ marginTop: '30px', borderTop: '1px solid var(--glass-border)', paddingTop: '40px' }}>
             {!isEditing ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '40px' }}>
                 <div className="info-section">
                   <h4 style={{ color: 'var(--primary)', fontSize: '18px', fontWeight: '700', marginBottom: '20px', borderBottom: '2px solid var(--accent)', paddingBottom: '10px' }}>Contact Details</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -186,7 +186,7 @@ const Profile = () => {
                 </div>
               </div>
             ) : (
-              <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+              <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '24px' }}>
                 <div className="input-group">
                   <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>Full Name</label>
                   <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: upperName(e.target.value)})} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />

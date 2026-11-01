@@ -252,8 +252,10 @@
 .warning { color: var(--warning); }
 
 @media (max-width: 1200px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-main-content { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* minmax(0, 1fr), not 1fr: a bare 1fr track will not shrink below its
+     content, so one wide chart stretched the whole page past the screen. */
+  .dashboard-main-content { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Tablet/landscape sizing. The 48px banner padding, 32px heading and
@@ -269,7 +271,31 @@
 }
 
 @media (max-width: 640px) {
-  .stats-row { grid-template-columns: 1fr; }
-  .welcome-banner { flex-direction: column; text-align: center; gap: 20px; }
+  .stats-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .welcome-banner { flex-direction: column; text-align: center; gap: 14px; padding: 20px 16px; border-radius: 24px; }
+  .welcome-text h1 { font-size: 20px; overflow-wrap: anywhere; }
+  .welcome-text p { font-size: 13px; margin-bottom: 14px; }
+  .welcome-text .btn { flex: 1 1 auto; justify-content: center; }
   .welcome-illustration { display: none; }
+}
+
+/* Phones: the desktop card sizes (30px padding, 300px chart, 40px-wide
+   bars with 20px gaps) did not fit a 320-390px screen and pushed the page
+   wider than the phone. */
+@media (max-width: 640px) {
+  .dashboard-grid { gap: 16px; }
+  .dashboard-main-content { gap: 16px; }
+  .dashboard-main-content > *,
+  .dashboard-widgets > * { min-width: 0; }
+  .card { padding: 16px; border-radius: 20px; }
+  .card-header { margin-bottom: 16px; gap: 10px; }
+  .card-header h3 { font-size: 16px; }
+  .stat-card { padding: 16px; border-radius: 18px; }
+  .stat-value { font-size: 22px; }
+  .performance-chart-mini { height: 210px; padding: 10px 0 24px; }
+  .chart-placeholder { gap: 8px; }
+  .bar { min-width: 0; max-width: 48px; }
+  .activity-item { gap: 12px; min-width: 0; }
+  .activity-info { min-width: 0; overflow-wrap: anywhere; }
+  .event-item { gap: 12px; padding: 12px; }
 }

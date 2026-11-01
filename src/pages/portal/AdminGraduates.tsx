@@ -78,7 +78,7 @@ const AdminGraduates = () => {
           ) : (
             <>
               <div style={{ width: '100%', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                <table className="resp-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                   <thead>
                     <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: '13px' }}>
                       <th style={{ padding: '12px 20px' }}>PUPIL NAME</th>
