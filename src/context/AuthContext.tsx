@@ -461,7 +461,18 @@ export interface AdmissionApplication extends NewAdmissionApplicationInput {
   paymentMethod?: 'cash' | 'transfer';
 }
 
+export interface PortalLock {
+  studentId: string;
+  lockedAt: string;
+  note?: string;
+  parentNotifiedAt?: string;
+}
+
 export interface PaymentReceipt {
+  reference?: string;
+  paidOn?: string;
+  duplicateOf?: string;
+  duplicateReason?: string;
   id: string;
   studentId: string;
   studentName?: string;
@@ -642,7 +653,13 @@ interface AuthContextType {
   reviewAdmissionApplication: (id: string, status: 'reviewed' | 'admitted' | 'declined', adminNote: string) => Promise<{ error: string | null }>;
   deleteAdmissionApplication: (id: string) => Promise<{ error: string | null }>;
   getAdmissionPhotoUrl: (path: string) => Promise<string | null>;
-  submitPaymentReceipt: (amount: number, note: string, file: File) => Promise<{ error: string | null }>;
+  submitPaymentReceipt: (amount: number, note: string, file: File, reference: string, paidOn: string) => Promise<{ error: string | null }>;
+  portalLocked: boolean;
+  lockChecked: boolean;
+  getPortalLocks: () => Promise<PortalLock[]>;
+  setPortalLock: (studentIds: string[], locked: boolean, note?: string) => Promise<{ error: string | null }>;
+  markParentsNotified: (studentIds: string[]) => Promise<{ error: string | null }>;
+  emailParentsAboutLock: (studentIds: string[]) => Promise<{ error: string | null; sent?: number; skipped?: number; notConfigured?: boolean }>;
   getMyPaymentReceipts: () => Promise<PaymentReceipt[]>;
   getAllPaymentReceipts: () => Promise<PaymentReceipt[]>;
   reviewPaymentReceipt: (id: string, status: 'acknowledged' | 'rejected', adminNote: string) => Promise<{ error: string | null }>;
@@ -948,6 +965,10 @@ const mapPaymentReceiptRow = (row: any): PaymentReceipt => ({
   reviewedBy: row.reviewed_by ?? undefined,
   reviewedAt: row.reviewed_at ?? undefined,
   createdAt: row.created_at,
+  reference: row.reference ?? undefined,
+  paidOn: row.paid_on ?? undefined,
+  duplicateOf: row.duplicate_of ?? undefined,
+  duplicateReason: row.duplicate_reason ?? undefined,
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1049,6 +1070,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [rawNotifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unreadTarget, setUnreadTarget] = useState<UnreadTarget>(null);
+  // Whether this pupil's portal is locked (patch_43). lockChecked stops the
+  // portal flashing open for a moment before the answer arrives.
+  const [portalLocked, setPortalLocked] = useState(false);
+  const [lockChecked, setLockChecked] = useState(false);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Record<string, AssignmentSubmission>>({});
   const [tests, setTests] = useState<Test[]>([]);
@@ -1068,6 +1093,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) { console.error('Failed to load current profile', error); setCurrentUser(null); return; }
     setCurrentUser(mapProfileRow(data));
   }, []);
+
+  const lockUid = currentUser?.role === 'student' ? currentUser.id : undefined;
+  useEffect(() => {
+    if (!lockUid) { setPortalLocked(false); setLockChecked(true); return; }
+    let cancelled = false;
+    setLockChecked(false);
+    const check = async () => {
+      const { data, error } = await supabase.from('portal_locks').select('student_id').eq('student_id', lockUid).maybeSingle();
+      if (cancelled) return;
+      if (!error) setPortalLocked(!!data);
+      setLockChecked(true);
+    };
+    check();
+    const poll = setInterval(check, 60_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [lockUid]);
 
   const refreshSubjects = useCallback(async () => {
     const { data, error } = await supabase.from('class_subjects').select('*');
@@ -2714,16 +2755,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.signedUrl;
   };
 
-  const submitPaymentReceipt = async (amount: number, note: string, file: File) => {
+  const submitPaymentReceipt = async (amount: number, note: string, file: File, reference: string, paidOn: string) => {
     if (!session?.user.id) return { error: 'Not signed in' };
     const studentId = session.user.id;
-    const path = `${studentId}/${Date.now()}-${file.name}`;
+    // A fingerprint of the file lets the admin see if the very same
+    // receipt was sent before (patch_43). It never approves anything.
+    let fileHash: string | null = null;
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+      fileHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch { /* hashing unavailable: the reference check still works */ }
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '_') || 'receipt';
+    const path = `${studentId}/${Date.now()}-${safeName}`;
     const { error: uploadError } = await supabase.storage.from('payment-receipts').upload(path, file);
     if (uploadError) return { error: uploadError.message };
     const { error } = await supabase.from('payment_receipts').insert({
       student_id: studentId, amount, note: note || null, file_path: path, file_name: file.name,
+      file_hash: fileHash, reference: reference.trim() || null, paid_on: paidOn || null,
     });
     return { error: error?.message ?? null };
+  };
+
+  // ---- Portal lock (patch_43) ----
+  const getPortalLocks = async (): Promise<PortalLock[]> => {
+    const { data, error } = await supabase.from('portal_locks').select('student_id, locked_at, note, parent_notified_at');
+    if (error) { console.error('getPortalLocks failed', error); return []; }
+    return (data ?? []).map((r) => ({
+      studentId: r.student_id as string, lockedAt: r.locked_at as string,
+      note: (r.note as string | null) ?? undefined, parentNotifiedAt: (r.parent_notified_at as string | null) ?? undefined,
+    }));
+  };
+
+  const setPortalLock = async (studentIds: string[], locked: boolean, note?: string) => {
+    if (studentIds.length === 0) return { error: null };
+    const { error } = await supabase.rpc('set_portal_lock', { p_student_ids: studentIds, p_locked: locked, p_note: note ?? null });
+    return { error: error?.message ?? null };
+  };
+
+  const markParentsNotified = async (studentIds: string[]) => {
+    if (!currentUser || studentIds.length === 0) return { error: null };
+    const { error } = await supabase.from('portal_locks')
+      .update({ parent_notified_at: new Date().toISOString(), parent_notified_by: currentUser.id })
+      .in('student_id', studentIds);
+    return { error: error?.message ?? null };
+  };
+
+  // Emails the parent's contact address (needs the email provider set up
+  // on the notify-parents function; says so if it is not).
+  const emailParentsAboutLock = async (studentIds: string[]) => {
+    const { data, error } = await supabase.functions.invoke('notify-parents', { body: { studentIds } });
+    if (error) return { error: await describeFunctionError(error) };
+    if (data?.notConfigured) return { error: null, notConfigured: true };
+    if (data?.error) return { error: data.error as string };
+    return { error: null, sent: data?.sent as number, skipped: data?.skipped as number };
   };
 
   const getMyPaymentReceipts = async (): Promise<PaymentReceipt[]> => {
@@ -2930,6 +3014,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       uploadChatAttachment, getChatAttachmentUrl,
       submitAdmissionApplication, submitAdmissionPayment, confirmAdmissionPayment, getAdmissionApplications, reviewAdmissionApplication, deleteAdmissionApplication, getAdmissionPhotoUrl,
       submitPaymentReceipt, getMyPaymentReceipts, getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
+      portalLocked, lockChecked, getPortalLocks, setPortalLock, markParentsNotified, emailParentsAboutLock,
       tests, createTest, updateTest, publishTest, closeTest, deleteTest,
       getTestQuestions, saveQuestion, deleteQuestion, reorderQuestions,
       getAttemptsForTest, getAnswersForAttempt, gradeEssayAnswer, getViolationsForTest,

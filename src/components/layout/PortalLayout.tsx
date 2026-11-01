@@ -37,7 +37,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout, notifications, unreadMessageCount, unreadTarget } = useAuth();
+  const { currentUser, logout, notifications, unreadMessageCount, unreadTarget, portalLocked } = useAuth();
 
   // Simple role detection from path for demo purposes
   const isTeacher = currentUser?.role === 'teacher';
@@ -115,7 +115,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
         </div>
       </aside>
 
-      <LoginPopups />
+      {!portalLocked && <LoginPopups />}
       <main className="portal-main">
         <header className="portal-header glass">
           <div className="header-left">

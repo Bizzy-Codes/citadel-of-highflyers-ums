@@ -55,6 +55,12 @@ const MyStudentsRedirect = () => {
     : <Navigate to="/portal/teacher" replace />;
 };
 
+// The assistant is hidden while a pupil's portal is locked.
+function AiWidget() {
+  const { currentUser, portalLocked } = useAuth()
+  return currentUser?.role === 'student' && portalLocked ? null : <CitadelAI />
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -183,7 +189,7 @@ function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <CitadelAI />
+      <AiWidget />
     </BrowserRouter>
   )
 }

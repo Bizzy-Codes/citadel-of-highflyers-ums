@@ -26,6 +26,8 @@ const Financial = () => {
   const [saving, setSaving] = useState(false);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [reference, setReference] = useState('');
+  const [paidOn, setPaidOn] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
   const load = async () => {
@@ -47,12 +49,14 @@ const Financial = () => {
     if (!file) { alert('Please attach your payment receipt (image or PDF).'); return; }
     const amountNum = Number(amount);
     if (!amountNum || amountNum <= 0) { alert('Enter a valid amount.'); return; }
+    if (!reference.trim()) { alert("Please type the payment reference (the transaction / teller number on the receipt)."); return; }
+    if (!paidOn) { alert('Please choose the date you made the payment.'); return; }
     setSaving(true);
-    const { error } = await submitPaymentReceipt(amountNum, note, file);
+    const { error } = await submitPaymentReceipt(amountNum, note, file, reference, paidOn);
     setSaving(false);
     if (error) { alert('Failed to submit receipt: ' + error); return; }
     setIsSubmitting(false);
-    setAmount(''); setNote(''); setFile(null);
+    setAmount(''); setNote(''); setReference(''); setPaidOn(''); setFile(null);
     await load();
   };
 
@@ -160,6 +164,16 @@ const Financial = () => {
               <div className="input-group">
                 <label>Amount Paid (₦)</label>
                 <input type="number" min={1} step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+              </div>
+              <div className="input-group">
+                <label>Payment reference / transaction number</label>
+                <input type="text" required placeholder="As printed on the receipt or bank alert" value={reference} onChange={(e) => setReference(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+              </div>
+              <div className="input-group">
+                <label>Date of payment</label>
+                <input type="date" required value={paidOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaidOn(e.target.value)}
                   style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
               <div className="input-group">

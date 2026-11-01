@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type PaymentReceipt, type AdmissionApplication } from '../../context/AuthContext';
-import { Download, CheckCircle2, XCircle, Receipt, Banknote, Landmark, GraduationCap } from 'lucide-react';
+import { Download, CheckCircle2, XCircle, Receipt, Banknote, Landmark, GraduationCap, Lock, AlertTriangle } from 'lucide-react';
+import AdminPortalAccess from '../../components/portal/AdminPortalAccess';
 
 const STATUS_STYLE: Record<PaymentReceipt['status'], { bg: string; color: string; label: string }> = {
   pending: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', label: 'Pending' },
@@ -21,7 +22,11 @@ const AdminPayments = () => {
   const {
     getAllPaymentReceipts, reviewPaymentReceipt, getPaymentReceiptUrl,
     getAdmissionApplications, confirmAdmissionPayment, getAdmissionPhotoUrl,
+    getPortalLocks, setPortalLock,
   } = useAuth();
+  // Receipts from pupils whose portal is locked: approving one offers to reopen it.
+  const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
+  const [reopenWith, setReopenWith] = useState<Record<string, boolean>>({});
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   // Admission fees are a completely separate table from pupil fee
   // receipts -- an applicant has no profile yet, so their payment can't
@@ -29,7 +34,7 @@ const AdminPayments = () => {
   // which is why every admission payment the school had taken was
   // invisible here.
   const [admissions, setAdmissions] = useState<AdmissionApplication[]>([]);
-  const [tab, setTab] = useState<'admissions' | 'fees'>('admissions');
+  const [tab, setTab] = useState<'admissions' | 'fees' | 'access'>('admissions');
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -41,6 +46,7 @@ const AdminPayments = () => {
       getAdmissionApplications(),
     ]);
     setReceipts(feeData);
+    setLockedIds(new Set((await getPortalLocks()).map((l) => l.studentId)));
     setAdmissions(admissionData.filter((a) => a.paymentStatus !== 'unpaid'));
     setLoading(false);
   };
@@ -76,9 +82,15 @@ const AdminPayments = () => {
     else alert('Could not open this receipt.');
   };
 
-  const handleReview = async (id: string, status: 'acknowledged' | 'rejected') => {
-    setBusyId(id);
-    const { error } = await reviewPaymentReceipt(id, status, notes[id] ?? '');
+  const handleReview = async (r: PaymentReceipt, status: 'acknowledged' | 'rejected') => {
+    if (status === 'acknowledged' && r.duplicateReason
+      && !confirm(`WARNING: ${r.duplicateReason}\n\nOnly acknowledge this if you have checked it against the bank statement. Acknowledge anyway?`)) return;
+    setBusyId(r.id);
+    const { error } = await reviewPaymentReceipt(r.id, status, notes[r.id] ?? '');
+    if (!error && status === 'acknowledged' && lockedIds.has(r.studentId) && reopenWith[r.id]) {
+      const unlock = await setPortalLock([r.studentId], false);
+      if (unlock.error) alert('Receipt acknowledged, but the portal could not be reopened: ' + unlock.error);
+    }
     setBusyId(null);
     if (error) { alert('Failed to update receipt: ' + error); return; }
     await load();
@@ -105,7 +117,12 @@ const AdminPayments = () => {
           <button className={`btn sm ${tab === 'fees' ? 'btn-primary' : ''}`} style={{ borderRadius: '8px' }} onClick={() => setTab('fees')}>
             <Receipt size={16} /> School Fees{visible.length > 0 ? ` (${visible.length})` : ''}
           </button>
+          <button className={`btn sm ${tab === 'access' ? 'btn-primary' : ''}`} style={{ borderRadius: '8px' }} onClick={() => setTab('access')}>
+            <Lock size={16} /> Portal access{lockedIds.size > 0 ? ` (${lockedIds.size} locked)` : ''}
+          </button>
         </div>
+
+        {tab === 'access' && <AdminPortalAccess />}
 
         {tab === 'admissions' && (
           <div className="card glass" style={{ padding: '0' }}>
@@ -174,8 +191,18 @@ const AdminPayments = () => {
                     <span style={{ padding: '3px 10px', borderRadius: '50px', fontSize: '11px', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
                   </div>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    {r.studentDisplayId} · {naira(r.amount)} · {new Date(r.createdAt).toLocaleDateString()}
+                    {r.studentDisplayId} · {naira(r.amount)} · sent {new Date(r.createdAt).toLocaleDateString()}
+                    {r.paidOn ? ` · paid on ${new Date(r.paidOn).toLocaleDateString()}` : ''}
+                    {r.reference ? ` · ref ${r.reference}` : ''}
                   </p>
+                  {r.duplicateReason && (
+                    <p style={{ fontSize: '13px', marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertTriangle size={14} /> Possible duplicate: {r.duplicateReason} Check the bank statement before acknowledging.
+                    </p>
+                  )}
+                  {!r.reference && r.status === 'pending' && (
+                    <p style={{ fontSize: '12px', marginTop: '4px', color: 'var(--warning)' }}>No payment reference was given.</p>
+                  )}
                   {r.note && <p style={{ fontSize: '13px', marginTop: '6px' }}>{r.note}</p>}
                   {r.adminNote && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Admin note: {r.adminNote}</p>}
                 </div>
@@ -186,11 +213,17 @@ const AdminPayments = () => {
                       <input type="text" placeholder="note (optional)" value={notes[r.id] ?? ''}
                         onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })}
                         style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
+                      {lockedIds.has(r.studentId) && (
+                        <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
+                          <input type="checkbox" checked={!!reopenWith[r.id]} onChange={(e) => setReopenWith({ ...reopenWith, [r.id]: e.target.checked })} />
+                          Also reopen this pupil's portal
+                        </label>
+                      )}
                       <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                        <button className="btn btn-primary sm" style={{ flex: 1 }} disabled={busyId === r.id} onClick={() => handleReview(r.id, 'acknowledged')}>
+                        <button className="btn btn-primary sm" style={{ flex: 1 }} disabled={busyId === r.id} onClick={() => handleReview(r, 'acknowledged')}>
                           <CheckCircle2 size={14} /> Acknowledge
                         </button>
-                        <button className="btn btn-outline sm" style={{ flex: 1 }} disabled={busyId === r.id} onClick={() => handleReview(r.id, 'rejected')}>
+                        <button className="btn btn-outline sm" style={{ flex: 1 }} disabled={busyId === r.id} onClick={() => handleReview(r, 'rejected')}>
                           <XCircle size={14} /> Reject
                         </button>
                       </div>

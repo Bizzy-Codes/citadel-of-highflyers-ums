@@ -112,10 +112,25 @@ export function buildLoginDetailsMessage(opts: {
     ``,
     url ? `Sign in here: ${url}` : '',
     ``,
-    `You can change the password once you are signed in, under Profile.`,
+    `Passwords can only be changed by the school office, so please keep these details safe.`,
     ``,
     `Thank you for partnering with us in raising future generals.`,
   ].filter((line) => line !== undefined).join('\n');
+}
+
+// Sent to the PARENT when the school locks a pupil's portal. The pupil is
+// never shown this wording -- they only see "ask your parent to contact
+// the school".
+export function buildPortalLockedParentMessage(studentName: string): string {
+  return [
+    `Hello, this is Citadel of Highflyers Int'l Academy.`,
+    ``,
+    `The school portal for ${studentName} has been temporarily closed because there is an outstanding school fees balance.`,
+    ``,
+    `Kindly contact the school accountant or secretary (WhatsApp ${SCHOOL_WHATSAPP.replace(/^234/, '0')}) or send your payment receipt from the portal, and it will be reopened once the payment is confirmed.`,
+    ``,
+    `Thank you for partnering with us.`,
+  ].join('\n');
 }
 
 export function whatsappLink(phoneOrLine: string, message: string): string {
