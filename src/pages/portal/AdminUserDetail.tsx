@@ -13,6 +13,7 @@ import { CLASSES } from '../../lib/accounts';
 import { useDefaultAccountPassword } from '../../lib/defaultPassword';
 import { upperName } from '../../lib/names';
 import DateWheelInput from '../../components/common/DateWheelInput';
+import TeacherSetup from '../../components/portal/TeacherSetup';
 
 const naira = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
@@ -499,6 +500,12 @@ const AdminUserDetail = () => {
               </button>
             </form>
           </div>
+
+          {user.role === 'teacher' && (
+            <div className="card glass" style={{ padding: '28px', borderRadius: '24px' }}>
+              <TeacherSetup teacher={user} />
+            </div>
+          )}
 
           <div className="card glass" style={{ padding: '28px', borderRadius: '24px' }}>
             <h3 style={{ marginBottom: '6px' }}>Set New Password</h3>

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
+import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   GraduationCap,
@@ -11,7 +12,9 @@ import {
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, students } = useAuth();
+  const { currentUser, students, teachingClasses, setActiveTeachingClass } = useAuth();
+  const [switching, setSwitching] = useState(false);
+  const isSubTeacher = currentUser?.teacherKind === 'sub';
 
   const classes = ["Daycare", "Reception", "Kindergarten 1", "Kindergarten 2", "Pre-Grade", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5"];
 
@@ -34,7 +37,29 @@ const TeacherDashboard = () => {
         <section className="welcome-banner glass-purple" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px', padding: '24px' }}>
            <div className="welcome-text">
               <h1>Hello, <span>{currentUser?.name || 'Teacher'}!</span> 👋</h1>
-              <p>Manage your class{currentUser?.assignedClass ? ` (${currentUser.assignedClass})` : ''} below.</p>
+              <p>
+                {isSubTeacher
+                  ? `You teach ${(teachingClasses.find((c) => c.className === currentUser?.assignedClass)?.subjects ?? []).join(', ') || 'your subjects'}${currentUser?.assignedClass ? ' in ' + currentUser.assignedClass : ''}.`
+                  : `Manage your class${currentUser?.assignedClass ? ` (${currentUser.assignedClass})` : ''} below.`}
+              </p>
+              {isSubTeacher && teachingClasses.length > 1 && (
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginTop: '10px', fontWeight: 600, fontSize: '14px' }}>
+                  Working in
+                  <select
+                    value={currentUser?.assignedClass ?? ''}
+                    disabled={switching}
+                    onChange={async (e) => {
+                      setSwitching(true);
+                      const { error } = await setActiveTeachingClass(e.target.value);
+                      setSwitching(false);
+                      if (error) alert(error);
+                    }}
+                    style={{ padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)' }}
+                  >
+                    {teachingClasses.map((c) => <option key={c.className} value={c.className}>{c.className}</option>)}
+                  </select>
+                </label>
+              )}
            </div>
            <div style={{ display: 'flex', gap: '12px' }}>
               <button

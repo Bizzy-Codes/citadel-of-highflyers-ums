@@ -42,7 +42,7 @@ const rowHasMarks = (r: ScoreRow) => n(r.ca1) > 0 || n(r.ca2) > 0 || n(r.exam) >
 const TeacherResults = () => {
   const {
     currentUser, students, academicCalendar, subjectsByClass,
-    getReportCard, upsertReportCard, getSubjectStats, saveSubjectResults,
+    getReportCard, upsertReportCard, getSubjectStats, saveSubjectResults, teachingClasses,
   } = useAuth();
 
   const className = currentUser?.assignedClass ?? '';
@@ -59,7 +59,16 @@ const TeacherResults = () => {
   // Every subject the class offers, plus any subject a pupil somehow
   // already has a result for that isn't on the list (so nothing is
   // ever hidden). This is the sheet's row order.
-  const classSubjects = useMemo(() => subjectsByClass[className] ?? [], [subjectsByClass, className]);
+  // A subject teacher only sees (and can only save) the subjects they teach in this class.
+  const isSubTeacher = currentUser?.teacherKind === 'sub';
+  const mySubjects = useMemo(
+    () => new Set((teachingClasses.find((c) => c.className === className)?.subjects ?? []).map((s) => s.trim().toLowerCase())),
+    [teachingClasses, className],
+  );
+  const classSubjects = useMemo(
+    () => (subjectsByClass[className] ?? []).filter((s) => !isSubTeacher || mySubjects.has(s.trim().toLowerCase())),
+    [subjectsByClass, className, isSubTeacher, mySubjects],
+  );
 
   const [selectedId, setSelectedId] = useState('');
   const selectedStudent: User | undefined = useMemo(
@@ -86,9 +95,10 @@ const TeacherResults = () => {
   // Rows shown in the sheet: class subject list first, then any extra
   // subject the pupil already has a result for.
   const sheetSubjects = useMemo(() => {
-    const extra = existingResults.map((r) => r.subject).filter((s) => !classSubjects.includes(s));
+    const extra = existingResults.map((r) => r.subject)
+      .filter((s) => !classSubjects.includes(s) && (!isSubTeacher || mySubjects.has(s.trim().toLowerCase())));
     return [...classSubjects, ...extra];
-  }, [classSubjects, existingResults]);
+  }, [classSubjects, existingResults, isSubTeacher, mySubjects]);
 
   // Load the sheet from whatever's already saved whenever the pupil
   // (or the term/session from the calendar) changes.
@@ -169,7 +179,7 @@ const TeacherResults = () => {
   const cellInput: React.CSSProperties = { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', textAlign: 'center' };
 
   return (
-    <PortalLayout title="Report Cards">
+    <PortalLayout title={isSubTeacher ? "Enter Marks" : "Report Cards"}>
       <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
         <div className="card glass" style={{ padding: '24px', borderRadius: '24px' }}>
@@ -191,7 +201,7 @@ const TeacherResults = () => {
             </div>
             {selectedStudent && (
               <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
-                <button className="btn btn-outline" onClick={openEdit}><Pencil size={16} /> Edit Ratings & Comments</button>
+                {!isSubTeacher && <button className="btn btn-outline" onClick={openEdit}><Pencil size={16} /> Edit Ratings & Comments</button>}
                 <button className="btn btn-primary" onClick={() => window.print()}><Download size={16} /> Download</button>
               </div>
             )}
@@ -223,7 +233,9 @@ const TeacherResults = () => {
 
             {sheetSubjects.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '12px', borderRadius: '10px', background: 'var(--bg-light)', border: '1px dashed var(--glass-border)' }}>
-                No subjects defined for {className}. An admin adds them in User Management &gt; Subjects, then they show up here automatically.
+                {isSubTeacher
+                  ? `The office hasn't set up any subjects for you in ${className} yet.`
+                  : `No subjects defined for ${className}. An admin adds them in User Management > Subjects, then they show up here automatically.`}
               </p>
             ) : (
               <div style={{ overflowX: 'auto' }}>

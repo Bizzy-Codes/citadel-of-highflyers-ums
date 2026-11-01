@@ -138,6 +138,35 @@
   background: rgba(239, 68, 68, 0.05);
 }
 
+/* Subject teachers: which of their classes they are working in. */
+.class-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.class-switch select {
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-light);
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.sidebar-closed .class-switch {
+  display: none;
+}
+
 /* Main Area */
 .portal-main {
   flex: 1;
@@ -419,6 +448,9 @@
 @media (min-width: 969px) and (max-width: 1100px) {
   .portal-sidebar {
     width: 80px;
+  }
+  .class-switch {
+    display: none;
   }
   .portal-main {
     margin-left: 80px;

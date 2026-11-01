@@ -14,6 +14,7 @@ import Profile from './pages/portal/Profile'
 import Results from './pages/portal/Results'
 import TeacherResults from './pages/portal/TeacherResults'
 import Messages from './pages/portal/Messages'
+import Spotlight from './pages/portal/Spotlight'
 import TeacherDashboard from './pages/portal/TeacherDashboard'
 import AdminDashboard from './pages/portal/AdminDashboard'
 import UserManagement from './pages/portal/UserManagement'
@@ -118,6 +119,9 @@ function App() {
         } />
         <Route path="/portal/messages" element={
           <ProtectedRoute><Messages /></ProtectedRoute>
+        } />
+        <Route path="/portal/spotlight" element={
+          <ProtectedRoute><Spotlight /></ProtectedRoute>
         } />
         <Route path="/portal/support" element={
           <ProtectedRoute><Support /></ProtectedRoute>

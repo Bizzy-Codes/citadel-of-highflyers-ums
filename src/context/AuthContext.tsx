@@ -122,6 +122,10 @@ export interface User {
   phone?: string;
   location?: string;
   assignedClass?: string;
+  // 'main' = class teacher (as before); 'sub' = subject teacher who teaches
+  // some subjects in one or more classes (patch_45). assignedClass is the
+  // class a subject teacher is working in right now.
+  teacherKind?: 'main' | 'sub';
   avatarUrl?: string;
   results?: Result[];
   history?: PastRecord[];
@@ -243,6 +247,12 @@ export interface EditAssignmentQuestionInput {
   type?: 'written' | 'objective';
   options?: TestQuestionOption[];
   correctOption?: string;
+}
+
+// A class (and the subjects in it) that a subject teacher covers.
+export interface TeachingClass {
+  className: string;
+  subjects: string[];
 }
 
 export interface ClassMessage {
@@ -649,6 +659,13 @@ interface AuthContextType {
   removeBlockedTerm: (term: string) => Promise<{ error: string | null }>;
   markClassChatRead: (className: string) => Promise<void>;
   classChatNames: string[];
+  // Subject teachers: the classes/subjects they cover, and a switch for
+  // which class they are working in. Empty for everyone else.
+  teachingClasses: TeachingClass[];
+  setActiveTeachingClass: (className: string) => Promise<{ error: string | null }>;
+  // Admin: read / change whether a teacher is a class teacher or a subject teacher.
+  getTeacherSetup: (teacherId: string) => Promise<TeachingClass[]>;
+  saveTeacherSetup: (teacherId: string, kind: 'main' | 'sub', classes: TeachingClass[]) => Promise<{ error: string | null }>;
   submitAssignment: (assignmentId: string, file: File) => Promise<{ error: string | null }>;
   getSubmissionsForAssignment: (assignmentId: string) => Promise<AssignmentSubmission[]>;
   gradeSubmission: (submissionId: string, grade: string, feedback: string) => Promise<{ error: string | null }>;
@@ -721,8 +738,7 @@ interface AuthContextType {
   upsertAttendanceNote: (className: string, studentId: string, noteDate: string, note: string) => Promise<{ error: string | null }>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AuthContext = createContext<AuthContextType | undefined>(undefined);// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapProfileRow = (row: any): User => ({
   id: row.id,
   displayId: row.display_id,
@@ -735,6 +751,7 @@ const mapProfileRow = (row: any): User => ({
   phone: row.phone ?? undefined,
   location: row.location ?? undefined,
   assignedClass: row.assigned_class ?? undefined,
+  teacherKind: row.teacher_kind === 'sub' ? 'sub' : 'main',
   avatarUrl: row.avatar_url ?? undefined,
   graduatedAt: row.graduated_at ?? undefined,
   finalClass: row.final_class ?? undefined,
@@ -1086,6 +1103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [rawNotifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unreadTarget, setUnreadTarget] = useState<UnreadTarget>(null);
+  const [teachingRows, setTeachingRows] = useState<TeachingClass[]>([]);
   // Whether this pupil's portal is locked (patch_43). lockChecked stops the
   // portal flashing open for a moment before the answer arrives.
   const [portalLocked, setPortalLocked] = useState(false);
@@ -1109,6 +1127,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) { console.error('Failed to load current profile', error); setCurrentUser(null); return; }
     setCurrentUser(mapProfileRow(data));
   }, []);
+
+  // A subject teacher's classes + subjects (the table is only readable by
+  // that teacher and admins).
+  const subTeacherId = currentUser?.role === 'teacher' && currentUser.teacherKind === 'sub' ? currentUser.id : undefined;
+  useEffect(() => {
+    if (!subTeacherId) return;
+    let cancelled = false;
+    supabase.from('teacher_classes').select('class_name, subjects').eq('teacher_id', subTeacherId).order('class_name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { console.error('Failed to load teaching classes', error); return; }
+        setTeachingRows((data ?? []).map((r) => ({ className: r.class_name as string, subjects: (r.subjects ?? []) as string[] })));
+      });
+    return () => { cancelled = true; };
+  }, [subTeacherId]);
+  const teachingClasses = useMemo<TeachingClass[]>(() => (subTeacherId ? teachingRows : []), [subTeacherId, teachingRows]);
+
+  const getTeacherSetup = async (teacherId: string): Promise<TeachingClass[]> => {
+    const { data, error } = await supabase.from('teacher_classes').select('class_name, subjects').eq('teacher_id', teacherId).order('class_name');
+    if (error) { console.error('getTeacherSetup failed', error); return []; }
+    return (data ?? []).map((r) => ({ className: r.class_name as string, subjects: (r.subjects ?? []) as string[] }));
+  };
+
+  const saveTeacherSetup = async (teacherId: string, kind: 'main' | 'sub', classes: TeachingClass[]) => {
+    const { error } = await supabase.rpc('admin_set_teacher_setup', {
+      p_teacher: teacherId,
+      p_kind: kind,
+      p_assignments: classes.map((c) => ({ class: c.className, subjects: c.subjects })),
+    });
+    if (error) return { error: error.message };
+    await refreshProfiles();
+    return { error: null };
+  };
+
+  // Move a subject teacher to another of their classes. Pupils, chat,
+  // assignments, tests and marks all follow "your class", so everything
+  // is reloaded afterwards.
+  const setActiveTeachingClass = async (className: string) => {
+    if (!session?.user.id) return { error: 'Not signed in' };
+    const { error } = await supabase.rpc('set_my_active_class', { p_class: className });
+    if (error) return { error: error.message };
+    await refreshAll(session.user.id);
+    return { error: null };
+  };
 
   const lockUid = currentUser?.role === 'student' ? currentUser.id : undefined;
   useEffect(() => {
@@ -3053,6 +3115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
       updateAssignment, getAssignmentKeys, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
       getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
+      teachingClasses, setActiveTeachingClass, getTeacherSetup, saveTeacherSetup,
       deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm,
       getSubmissionsForAssignment, gradeSubmission, getAssignmentFileUrl,
       messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages,

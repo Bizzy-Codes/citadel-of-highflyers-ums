@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { exportStudentsToSpreadsheet } from '../../lib/exportCsv';
 import { upperName } from '../../lib/names';
+import TeacherSetup from '../../components/portal/TeacherSetup';
 
 const PAGE_SIZE = 10;
 
@@ -196,7 +197,7 @@ const UserManagement = () => {
                            <td style={{ padding: '16px 20px', color: 'var(--text-muted)' }}>{user.displayId}</td>
                            <td style={{ padding: '16px 20px' }}>
                               <span style={{ fontSize: '12px', background: 'var(--accent)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px' }}>
-                                 {user.role === 'student' ? user.grade : (user.assignedClass || user.role)}
+                                 {user.role === 'student' ? user.grade : user.role === 'teacher' && user.teacherKind === 'sub' ? `Subject teacher${user.assignedClass ? ' · ' + user.assignedClass : ''}` : (user.assignedClass || user.role)}
                               </span>
                            </td>
                            <td style={{ padding: '16px 20px' }}>
@@ -332,7 +333,7 @@ const UserManagement = () => {
         {/* Edit User Modal */}
         {editingUser && (
           <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-             <div className="glass" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px', position: 'relative' }}>
+             <div className="glass" style={{ background: 'var(--bg-surface)', padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '500px', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
                 <button onClick={() => setEditingUser(null)} style={{ position: 'absolute', right: '20px', top: '20px' }}><X size={20} /></button>
                 <h3 style={{ marginBottom: '24px' }}>Edit User Details</h3>
                 <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -376,6 +377,11 @@ const UserManagement = () => {
                       <Save size={18} /> Save Changes
                    </button>
                 </form>
+                {editingUser.role === 'teacher' && (
+                  <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
+                    <TeacherSetup teacher={editingUser} />
+                  </div>
+                )}
              </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import PortalLayout from '../../components/layout/PortalLayout';
 import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow, type BlockedTerm } from '../../context/AuthContext';
 import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X, Pin, PinOff, Trash2, ShieldAlert } from 'lucide-react';
 import { compressImageToTarget } from '../../lib/imageCompression';
+import SpotlightBanner from '../../components/spotlight/SpotlightBanner';
 
 const Messages = () => {
   const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen, deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm } = useAuth();
@@ -487,6 +488,8 @@ const Messages = () => {
                      <button type="button" className="btn btn-outline sm" onClick={openBlocked} title="Words and emojis pupils cannot send"><ShieldAlert size={16} /> Blocked words</button>
                    )}
                 </div>
+
+                <SpotlightBanner className={activeGroup} />
 
                 {pinnedMessages.length > 0 && (
                   <div style={{ padding: '8px 14px', background: 'var(--accent)', borderBottom: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>

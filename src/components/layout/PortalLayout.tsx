@@ -19,7 +19,8 @@ import {
   UserPlus,
   CalendarCheck,
   CalendarRange,
-  Sparkles
+  Sparkles,
+  Star
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -39,20 +40,23 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
   const location = useLocation();
   useTableLabels();
   const navigate = useNavigate();
-  const { currentUser, logout, notifications, unreadMessageCount, unreadTarget, portalLocked } = useAuth();
+  const { currentUser, logout, notifications, unreadMessageCount, unreadTarget, portalLocked, teachingClasses, setActiveTeachingClass } = useAuth();
 
   // Simple role detection from path for demo purposes
   const isTeacher = currentUser?.role === 'teacher';
   const isAdmin = currentUser?.role === 'admin';
+  // A subject teacher teaches some subjects (not the whole class), so the class register and report-card comments are left to the class teacher.
+  const isSubTeacher = isTeacher && currentUser?.teacherKind === 'sub';
+  const [switchingClass, setSwitchingClass] = useState(false);
 
   const navItems = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: isTeacher ? '/portal/teacher' : isAdmin ? '/portal/admin' : '/portal', show: true },
     { label: 'My Pupils', icon: <Users size={20} />, path: '/portal/teacher/students', show: isTeacher },
-    { label: 'Register', icon: <CalendarCheck size={20} />, path: '/portal/teacher/register', show: isTeacher },
+    { label: 'Register', icon: <CalendarCheck size={20} />, path: '/portal/teacher/register', show: isTeacher && !isSubTeacher },
     { label: 'My Attendance', icon: <CalendarCheck size={20} />, path: '/portal/attendance', show: !isTeacher && !isAdmin },
     { label: 'Tests', icon: <ClipboardCheck size={20} />, path: isTeacher ? '/portal/teacher/tests' : '/portal/tests', show: !isAdmin },
     { label: 'Assignments', icon: <FileText size={20} />, path: isTeacher ? '/portal/teacher/assignments' : '/portal/assignments', show: !isAdmin },
-    { label: isTeacher ? 'Report Cards' : 'Academic Results', icon: <GraduationCap size={20} />, path: isTeacher ? '/portal/teacher/results' : '/portal/results', show: !isAdmin },
+    { label: isSubTeacher ? 'Enter Marks' : isTeacher ? 'Report Cards' : 'Academic Results', icon: <GraduationCap size={20} />, path: isTeacher ? '/portal/teacher/results' : '/portal/results', show: !isAdmin },
     { label: 'Financial / Fees', icon: <CreditCard size={20} />, path: '/portal/fees', show: !isTeacher && !isAdmin },
     { label: 'User Management', icon: <Settings size={20} />, path: '/portal/admin/users', show: isAdmin },
     { label: 'Graduated Pupils', icon: <GraduationCap size={20} />, path: '/portal/admin/graduates', show: isAdmin },
@@ -63,6 +67,7 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
     { label: 'Citadel AI', icon: <Sparkles size={20} />, path: '/portal/admin/citadel-ai', show: isAdmin },
     { label: 'School Calendar', icon: <CalendarRange size={20} />, path: '/portal/calendar', show: !isAdmin },
     { label: 'Messages', icon: <MessageSquare size={20} />, path: '/portal/messages', show: true },
+    { label: 'Weekend Spotlight', icon: <Star size={20} />, path: '/portal/spotlight', show: true },
     { label: 'Timetable', icon: <Calendar size={20} />, path: '/portal/timetable', show: true },
     { label: 'Profile', icon: <User size={20} />, path: '/portal/profile', show: true },
     { label: 'Help & Support', icon: <HelpCircle size={20} />, path: '/portal/support', show: true },
@@ -92,6 +97,23 @@ const PortalLayout = ({ children, title }: PortalLayoutProps) => {
         </div>
 
         <nav className="sidebar-nav">
+          {isSubTeacher && teachingClasses.length > 1 && (
+            <label className="class-switch">
+              <span>Working in</span>
+              <select
+                value={currentUser?.assignedClass ?? ''}
+                disabled={switchingClass}
+                onChange={async (e) => {
+                  setSwitchingClass(true);
+                  const { error } = await setActiveTeachingClass(e.target.value);
+                  setSwitchingClass(false);
+                  if (error) alert(error);
+                }}
+              >
+                {teachingClasses.map((c) => <option key={c.className} value={c.className}>{c.className}</option>)}
+              </select>
+            </label>
+          )}
           {navItems.filter(item => item.show).map((item, idx) => (
             <Link 
               key={`${item.path}-${idx}`} 
