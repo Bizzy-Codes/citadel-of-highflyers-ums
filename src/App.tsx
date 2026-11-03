@@ -42,6 +42,7 @@ import AdminCitadelAI from './pages/portal/AdminCitadelAI'
 import MouseGlow from './components/common/MouseGlow'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import ScrollToTop from './components/common/ScrollToTop'
+import PageMeta from './components/common/PageMeta'
 import CitadelAI from './components/ai/CitadelAI'
 import './index.css'
 import './mobile.css'
@@ -67,6 +68,7 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <PageMeta />
       <MouseGlow />
       <Routes>
         {/* Public Marketing Routes */}

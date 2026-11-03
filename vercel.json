@@ -1,5 +1,11 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!robots\\.txt|sitemap\\.xml|assets/|gallery/|prospectus/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(portal|login|forgot-password|reset-password)(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+    }
   ]
 }
