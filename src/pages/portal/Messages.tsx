@@ -1,19 +1,64 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PortalLayout from '../../components/layout/PortalLayout';
-import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow, type BlockedTerm } from '../../context/AuthContext';
-import { Send, MessageCircle, Bell, User, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X, Pin, PinOff, Trash2, ShieldAlert } from 'lucide-react';
+import { useAuth, type DirectMessage, type ClassMessage, type ClassSeenRow, type BlockedTerm, type User } from '../../context/AuthContext';
+import {
+  Send, MessageCircle, MessageSquare, Bell, Users, ArrowLeft, Paperclip, FileDown, Search, ImagePlus, X,
+  Pin, PinOff, Trash2, ShieldAlert, MoreHorizontal, Check, CheckCheck,
+} from 'lucide-react';
 import { compressImageToTarget } from '../../lib/imageCompression';
 import SpotlightBanner from '../../components/spotlight/SpotlightBanner';
+import './Messages.css';
+
+const ICON = { strokeWidth: 1.5 } as const;
+
+const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
+
+const dayLabel = (iso: string) => {
+  const d = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+// Time shown on a chat in the list: the clock today, "Yesterday", else the date.
+const listTime = (iso: string) => {
+  const d = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return clock(iso);
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+};
+
+const roleLabel = (role: string) => {
+  const text = role.replace('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const Avatar = ({ name, url }: { name: string; url?: string }) => (
+  <div className="msg-avatar" aria-hidden="true">
+    {url ? <img src={url} alt="" /> : name.charAt(0).toUpperCase()}
+  </div>
+);
 
 const Messages = () => {
-  const { currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage, markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen, deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm } = useAuth();
+  const {
+    currentUser, notifications, addNotification, uploadAnnouncementImage, messageContacts, getConversation, sendDirectMessage,
+    markConversationRead, subscribeToDirectMessages, uploadChatAttachment, getChatAttachmentUrl, classChatNames, getClassMessages,
+    sendClassMessage, subscribeToClassMessages, markClassChatRead, getClassSeen, deleteClassMessage, pinClassMessage,
+    getBlockedTerms, addBlockedTerm, removeBlockedTerm, dmSummaries, dmUnread, groupUnread, refreshDmSummaries,
+  } = useAuth();
   const location = useLocation();
   const isAdmin = currentUser?.role === 'admin';
   // The notifications table's RLS already lets teachers post ("staff
-  // write notifications" covers admin and teacher) -- the form was just
-  // hidden from them, which left the teacher dashboard's "New
-  // Announcement" button with nowhere useful to go.
+  // write notifications" covers admin and teacher).
   const canPostAnnouncements = isAdmin || currentUser?.role === 'teacher';
   // Where we were sent: from a link / notification (?chat=<id> or ?group=1)
   // or from a click inside the app (router state). Either way we open the
@@ -25,14 +70,14 @@ const Messages = () => {
   // Pupils and teachers only have a private chat with the admin; the
   // header's "messages" button takes them to their class group first.
   const startView = forcedView === 'chats' && !linkedContactId && !isAdmin && classChatNames.length > 0 ? 'group' : forcedView;
-  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp' | 'group'>(startView ?? (isAdmin ? 'whatsapp' : 'notifications'));
+  const [activeView, setActiveView] = useState<'chats' | 'notifications' | 'whatsapp' | 'group'>(startView ?? (isAdmin ? 'chats' : 'notifications'));
 
-  // Class group chat state
+  // ---------- Class group chat ----------
   const [groupClass, setGroupClass] = useState<string>(classChatNames[0] ?? '');
   const [groupMessages, setGroupMessages] = useState<ClassMessage[]>([]);
   const [groupDraft, setGroupDraft] = useState('');
   const [groupLoading, setGroupLoading] = useState(false);
-  const groupEndRef = useRef<HTMLDivElement>(null);
+  const groupListRef = useRef<HTMLDivElement>(null);
   const [groupSeen, setGroupSeen] = useState<ClassSeenRow[]>([]);
   const [seenOpenId, setSeenOpenId] = useState<string | null>(null);
   const hasGroup = classChatNames.length > 0;
@@ -58,9 +103,9 @@ const Messages = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView, activeGroup]);
 
-  useEffect(() => {
-    groupEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [groupMessages]);
+  // Scroll the message list itself (not the whole page) to the newest message.
+  const scrollToEnd = (el: HTMLDivElement | null) => el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  useEffect(() => { scrollToEnd(groupListRef.current); }, [groupMessages.length]);
 
   // Who has seen the group chat (read receipts). Refreshed while it is open.
   useEffect(() => {
@@ -77,12 +122,38 @@ const Messages = () => {
   const isStaff = isAdmin || currentUser?.role === 'teacher';
   const pinnedMessages = groupMessages.filter((m) => m.pinnedAt).sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''));
 
+  // The strip at the top shows ONE pinned message on ONE line. Tapping it
+  // scrolls to that message, and the next tap moves on to the next pin.
+  const [pinIndex, setPinIndex] = useState(0);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const shownPin = pinnedMessages.length > 0 ? pinnedMessages[pinIndex % pinnedMessages.length] : null;
+  const jumpToPinned = () => {
+    if (!shownPin) return;
+    document.getElementById(`gm-${shownPin.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlashId(shownPin.id);
+    setTimeout(() => setFlashId(null), 1400);
+    setPinIndex((i) => (i + 1) % pinnedMessages.length);
+  };
+
+  // The "..." menu on a message (pin / delete), for teachers and the admin.
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.msg-menu, .msg-more')) setMenuFor(null);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuFor]);
+
   const handlePin = async (msg: ClassMessage) => {
+    setMenuFor(null);
     const { error } = await pinClassMessage(msg.id, !msg.pinnedAt);
     if (error) alert('Could not change the pin: ' + error);
   };
 
   const handleDeleteGroupMessage = async (msg: ClassMessage) => {
+    setMenuFor(null);
     if (!confirm(`Delete this message from ${msg.senderName}? Everyone in the class will no longer see it.`)) return;
     const { error } = await deleteClassMessage(msg.id);
     if (error) alert('Could not delete the message: ' + error);
@@ -115,14 +186,14 @@ const Messages = () => {
     if (error) { alert('Failed to send message: ' + error); setGroupDraft(draft); }
   };
 
-  // Private Chats state
+  // ---------- Private chats ----------
   const [selectedContactId, setSelectedContactId] = useState<string | null>(linkedContactId ?? null);
   const [conversation, setConversation] = useState<DirectMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const threadEndRef = useRef<HTMLDivElement>(null);
+  const dmListRef = useRef<HTMLDivElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,9 +215,7 @@ const Messages = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedContactId]);
 
-  useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation]);
+  useEffect(() => { scrollToEnd(dmListRef.current); }, [conversation.length, selectedContactId]);
 
   const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +223,8 @@ const Messages = () => {
     const draft = chatDraft;
     setChatDraft('');
     const { error } = await sendDirectMessage(selectedContactId, draft);
-    if (error) { alert('Failed to send message: ' + error); setChatDraft(draft); }
+    if (error) { alert('Failed to send message: ' + error); setChatDraft(draft); return; }
+    void refreshDmSummaries();
   };
 
   const handleAttachmentChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,6 +243,7 @@ const Messages = () => {
     const { error: sendError } = await sendDirectMessage(selectedContactId, caption, { path, name });
     setUploadingAttachment(false);
     if (sendError) alert('Failed to send attachment: ' + sendError);
+    else void refreshDmSummaries();
   };
 
   const handleOpenAttachment = async (path: string) => {
@@ -181,10 +252,49 @@ const Messages = () => {
     else alert('Could not open this attachment.');
   };
 
-  const selectedContact = messageContacts.find(c => c.id === selectedContactId) ?? null;
-  const filteredContacts = messageContacts.filter(c => c.name.toLowerCase().includes(contactSearch.trim().toLowerCase()));
+  const selectedContact = messageContacts.find((c) => c.id === selectedContactId) ?? null;
 
-  // WhatsApp State
+  // Chats with something new first (newest on top), then the rest of the
+  // chats by most recent message, then everyone else by name.
+  const search = contactSearch.trim().toLowerCase();
+  const matching = messageContacts.filter((c) => c.name.toLowerCase().includes(search));
+  const withChat = matching
+    .filter((c) => dmSummaries[c.id])
+    .sort((a, b) => {
+      const A = dmSummaries[a.id];
+      const B = dmSummaries[b.id];
+      if ((A.unread > 0) !== (B.unread > 0)) return A.unread > 0 ? -1 : 1;
+      return B.lastAt.localeCompare(A.lastAt);
+    });
+  const noChat = matching.filter((c) => !dmSummaries[c.id]).sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderContact = (contact: User) => {
+    const summary = dmSummaries[contact.id];
+    const unread = summary?.unread ?? 0;
+    return (
+      <button
+        key={contact.id}
+        type="button"
+        className={`msg-contact ${unread > 0 ? 'unread' : ''}`}
+        aria-current={selectedContactId === contact.id}
+        onClick={() => setSelectedContactId(contact.id)}
+      >
+        <Avatar name={contact.name} url={contact.avatarUrl} />
+        <div style={{ minWidth: 0 }}>
+          <div className="msg-contact-top">
+            <span className="msg-contact-name">{contact.name}</span>
+            {summary && <span className="msg-contact-time">{listTime(summary.lastAt)}</span>}
+          </div>
+          <div className="msg-contact-preview">
+            {summary ? `${summary.lastMine ? 'You: ' : ''}${summary.lastText}` : roleLabel(contact.role)}
+          </div>
+        </div>
+        {unread > 0 ? <span className="msg-badge" aria-label={`${unread} unread`}>{unread}</span> : <span />}
+      </button>
+    );
+  };
+
+  // ---------- Notices and WhatsApp (admin) ----------
   const [waMessage, setWaMessage] = useState('');
   const [waImage, setWaImage] = useState<File | null>(null);
   const waImageInputRef = useRef<HTMLInputElement>(null);
@@ -221,8 +331,7 @@ const Messages = () => {
     }
     set(out);
   };
-  
-  // Notification State
+
   const [notifTitle, setNotifTitle] = useState('');
   const [notifMsg, setNotifMsg] = useState('');
   const [notifType, setNotifType] = useState<'info' | 'warning' | 'success'>('info');
@@ -280,467 +389,388 @@ const Messages = () => {
     );
   };
 
+  const tabs: { id: 'notifications' | 'group' | 'chats' | 'whatsapp'; label: string; icon: React.ReactNode; badge?: number; show: boolean }[] = [
+    { id: 'notifications', label: 'Notices', icon: <Bell size={16} {...ICON} />, show: true },
+    { id: 'group', label: isAdmin ? 'Class groups' : `${activeGroup} group`, icon: <Users size={16} {...ICON} />, badge: groupUnread, show: hasGroup },
+    { id: 'chats', label: isAdmin ? 'Private chats' : 'Message the admin', icon: <MessageSquare size={16} {...ICON} />, badge: dmUnread, show: true },
+    { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle size={16} {...ICON} />, show: isAdmin },
+  ];
+
   return (
-    <PortalLayout title="Communication Center">
-      <div className="animate-fade-in comm-center-grid" style={{ gap: '24px' }}>
-
-        {/* Sidebar Navigation */}
-        <div className="card glass comm-center-sidebar" style={{ padding: '20px', borderRadius: '24px', gap: '12px' }}>
-           <button
-            onClick={() => setActiveView('notifications')}
-            className={`btn ${activeView === 'notifications' ? 'btn-primary' : 'btn-outline'}`}
-            style={{ justifyContent: 'flex-start' }}
-           >
-             <Bell size={18} /> System Notices
-           </button>
-
-           {isAdmin && (
-             <button
-              onClick={() => setActiveView('whatsapp')}
-              className={`btn ${activeView === 'whatsapp' ? 'btn-primary' : 'btn-outline'}`}
-              style={{ justifyContent: 'flex-start' }}
-             >
-               <MessageCircle size={18} /> WhatsApp Group
-             </button>
-           )}
-
-           {hasGroup && (
-             <button
-              onClick={() => setActiveView('group')}
-              className={`btn ${activeView === 'group' ? 'btn-primary' : 'btn-outline'}`}
-              style={{ justifyContent: 'flex-start' }}
-             >
-               <Users size={18} /> {isAdmin ? 'Class Groups' : `${activeGroup} Group`}
-             </button>
-           )}
-
-           <button
-            onClick={() => setActiveView('chats')}
-            className={`btn ${activeView === 'chats' ? 'btn-primary' : 'btn-outline'}`}
-            style={{ justifyContent: 'flex-start' }}
-           >
-             <User size={18} /> {isAdmin ? 'Private Chats' : 'Message the Admin'}
-           </button>
+    <PortalLayout title="Messages">
+      <div className="msg">
+        <div className="msg-tabs" role="tablist" aria-label="Messages">
+          {tabs.filter((t) => t.show).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={activeView === t.id}
+              className="msg-tab"
+              onClick={() => setActiveView(t.id)}
+            >
+              {t.icon} {t.label}
+              {!!t.badge && t.badge > 0 && <span className="msg-badge" aria-label={`${t.badge} unread`}>{t.badge}</span>}
+            </button>
+          ))}
         </div>
 
-        {/* Main Content Area */}
-        <div className="card glass comm-center-main" style={{ padding: '30px', borderRadius: '24px', overflowY: 'auto' }}>
-           
-           {activeView === 'notifications' && (
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <h3>System Notifications</h3>
-                   {isAdmin && <span className="badge" style={{ background: 'var(--primary)', color: 'white' }}>Admin View</span>}
-                </div>
+        <div className="msg-pane">
 
-                {canPostAnnouncements && (
-                  <form onSubmit={handlePostNotification} className="blend-bg" style={{ padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                     <h4 style={{ fontSize: '15px' }}>Post New Announcement</h4>
-                     <input
-                      type="text"
-                      placeholder="Title"
-                      value={notifTitle}
-                      onChange={(e) => setNotifTitle(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                     />
-                     <textarea
-                      placeholder="Message content..."
-                      rows={3}
-                      value={notifMsg}
-                      onChange={(e) => setNotifMsg(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', resize: 'none' }}
-                     />
-                     <input ref={noticeImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => pickImage(e, setNoticeImage)} />
-                     {noticeImagePreview ? (
-                       <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
-                         <img src={noticeImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
-                         <button type="button" onClick={() => setNoticeImage(null)} title="Remove picture" style={{ position: 'absolute', top: '6px', right: '6px', width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
-                       </div>
-                     ) : (
-                       <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start' }} onClick={() => noticeImageInputRef.current?.click()}>
-                         <ImagePlus size={18} /> Attach a picture
-                       </button>
-                     )}
-                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '13px' }}>
-                       <label htmlFor="notif-popup-days" style={{ fontWeight: 700 }}>Pop up at login:</label>
-                       <select
-                         id="notif-popup-days"
-                         value={notifPopupDays}
-                         onChange={(e) => setNotifPopupDays(Number(e.target.value))}
-                         style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                       >
-                         <option value={0}>No pop-up (notice list only)</option>
-                         <option value={1}>For 1 day</option>
-                         <option value={2}>For 2 days</option>
-                         <option value={3}>For 3 days</option>
-                         <option value={5}>For 5 days</option>
-                         <option value={7}>For 7 days</option>
-                         <option value={14}>For 14 days</option>
-                         <option value={30}>For 30 days</option>
-                       </select>
-                       <span style={{ color: 'var(--text-muted)' }}>Everyone it is for sees it each time they log in during this period.</span>
-                     </div>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          <select
-                            value={notifAudience}
-                            onChange={(e) => setNotifAudience(e.target.value as 'all' | 'students' | 'teachers')}
-                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                          >
-                             <option value="all">Everyone</option>
-                             <option value="students">Pupils only</option>
-                             <option value="teachers">Staff only</option>
-                          </select>
-                          <select
-                            value={notifType}
-                            onChange={(e) => setNotifType(e.target.value as 'info' | 'warning' | 'success')}
-                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                          >
-                             <option value="info">Information (Blue)</option>
-                             <option value="warning">Important (Orange)</option>
-                             <option value="success">Success (Green)</option>
-                          </select>
-                        </div>
-                        <button type="submit" className="btn btn-primary" disabled={posting}>
-                           <Send size={18} /> {posting ? 'Posting...' : 'Post Announcement'}
-                        </button>
-                     </div>
-                  </form>
-                )}
+          {/* ---------- Notices ---------- */}
+          {activeView === 'notifications' && (
+            <div className="msg-scroll">
+              {canPostAnnouncements && (
+                <form onSubmit={handlePostNotification} className="msg-form">
+                  <h4>Post an announcement</h4>
+                  <input className="msg-field" type="text" placeholder="Title" value={notifTitle} onChange={(e) => setNotifTitle(e.target.value)} />
+                  <textarea className="msg-field" placeholder="Message" rows={3} value={notifMsg} onChange={(e) => setNotifMsg(e.target.value)} style={{ resize: 'vertical' }} />
+                  <input ref={noticeImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => pickImage(e, setNoticeImage)} />
+                  {noticeImagePreview ? (
+                    <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+                      <img src={noticeImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', display: 'block' }} />
+                      <button type="button" className="msg-icon-btn small" onClick={() => setNoticeImage(null)} title="Remove picture" style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.65)', color: '#fff' }}><X size={16} {...ICON} /></button>
+                    </div>
+                  ) : (
+                    <button type="button" className="msg-btn" style={{ alignSelf: 'flex-start' }} onClick={() => noticeImageInputRef.current?.click()}>
+                      <ImagePlus size={16} {...ICON} /> Add a picture
+                    </button>
+                  )}
+                  <div className="msg-row-wrap">
+                    <label htmlFor="notif-popup-days" style={{ fontSize: '14px', fontWeight: 500 }}>Pop up at login</label>
+                    <select id="notif-popup-days" value={notifPopupDays} onChange={(e) => setNotifPopupDays(Number(e.target.value))}>
+                      <option value={0}>No pop-up</option>
+                      <option value={1}>For 1 day</option>
+                      <option value={2}>For 2 days</option>
+                      <option value={3}>For 3 days</option>
+                      <option value={5}>For 5 days</option>
+                      <option value={7}>For 7 days</option>
+                      <option value={14}>For 14 days</option>
+                      <option value={30}>For 30 days</option>
+                    </select>
+                  </div>
+                  <p className="msg-hint" style={{ margin: 0 }}>Everyone it is for sees it each time they log in during this period.</p>
+                  <div className="msg-row-wrap" style={{ justifyContent: 'space-between' }}>
+                    <div className="msg-row-wrap">
+                      <select aria-label="Who is it for" value={notifAudience} onChange={(e) => setNotifAudience(e.target.value as 'all' | 'students' | 'teachers')}>
+                        <option value="all">Everyone</option>
+                        <option value="students">Pupils only</option>
+                        <option value="teachers">Staff only</option>
+                      </select>
+                      <select aria-label="Type" value={notifType} onChange={(e) => setNotifType(e.target.value as 'info' | 'warning' | 'success')}>
+                        <option value="info">Information</option>
+                        <option value="warning">Important</option>
+                        <option value="success">Good news</option>
+                      </select>
+                    </div>
+                    <button type="submit" className="msg-btn primary" disabled={posting}>
+                      <Send size={16} {...ICON} /> {posting ? 'Posting' : 'Post'}
+                    </button>
+                  </div>
+                </form>
+              )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                   {notifications.map((n, i) => (
-                     <div key={i} className="hover-scale" style={{ padding: '20px', borderRadius: '16px', borderLeft: `6px solid ${n.type === 'warning' ? 'var(--warning)' : n.type === 'success' ? 'var(--success)' : 'var(--primary)'}`, background: 'var(--bg-surface)', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                           <h4 style={{ fontWeight: '800' }}>{n.title}</h4>
-                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(n.date).toLocaleDateString()}</span>
-                        </div>
-                        {n.imageUrl && (
-                          <a href={n.imageUrl} target="_blank" rel="noreferrer">
-                            <img src={n.imageUrl} alt="" loading="lazy" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '12px', marginBottom: '10px', display: 'block' }} />
-                          </a>
-                        )}
-                        <p style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{n.message}</p>
-                     </div>
-                   ))}
-                   {notifications.length === 0 && (
-                     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                        <Bell size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
-                        <p>No system notifications yet.</p>
-                     </div>
-                   )}
+              {notifications.map((n, i) => (
+                <article key={i} className={`msg-notice ${n.type === 'warning' ? 'warning' : n.type === 'success' ? 'success' : ''}`}>
+                  <div className="msg-notice-head">
+                    <h4>{n.title}</h4>
+                    <time>{new Date(n.date).toLocaleDateString()}</time>
+                  </div>
+                  {n.imageUrl && (
+                    <a href={n.imageUrl} target="_blank" rel="noreferrer">
+                      <img src={n.imageUrl} alt="" loading="lazy" />
+                    </a>
+                  )}
+                  <p>{n.message}</p>
+                </article>
+              ))}
+              {notifications.length === 0 && (
+                <div className="msg-empty">
+                  <Bell size={32} {...ICON} />
+                  <p>No notices yet</p>
                 </div>
-             </div>
-           )}
+              )}
+            </div>
+          )}
 
-           {activeView === 'whatsapp' && isAdmin && (
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center', justifyContent: 'center', height: '100%', maxWidth: '600px', margin: '0 auto' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                   <MessageCircle size={40} />
-                </div>
-                <h2 style={{ textAlign: 'center' }}>WhatsApp Broadcast Control</h2>
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '20px' }}>Compose a message below to send directly to the school's WhatsApp group as an Administrator.</p>
-                
-                <textarea 
+          {/* ---------- WhatsApp (admin) ---------- */}
+          {activeView === 'whatsapp' && isAdmin && (
+            <div className="msg-scroll">
+              <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h2 className="msg-title">WhatsApp group message</h2>
+                <p className="msg-hint" style={{ margin: 0 }}>Write the message here. WhatsApp opens with it ready to send to the school group.</p>
+                <textarea
+                  className="msg-field"
                   value={waMessage}
                   onChange={(e) => setWaMessage(e.target.value)}
-                  placeholder="Type your group announcement here..."
-                  style={{ width: '100%', padding: '24px', borderRadius: '20px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', minHeight: '200px', fontSize: '16px', resize: 'none' }}
+                  placeholder="Message"
+                  style={{ minHeight: '200px', resize: 'vertical' }}
                 />
-                
                 <input ref={waImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => pickImage(e, setWaImage)} />
                 {waImagePreview ? (
                   <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
-                    <img src={waImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '12px', border: '1px solid var(--glass-border)' }} />
-                    <button type="button" onClick={() => setWaImage(null)} title="Remove picture" style={{ position: 'absolute', top: '6px', right: '6px', width: '28px', height: '28px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+                    <img src={waImagePreview} alt="Attached" style={{ maxWidth: '100%', maxHeight: '240px', borderRadius: '8px', display: 'block' }} />
+                    <button type="button" className="msg-icon-btn small" onClick={() => setWaImage(null)} title="Remove picture" style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.65)', color: '#fff' }}><X size={16} {...ICON} /></button>
                   </div>
                 ) : (
-                  <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start' }} onClick={() => waImageInputRef.current?.click()}>
-                    <ImagePlus size={18} /> Attach a picture
+                  <button type="button" className="msg-btn" style={{ alignSelf: 'flex-start' }} onClick={() => waImageInputRef.current?.click()}>
+                    <ImagePlus size={16} {...ICON} /> Add a picture
                   </button>
                 )}
-
-                <button 
-                  onClick={handleSendWhatsApp}
-                  className="btn btn-primary lg" 
-                  style={{ width: '100%', background: '#25D366 !important', borderColor: '#25D366 !important', boxShadow: '0 8px 20px rgba(37, 211, 102, 0.3)' }}
-                >
-                   <MessageCircle size={20} /> Open WhatsApp & Send to Group
+                <button type="button" className="msg-btn" onClick={handleSendWhatsApp} style={{ height: '48px', background: '#1fa855', borderColor: 'transparent', color: '#fff' }}>
+                  <MessageCircle size={18} {...ICON} /> Open WhatsApp
                 </button>
-             </div>
-           )}
+              </div>
+            </div>
+          )}
 
-           {activeView === 'group' && hasGroup && (
-             <div className="chats-thread" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '480px' }}>
-                <div className="chats-thread-header">
-                   <div className="chats-contact-avatar"><Users size={18} /></div>
-                   <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '700', fontSize: '15px' }}>{activeGroup} Group</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Everyone in {activeGroup} can see what is posted here.</div>
-                   </div>
-                   {isAdmin && (
-                     <select value={activeGroup} onChange={(e) => setGroupClass(e.target.value)}
-                       style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}>
-                       {classChatNames.map((c) => <option key={c} value={c}>{c}</option>)}
-                     </select>
-                   )}
-                   {isAdmin && (
-                     <button type="button" className="btn btn-outline sm" onClick={openBlocked} title="Words and emojis pupils cannot send"><ShieldAlert size={16} /> Blocked words</button>
-                   )}
+          {/* ---------- Class group ---------- */}
+          {activeView === 'group' && hasGroup && (
+            <div className="msg-thread">
+              <div className="msg-head">
+                <Avatar name={activeGroup} />
+                <div className="msg-head-text">
+                  <div className="msg-head-title">{activeGroup} group</div>
+                  <div className="msg-head-sub">Everyone in {activeGroup} sees these messages</div>
                 </div>
+                {isAdmin && (
+                  <select value={activeGroup} onChange={(e) => setGroupClass(e.target.value)} aria-label="Class">
+                    {classChatNames.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+                {isAdmin && (
+                  <button type="button" className="msg-icon-btn" onClick={openBlocked} title="Blocked words and emojis" aria-label="Blocked words and emojis"><ShieldAlert size={18} {...ICON} /></button>
+                )}
+              </div>
 
-                <SpotlightBanner className={activeGroup} />
+              <SpotlightBanner className={activeGroup} />
 
-                {pinnedMessages.length > 0 && (
-                  <div style={{ padding: '8px 14px', background: 'var(--accent)', borderBottom: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {pinnedMessages.map((m) => (
-                      <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px' }}>
-                        <Pin size={14} color="var(--primary)" style={{ marginTop: '2px', flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <strong style={{ color: 'var(--primary)' }}>{m.senderName}: </strong>
-                          <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.content}</span>
-                        </div>
-                        {isStaff && (
-                          <button type="button" className="icon-btn sm" title="Unpin" onClick={() => handlePin(m)}><PinOff size={14} /></button>
-                        )}
-                      </div>
-                    ))}
+              {shownPin && (
+                <div
+                  className="msg-pinned"
+                  role="button"
+                  tabIndex={0}
+                  onClick={jumpToPinned}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jumpToPinned(); } }}
+                  title="Show this message"
+                >
+                  <Pin size={16} {...ICON} />
+                  <span className="msg-pinned-text"><b>{shownPin.senderName}</b> {shownPin.content.replace(/\s+/g, ' ')}</span>
+                  {pinnedMessages.length > 1 && <span className="msg-pinned-count">{(pinIndex % pinnedMessages.length) + 1} of {pinnedMessages.length}</span>}
+                  {isStaff && (
+                    <button type="button" className="msg-icon-btn small" title="Unpin" aria-label="Unpin" onClick={(e) => { e.stopPropagation(); void handlePin(shownPin); }}>
+                      <PinOff size={16} {...ICON} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="msg-list" ref={groupListRef}>
+                {groupLoading && <p className="msg-empty">Loading messages</p>}
+                {!groupLoading && groupMessages.length === 0 && (
+                  <div className="msg-empty">
+                    <Users size={32} {...ICON} />
+                    <p>No messages yet. What you write here goes to everyone in {activeGroup}.</p>
                   </div>
                 )}
-
-                <div className="chats-thread-messages">
-                   {groupLoading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading messages...</p>}
-                   {!groupLoading && groupMessages.length === 0 && (
-                     <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No messages yet. Say hello to the class!</p>
-                   )}
-                   {groupMessages.map((msg) => {
-                     const mine = msg.senderId === currentUser?.id;
-                     const staffSender = msg.senderRole === 'teacher' || msg.senderRole === 'admin';
-                     return (
-                       <div key={msg.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-                          <div className="chats-bubble" style={{
-                            background: mine ? 'var(--primary)' : 'var(--bg-surface)',
-                            color: mine ? '#fff' : 'var(--text-main)',
-                            border: mine ? 'none' : '1px solid var(--glass-border)',
-                          }}>
-                             {!mine && (
-                               <div style={{ fontSize: '11px', fontWeight: 800, marginBottom: '2px', color: staffSender ? 'var(--primary)' : 'var(--text-muted)' }}>
-                                 {msg.senderName}{msg.senderRole === 'teacher' ? ' (Teacher)' : msg.senderRole === 'admin' ? ' (Admin)' : ''}
-                               </div>
-                             )}
-                             <p style={{ fontSize: '14px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-                             <span style={{ fontSize: '10px', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                                {msg.pinnedAt && <Pin size={10} />}
-                                {new Date(msg.createdAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                {isStaff && (
-                                  <>
-                                    <button type="button" onClick={() => handlePin(msg)} title={msg.pinnedAt ? 'Unpin' : 'Pin to the top of the chat'}
-                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}>
-                                      {msg.pinnedAt ? <PinOff size={12} /> : <Pin size={12} />}
-                                    </button>
-                                    <button type="button" onClick={() => handleDeleteGroupMessage(msg)} title="Delete this message"
-                                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}>
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </>
-                                )}
-                             </span>
-                             {mine && (() => {
-                               const seenBy = groupSeen.filter((r) => r.userId !== currentUser?.id && new Date(r.lastReadAt).getTime() >= new Date(msg.createdAt).getTime());
-                               return (
-                                 <button type="button" onClick={() => setSeenOpenId(seenOpenId === msg.id ? null : msg.id)}
-                                   style={{ background: 'none', border: 'none', padding: 0, marginTop: '2px', color: 'inherit', opacity: 0.85, fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}>
-                                   {seenBy.length > 0 ? `✓✓ Seen by ${seenBy.length}` : '✓ Sent'}
-                                   {seenOpenId === msg.id && seenBy.length > 0 && (
-                                     <span style={{ display: 'block', marginTop: '2px' }}>{seenBy.map((r) => r.userName).join(', ')}</span>
-                                   )}
-                                 </button>
-                               );
-                             })()}
-                          </div>
-                       </div>
-                     );
-                   })}
-                   <div ref={groupEndRef} />
-                </div>
-
-                <form onSubmit={handleSendGroup} className="chats-thread-input">
-                   <input
-                     type="text"
-                     placeholder={`Message ${activeGroup} group...`}
-                     value={groupDraft}
-                     onChange={(e) => setGroupDraft(e.target.value)}
-                     style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                   />
-                   <button type="submit" className="btn btn-primary" disabled={!groupDraft.trim()}><Send size={18} /></button>
-                </form>
-             </div>
-           )}
-
-           {showBlocked && (
-             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-               <div className="glass animate-fade-in" style={{ background: 'var(--bg-surface)', padding: '28px', borderRadius: '24px', width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto' }}>
-                 <h3 style={{ marginBottom: '6px' }}>Blocked words and emojis</h3>
-                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>
-                   Pupils cannot send these in the class chat or to the admin. Teachers and admins are not restricted. A word is only blocked as a whole word ("mad" is blocked, "made" is not).
-                 </p>
-                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-                   <input type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} placeholder="Type a word or paste an emoji"
-                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTerm(); } }}
-                     style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
-                   <button type="button" className="btn btn-primary sm" onClick={handleAddTerm} disabled={!newTerm.trim()}>Block it</button>
-                 </div>
-                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                   {blockedList.map((t) => (
-                     <span key={t.term} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '999px', fontSize: '13px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', fontWeight: 600 }}>
-                       {t.term}
-                       <button type="button" onClick={() => handleRemoveTerm(t.term)} title="Allow it again" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', display: 'inline-flex' }}><X size={12} /></button>
-                     </span>
-                   ))}
-                 </div>
-                 <button className="btn btn-outline" style={{ width: '100%', marginTop: '18px' }} onClick={() => setShowBlocked(false)}>Done</button>
-               </div>
-             </div>
-           )}
-
-           {activeView === 'chats' && (
-             <div className="chats-panel">
-                {/* Contact list */}
-                <div className={`chats-contact-list ${selectedContactId ? 'chats-contact-list-hidden-mobile' : ''}`}>
-                   {messageContacts.length > 0 && (
-                     <div style={{ position: 'relative', padding: '4px 4px 12px' }}>
-                        <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                        <input
-                          type="text"
-                          placeholder="Search chats..."
-                          value={contactSearch}
-                          onChange={(e) => setContactSearch(e.target.value)}
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px 10px 38px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)', color: 'var(--text-main)', fontSize: '13px' }}
-                        />
-                     </div>
-                   )}
-                   {messageContacts.length === 0 && (
-                     <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                        <User size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
-                        <p style={{ fontSize: '13px' }}>{isAdmin ? 'No contacts available yet.' : 'The school admin is not available to message yet.'}</p>
-                     </div>
-                   )}
-                   {messageContacts.length > 0 && filteredContacts.length === 0 && (
-                     <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)' }}>
-                        <p style={{ fontSize: '13px' }}>No chats match "{contactSearch}".</p>
-                     </div>
-                   )}
-                   {filteredContacts.map((contact) => (
-                     <button
-                      key={contact.id}
-                      onClick={() => setSelectedContactId(contact.id)}
-                      className="chats-contact-item"
-                      style={{
-                        background: selectedContactId === contact.id ? 'var(--accent)' : 'transparent',
-                        color: selectedContactId === contact.id ? 'var(--primary)' : 'var(--text-main)',
-                      }}
-                     >
-                        <div className="chats-contact-avatar">
-                           {contact.avatarUrl
-                             ? <img src={contact.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                             : contact.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ textAlign: 'left', overflow: 'hidden' }}>
-                           <div style={{ fontWeight: '700', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{contact.name}</div>
-                           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{contact.role.replace('_', ' ')}</div>
-                        </div>
-                     </button>
-                   ))}
-                </div>
-
-                {/* Thread */}
-                <div className={`chats-thread ${selectedContactId ? '' : 'chats-thread-hidden-mobile'}`}>
-                   {!selectedContact && (
-                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-                        <MessageCircle size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
-                        <p>Select a contact to start chatting.</p>
-                     </div>
-                   )}
-                   {selectedContact && (
-                     <>
-                       <div className="chats-thread-header">
-                          <button className="chats-back-btn" onClick={() => setSelectedContactId(null)}><ArrowLeft size={18} /></button>
-                          <div className="chats-contact-avatar">
-                             {selectedContact.avatarUrl
-                               ? <img src={selectedContact.avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                               : selectedContact.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                             <div style={{ fontWeight: '700', fontSize: '15px' }}>{selectedContact.name}</div>
-                             <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{selectedContact.role.replace('_', ' ')}</div>
-                          </div>
-                       </div>
-
-                       <div className="chats-thread-messages">
-                          {chatLoading && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Loading conversation...</p>}
-                          {!chatLoading && conversation.length === 0 && (
-                            <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No messages yet. Say hello!</p>
+                {groupMessages.map((msg, i) => {
+                  const prev = groupMessages[i - 1];
+                  const newDay = !prev || !sameDay(prev.createdAt, msg.createdAt);
+                  const first = newDay || prev.senderId !== msg.senderId;
+                  const mine = msg.senderId === currentUser?.id;
+                  const staffSender = msg.senderRole === 'teacher' || msg.senderRole === 'admin';
+                  const seenBy = mine ? groupSeen.filter((r) => r.userId !== currentUser?.id && new Date(r.lastReadAt).getTime() >= new Date(msg.createdAt).getTime()) : [];
+                  return (
+                    <div key={msg.id} style={{ display: 'contents' }}>
+                      {newDay && <div className="msg-day">{dayLabel(msg.createdAt)}</div>}
+                      <div id={`gm-${msg.id}`} className={`msg-row ${mine ? 'mine' : ''} ${first && !newDay ? 'first' : ''}`}>
+                        <div className={`msg-bubble ${staffSender && !mine ? 'staff' : ''} ${flashId === msg.id ? 'flash' : ''}`}>
+                          {!mine && first && (
+                            <div className="msg-sender">
+                              {msg.senderName}
+                              {staffSender && <span className="msg-role">{msg.senderRole === 'admin' ? 'Admin' : 'Teacher'}</span>}
+                            </div>
                           )}
-                          {conversation.map((msg) => {
-                            const mine = msg.senderId === currentUser?.id;
-                            return (
-                              <div key={msg.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-                                 <div className="chats-bubble" style={{
-                                   background: mine ? 'var(--primary)' : 'var(--bg-surface)',
-                                   color: mine ? '#fff' : 'var(--text-main)',
-                                   border: mine ? 'none' : '1px solid var(--glass-border)',
-                                 }}>
-                                    <p style={{ fontSize: '14px', wordBreak: 'break-word' }}>{msg.content}</p>
-                                    {msg.attachmentPath && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenAttachment(msg.attachmentPath!)}
-                                        className="chats-attachment-chip"
-                                        style={{ color: mine ? '#fff' : 'var(--primary)', borderColor: mine ? 'rgba(255,255,255,0.4)' : 'var(--glass-border)' }}
-                                      >
-                                        <FileDown size={14} /> {msg.attachmentName ?? 'Attachment'}
-                                      </button>
-                                    )}
-                                    <span style={{ fontSize: '10px', opacity: 0.7, display: 'block', marginTop: '4px' }}>
-                                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                       {mine && (msg.readAt ? '  ✓✓ Seen' : '  ✓ Sent')}
-                                    </span>
-                                 </div>
-                              </div>
-                            );
-                          })}
-                          <div ref={threadEndRef} />
-                       </div>
+                          <p className="msg-text">{msg.content}</p>
+                          <div className="msg-meta">
+                            {msg.pinnedAt && <Pin size={12} {...ICON} aria-label="Pinned" />}
+                            {mine && (seenBy.length > 0
+                              ? (
+                                <button type="button" onClick={() => setSeenOpenId(seenOpenId === msg.id ? null : msg.id)}>
+                                  <CheckCheck size={14} {...ICON} /> Seen by {seenBy.length}
+                                </button>
+                              )
+                              : <Check size={14} {...ICON} aria-label="Sent" />)}
+                            <span>{clock(msg.createdAt)}</span>
+                            {isStaff && (
+                              <button type="button" className="msg-more" aria-label="Message options" onClick={() => setMenuFor(menuFor === msg.id ? null : msg.id)}>
+                                <MoreHorizontal size={16} {...ICON} />
+                              </button>
+                            )}
+                          </div>
+                          {mine && seenOpenId === msg.id && seenBy.length > 0 && (
+                            <span className="msg-meta msg-seen-names">{seenBy.map((r) => r.userName).join(', ')}</span>
+                          )}
+                          {menuFor === msg.id && (
+                            <div className="msg-menu" role="menu">
+                              <button type="button" role="menuitem" onClick={() => handlePin(msg)}>
+                                {msg.pinnedAt ? <><PinOff size={16} {...ICON} /> Unpin</> : <><Pin size={16} {...ICON} /> Pin to the top</>}
+                              </button>
+                              <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteGroupMessage(msg)}>
+                                <Trash2 size={16} {...ICON} /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-                       <form onSubmit={handleSendChat} className="chats-thread-input">
-                          <input ref={attachInputRef} type="file" style={{ display: 'none' }} onChange={handleAttachmentChange} />
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            title="Attach a photo or document"
-                            disabled={uploadingAttachment}
-                            onClick={() => attachInputRef.current?.click()}
-                          >
-                            <Paperclip size={18} />
-                          </button>
-                          <input
-                            type="text"
-                            placeholder={uploadingAttachment ? 'Uploading attachment...' : 'Type a message...'}
-                            value={chatDraft}
-                            disabled={uploadingAttachment}
-                            onChange={(e) => setChatDraft(e.target.value)}
-                            style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }}
-                          />
-                          <button type="submit" className="btn btn-primary" disabled={!chatDraft.trim() || uploadingAttachment}><Send size={18} /></button>
-                       </form>
-                     </>
-                   )}
+              <form onSubmit={handleSendGroup} className="msg-composer">
+                <input
+                  className="msg-input"
+                  type="text"
+                  placeholder={`Message ${activeGroup} group`}
+                  value={groupDraft}
+                  onChange={(e) => setGroupDraft(e.target.value)}
+                  enterKeyHint="send"
+                />
+                <button type="submit" className="msg-send" disabled={!groupDraft.trim()} aria-label="Send"><Send size={18} {...ICON} /></button>
+              </form>
+            </div>
+          )}
+
+          {showBlocked && (
+            <div className="msg-modal" role="dialog" aria-modal="true" aria-label="Blocked words and emojis">
+              <div className="msg-modal-card">
+                <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 600 }}>Blocked words and emojis</h3>
+                <p className="msg-hint" style={{ margin: '0 0 16px' }}>
+                  Pupils cannot send these in the class chat or to the admin. Teachers and admins are not restricted. A word is only blocked as a whole word: "mad" is blocked, "made" is not.
+                </p>
+                <div className="msg-row-wrap" style={{ marginBottom: '16px', flexWrap: 'nowrap' }}>
+                  <input className="msg-field" type="text" value={newTerm} onChange={(e) => setNewTerm(e.target.value)} placeholder="A word or an emoji"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTerm(); } }} />
+                  <button type="button" className="msg-btn primary" onClick={handleAddTerm} disabled={!newTerm.trim()} style={{ flexShrink: 0 }}>Block</button>
                 </div>
-             </div>
-           )}
+                <div className="msg-row-wrap">
+                  {blockedList.map((t) => (
+                    <span key={t.term} className="msg-chip">
+                      {t.term}
+                      <button type="button" onClick={() => handleRemoveTerm(t.term)} title="Allow it again" aria-label={`Allow ${t.term} again`}><X size={14} {...ICON} /></button>
+                    </span>
+                  ))}
+                </div>
+                <button type="button" className="msg-btn" style={{ width: '100%', marginTop: '24px' }} onClick={() => setShowBlocked(false)}>Done</button>
+              </div>
+            </div>
+          )}
+
+          {/* ---------- Private chats ---------- */}
+          {activeView === 'chats' && (
+            <div className="msg-split">
+              <div className={`msg-contacts ${selectedContactId ? 'hide-mobile' : ''}`}>
+                {messageContacts.length > 0 && (
+                  <div className="msg-search">
+                    <Search size={16} {...ICON} />
+                    <input type="text" placeholder="Search" aria-label="Search chats" value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} />
+                  </div>
+                )}
+                <div className="msg-contact-list">
+                  {messageContacts.length === 0 && (
+                    <div className="msg-empty" style={{ padding: '40px 16px' }}>
+                      <MessageSquare size={32} {...ICON} />
+                      <p>{isAdmin ? 'No contacts yet' : 'The school admin is not available to message yet'}</p>
+                    </div>
+                  )}
+                  {messageContacts.length > 0 && matching.length === 0 && (
+                    <p className="msg-empty" style={{ padding: '24px 16px' }}>No chats match "{contactSearch}"</p>
+                  )}
+                  {withChat.map(renderContact)}
+                  {withChat.length > 0 && noChat.length > 0 && <div className="msg-group-label">Everyone else</div>}
+                  {noChat.map(renderContact)}
+                </div>
+              </div>
+
+              <div className={`msg-thread ${selectedContactId ? '' : 'hide-mobile'}`}>
+                {!selectedContact && (
+                  <div className="msg-empty">
+                    <MessageSquare size={32} {...ICON} />
+                    <p>Choose a chat to read and reply</p>
+                  </div>
+                )}
+                {selectedContact && (
+                  <>
+                    <div className="msg-head">
+                      <button type="button" className="msg-icon-btn msg-back" onClick={() => setSelectedContactId(null)} aria-label="Back to chats"><ArrowLeft size={20} {...ICON} /></button>
+                      <Avatar name={selectedContact.name} url={selectedContact.avatarUrl} />
+                      <div className="msg-head-text">
+                        <div className="msg-head-title">{selectedContact.name}</div>
+                        <div className="msg-head-sub">{roleLabel(selectedContact.role)}</div>
+                      </div>
+                    </div>
+
+                    <div className="msg-list" ref={dmListRef}>
+                      {chatLoading && <p className="msg-empty">Loading conversation</p>}
+                      {!chatLoading && conversation.length === 0 && (
+                        <div className="msg-empty">
+                          <MessageSquare size={32} {...ICON} />
+                          <p>No messages yet. Say hello.</p>
+                        </div>
+                      )}
+                      {conversation.map((msg, i) => {
+                        const prev = conversation[i - 1];
+                        const newDay = !prev || !sameDay(prev.createdAt, msg.createdAt);
+                        const first = newDay || prev.senderId !== msg.senderId;
+                        const mine = msg.senderId === currentUser?.id;
+                        return (
+                          <div key={msg.id} style={{ display: 'contents' }}>
+                            {newDay && <div className="msg-day">{dayLabel(msg.createdAt)}</div>}
+                            <div className={`msg-row ${mine ? 'mine' : ''} ${first && !newDay ? 'first' : ''}`}>
+                              <div className="msg-bubble">
+                                {msg.content && <p className="msg-text">{msg.content}</p>}
+                                {msg.attachmentPath && (
+                                  <button type="button" className="msg-attachment" onClick={() => handleOpenAttachment(msg.attachmentPath!)}>
+                                    <FileDown size={16} {...ICON} /> {msg.attachmentName ?? 'Attachment'}
+                                  </button>
+                                )}
+                                <div className="msg-meta">
+                                  <span>{clock(msg.createdAt)}</span>
+                                  {mine && (msg.readAt
+                                    ? <CheckCheck size={14} {...ICON} aria-label="Seen" />
+                                    : <Check size={14} {...ICON} aria-label="Sent" />)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <form onSubmit={handleSendChat} className="msg-composer">
+                      <input ref={attachInputRef} type="file" style={{ display: 'none' }} onChange={handleAttachmentChange} />
+                      <button type="button" className="msg-icon-btn" title="Attach a photo or document" aria-label="Attach a file" disabled={uploadingAttachment} onClick={() => attachInputRef.current?.click()}>
+                        <Paperclip size={20} {...ICON} />
+                      </button>
+                      <input
+                        className="msg-input"
+                        type="text"
+                        placeholder={uploadingAttachment ? 'Uploading' : 'Message'}
+                        value={chatDraft}
+                        disabled={uploadingAttachment}
+                        onChange={(e) => setChatDraft(e.target.value)}
+                        enterKeyHint="send"
+                      />
+                      <button type="submit" className="msg-send" disabled={!chatDraft.trim() || uploadingAttachment} aria-label="Send"><Send size={18} {...ICON} /></button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
         </div>
-
       </div>
     </PortalLayout>
   );

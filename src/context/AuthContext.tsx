@@ -255,6 +255,15 @@ export interface TeachingClass {
   subjects: string[];
 }
 
+// One row per private chat, used to put chats with something new at the
+// top of the list and to show an unread badge on them.
+export interface DmSummary {
+  lastAt: string;
+  lastText: string;
+  lastMine: boolean;
+  unread: number;
+}
+
 export interface ClassMessage {
   id: string;
   className: string;
@@ -645,6 +654,10 @@ interface AuthContextType {
   getAssignmentViewCounts: () => Promise<Record<string, number>>;
   getClassSeen: (className: string) => Promise<ClassSeenRow[]>;
   unreadTarget: UnreadTarget;
+  dmSummaries: Record<string, DmSummary>;
+  dmUnread: number;
+  groupUnread: number;
+  refreshDmSummaries: () => Promise<void>;
   getAssignmentQuestions: (assignmentId: string) => Promise<AssignmentQuestion[]>;
   getMyAnswers: (assignmentId: string) => Promise<Record<string, string>>;
   saveMyAnswer: (assignmentId: string, questionId: string, text: string) => Promise<{ error: string | null }>;
@@ -1103,6 +1116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [rawNotifications, setNotifications] = useState<Notification[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [unreadTarget, setUnreadTarget] = useState<UnreadTarget>(null);
+  const [dmSummaries, setDmSummaries] = useState<Record<string, DmSummary>>({});
+  const [dmUnread, setDmUnread] = useState(0);
+  const [groupUnread, setGroupUnread] = useState(0);
   const [teachingRows, setTeachingRows] = useState<TeachingClass[]>([]);
   // Whether this pupil's portal is locked (patch_43). lockChecked stops the
   // portal flashing open for a moment before the answer arrives.
@@ -2213,14 +2229,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Unread private messages: drives the login pop-up, the header badge
   // and the Messages menu badge. Refreshed live when a message arrives.
   const unreadClass = currentUser?.role === 'student' ? currentUser.grade : currentUser?.role === 'teacher' ? currentUser.assignedClass : undefined;
+  // Every private chat I am in, newest first, boiled down to one summary per
+  // person. The chat list sorts on this, so a new message jumps to the top.
+  const refreshDmSummaries = useCallback(async () => {
+    const uid = session?.user.id;
+    if (!uid) { setDmSummaries({}); return; }
+    const { data, error } = await supabase.from('direct_messages')
+      .select('sender_id, recipient_id, content, created_at, read_at')
+      .or(`sender_id.eq.${uid},recipient_id.eq.${uid}`)
+      .order('created_at', { ascending: false })
+      .limit(600);
+    if (error) { console.error('refreshDmSummaries failed', error); return; }
+    const out: Record<string, DmSummary> = {};
+    (data ?? []).forEach((m) => {
+      const mine = m.sender_id === uid;
+      const other = (mine ? m.recipient_id : m.sender_id) as string;
+      const row = out[other] ?? { lastAt: m.created_at as string, lastText: m.content as string, lastMine: mine, unread: 0 };
+      if (!mine && !m.read_at) row.unread += 1;
+      out[other] = row;
+    });
+    setDmSummaries(out);
+  }, [session?.user.id]);
+
   const refreshUnreadMessages = useCallback(async () => {
     const uid = session?.user.id;
-    if (!uid) { setUnreadMessageCount(0); setUnreadTarget(null); return; }
+    if (!uid) { setUnreadMessageCount(0); setUnreadTarget(null); setDmUnread(0); setGroupUnread(0); return; }
+    void refreshDmSummaries();
     const { count, error } = await supabase.from('direct_messages')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_id', uid).is('read_at', null);
     let total = error ? null : (count ?? 0);
     let target: UnreadTarget = null;
+    const dmOnly = total ?? 0;
+    let groupOnly = 0;
     if (total && total > 0) {
       const { data: latest } = await supabase.from('direct_messages').select('sender_id')
         .eq('recipient_id', uid).is('read_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -2237,11 +2278,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { count: groupCount, error: groupError } = await q;
       if (!groupError) {
         total += groupCount ?? 0;
+        groupOnly = groupCount ?? 0;
         if (!target && (groupCount ?? 0) > 0) target = { kind: 'group' };
       }
     }
-    if (total !== null) { setUnreadMessageCount(total); setUnreadTarget(target); }
-  }, [session?.user.id, unreadClass]);
+    if (total !== null) { setUnreadMessageCount(total); setUnreadTarget(target); setDmUnread(dmOnly); setGroupUnread(groupOnly); }
+  }, [session?.user.id, unreadClass, refreshDmSummaries]);
 
   useEffect(() => {
     const uid = session?.user.id;
@@ -2250,6 +2292,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const channel = supabase
       .channel(`unread-dm-${uid}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'direct_messages', filter: `recipient_id=eq.${uid}` }, () => { refreshUnreadMessages(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `sender_id=eq.${uid}` }, () => { refreshDmSummaries(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'class_messages' }, () => { refreshUnreadMessages(); })
       .subscribe();
     const poll = setInterval(refreshUnreadMessages, 60_000);
@@ -3114,6 +3157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       assignments, mySubmissions, createAssignment, deleteAssignment, submitAssignment,
       setAssignmentOpen, getAssignmentQuestions, getMyAnswers, saveMyAnswer, getAnswersForAssignment,
       updateAssignment, getAssignmentKeys, recordAssignmentView, getAssignmentViews, getAssignmentViewCounts, getClassSeen, unreadTarget,
+      dmSummaries, dmUnread, groupUnread, refreshDmSummaries,
       getClassMessages, sendClassMessage, subscribeToClassMessages, markClassChatRead, classChatNames,
       teachingClasses, setActiveTeachingClass, getTeacherSetup, saveTeacherSetup,
       deleteClassMessage, pinClassMessage, getBlockedTerms, addBlockedTerm, removeBlockedTerm,
