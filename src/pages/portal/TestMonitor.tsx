@@ -347,7 +347,7 @@ const TestMonitor = () => {
                         </p>
                       )}
                       <div style={{ display: 'flex', gap: '10px', marginTop: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input type="number" min={0} step="0.5" placeholder="points" value={draftScores[ans.id]?.points ?? ''}
+                        <input type="number" min={0} step="0.01" placeholder="points" value={draftScores[ans.id]?.points ?? ''}
                           onChange={(e) => setDraftScores({ ...draftScores, [ans.id]: { ...(draftScores[ans.id] ?? { feedback: '' }), points: e.target.value } })}
                           style={{ width: '90px', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                         <input type="text" placeholder="feedback (optional)" value={draftScores[ans.id]?.feedback ?? ''}

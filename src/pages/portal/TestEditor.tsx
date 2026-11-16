@@ -340,7 +340,7 @@ const TestEditor = () => {
 
               <div className="input-group">
                 <label>Points</label>
-                <input type="number" min={1} step="0.5" required value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })}
+                <input type="number" min={0.01} step="0.01" required value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })}
                   style={{ width: '140px', padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
               </div>
 
@@ -423,7 +423,7 @@ const TestEditor = () => {
                           <input type="text" placeholder="phrase or keyword" value={k.phrase}
                             onChange={(e) => setForm({ ...form, keywords: form.keywords.map((kw, idx) => idx === i ? { ...kw, phrase: e.target.value } : kw) })}
                             style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
-                          <input type="number" min={0} step="0.5" placeholder="pts" value={k.points}
+                          <input type="number" min={0} step="0.01" placeholder="pts" value={k.points}
                             onChange={(e) => setForm({ ...form, keywords: form.keywords.map((kw, idx) => idx === i ? { ...kw, points: e.target.value } : kw) })}
                             style={{ width: '80px', padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                           <button type="button" className="icon-btn sm" onClick={() => removeKeyword(i)}><Trash2 size={14} /></button>
@@ -469,7 +469,7 @@ const TestEditor = () => {
                 <QuestionBuilder value={importQs} onChange={setImportQs} forTest />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>Points for each question</label>
-                  <input type="number" min={0.5} step="0.5" value={importPoints} onChange={(e) => setImportPoints(e.target.value)}
+                  <input type="number" min={0.01} step="0.01" value={importPoints} onChange={(e) => setImportPoints(e.target.value)}
                     style={{ width: '90px', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'var(--bg-light)' }} />
                 </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
