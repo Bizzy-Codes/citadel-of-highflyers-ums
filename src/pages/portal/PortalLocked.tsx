@@ -4,8 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import './Login.css';
 
 // Shown instead of the portal while the school office has the pupil's
-// portal locked. Deliberately says nothing about WHY -- the pupil only
-// learns that a parent or guardian needs to speak to the office.
+// portal locked. The wording presents the lock as automatic: the system
+// closed it for a missing payment receipt and only a receipt reopens it,
+// so families don't plead with staff.
 const PortalLocked = () => {
   const { logout } = useAuth();
   return (
@@ -19,7 +20,15 @@ const PortalLocked = () => {
           <div className="login-header">
             <ShieldAlert size={36} color="var(--primary)" style={{ marginBottom: '12px' }} />
             <h1>Your portal is not available right now</h1>
-            <p>Please ask your parent or guardian to contact the school admin or the school secretary. They will help to open it for you.</p>
+            <p>
+              Your portal access period has ended. The system checks school payments automatically,
+              and it has temporarily closed this account because no payment receipt has been received for the current period.
+            </p>
+            <p style={{ marginTop: '12px' }}>
+              This is handled entirely by the system. It cannot be opened by the admin or any staff member.
+              It reopens automatically as soon as a payment receipt is uploaded to this account and verified by the system.
+              Please ask your parent or guardian to send the receipt using the button below.
+            </p>
           </div>
           <Link
             to="/portal/fees"

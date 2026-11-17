@@ -87,7 +87,7 @@ const AdminPortalAccess = () => {
       <div className="card glass" style={{ padding: '20px', borderRadius: '20px' }}>
         <h3 style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}><Lock size={18} /> Portal access</h3>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          Lock the portal of pupils who owe fees. When they log in they only see "Please ask your parent or guardian to contact the school admin or secretary" — it never says why.
+          Lock the portal of pupils who owe fees. When they log in they see that the system has automatically closed the portal for a missing payment receipt, and that only an uploaded receipt reopens it. Staff should not tell parents the office can open it by hand.
           Parents are told separately from here. <strong>{lockedCount}</strong> portal{lockedCount === 1 ? ' is' : 's are'} locked right now.
         </p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px', alignItems: 'center' }}>

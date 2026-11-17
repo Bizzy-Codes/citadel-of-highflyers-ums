@@ -64,14 +64,14 @@ Deno.serve(async (req) => {
     const name = escapeHtml(p.name);
     const text =
       `Hello,\n\nThis is Citadel of Highflyers Int'l Academy.\n\n` +
-      `The school portal for ${p.name} has been temporarily closed because there is an outstanding school fees balance.\n\n` +
-      `Kindly contact the school accountant or secretary on ${SCHOOL_PHONE}, or send your payment receipt from the portal. ` +
-      `The portal will be reopened once your payment is confirmed.\n\nThank you for partnering with us.`;
+      `The school portal for ${p.name} has been automatically closed by the system because no payment receipt has been received for the current period.\n\n` +
+      `This is handled by the system and cannot be opened manually by the admin or staff. Please upload your payment receipt (with its reference number) under Fees on the portal. ` +
+      `The portal reopens once the receipt is verified.\n\nThank you for partnering with us.`;
     const html =
       `<p>Hello,</p><p>This is Citadel of Highflyers Int'l Academy.</p>` +
-      `<p>The school portal for <strong>${name}</strong> has been temporarily closed because there is an outstanding school fees balance.</p>` +
-      `<p>Kindly contact the school accountant or secretary on <strong>${escapeHtml(SCHOOL_PHONE)}</strong>, or send your payment receipt from the portal. ` +
-      `The portal will be reopened once your payment is confirmed.</p><p>Thank you for partnering with us.</p>`;
+      `<p>The school portal for <strong>${name}</strong> has been automatically closed by the system because no payment receipt has been received for the current period.</p>` +
+      `<p>This is handled by the system and cannot be opened manually by the admin or staff. Please upload your payment receipt (with its reference number) under Fees on the portal. ` +
+      `The portal reopens once the receipt is verified.</p><p>Thank you for partnering with us.</p>`;
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',

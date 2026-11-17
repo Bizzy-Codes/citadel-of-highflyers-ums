@@ -125,9 +125,9 @@ export function buildPortalLockedParentMessage(studentName: string): string {
   return [
     `Hello, this is Citadel of Highflyers Int'l Academy.`,
     ``,
-    `The school portal for ${studentName} has been temporarily closed because there is an outstanding school fees balance.`,
+    `The school portal for ${studentName} has been automatically closed by the system because no payment receipt has been received for the current period.`,
     ``,
-    `Kindly contact the school accountant or secretary (WhatsApp ${SCHOOL_WHATSAPP.replace(/^234/, '0')}) or send your payment receipt from the portal, and it will be reopened once the payment is confirmed.`,
+    `The system manages this automatically and it cannot be opened manually by the admin or staff. To restore access, please upload your payment receipt (with its reference number) under Fees on the portal. The portal reopens once the receipt is verified.`,
     ``,
     `Thank you for partnering with us.`,
   ].join('\n');
